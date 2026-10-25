@@ -1,0 +1,57 @@
+import { banLabel } from "../logic/format";
+import type { MarkChange, TitleMark } from "../logic/types";
+
+interface Props {
+  marks: TitleMark[];
+  onMark: (mark: TitleMark, change: MarkChange) => void;
+}
+
+/** Every title the family told Nido not to suggest, including age bans that have lifted. */
+export default function HiddenTitles({ marks, onMark }: Props) {
+  const banned = marks
+    .filter((m) => m.ban)
+    .sort((a, b) => Number(b.ban_active) - Number(a.ban_active));
+  return (
+    <section class="panel hidden-titles">
+      <h2 class="section-title">Titles Nido won't suggest</h2>
+      {banned.length === 0 ? (
+        <p class="muted">
+          None yet. Press "Don't suggest…" on a result to hide it for now or for good.
+        </p>
+      ) : (
+        <ul class="watchlist">
+          {banned.map((m) => (
+            <li key={m.key} class="wl-item">
+              {m.poster_url ? (
+                <img src={m.poster_url} alt="" width={46} height={69} loading="lazy" />
+              ) : (
+                <div class="poster-empty small" aria-hidden="true" />
+              )}
+              <div class="wl-text">
+                <strong>{m.name}</strong>
+                <span class={m.ban_active ? "muted" : "muted lifted"}>
+                  {[m.year, m.title.media_type === "tv" ? "Series" : "Movie"]
+                    .filter(Boolean)
+                    .join(" · ")}{" "}
+                  · {banLabel(m.ban!, m.ban_active)}
+                </span>
+              </div>
+              {m.ban!.scope === "age" && m.ban_active && (
+                <button
+                  type="button"
+                  class="btn btn-small"
+                  onClick={() => onMark(m, { ban: { scope: "always" } })}
+                >
+                  Hide at every age
+                </button>
+              )}
+              <button type="button" class="btn btn-small" onClick={() => onMark(m, { ban: null })}>
+                {m.ban_active ? "Suggest again" : "Clear"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}

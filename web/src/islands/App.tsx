@@ -2,8 +2,16 @@ import { useEffect, useState } from "preact/hooks";
 import { ApiError, api } from "../logic/api";
 import { authEnabled, signIn, signOut, watchUser } from "../logic/auth";
 import { EMPTY_PROFILE } from "../logic/format";
-import type { AppConfig, Profile, TitleResult, WatchlistItem } from "../logic/types";
+import type {
+  AppConfig,
+  MarkChange,
+  Profile,
+  TitleMark,
+  TitleResult,
+  WatchlistItem,
+} from "../logic/types";
 import Finder from "./Finder";
+import HiddenTitles from "./HiddenTitles";
 import ProfileForm from "./ProfileForm";
 import Watchlist from "./Watchlist";
 
@@ -22,6 +30,7 @@ export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [marks, setMarks] = useState<TitleMark[]>([]);
   const [tab, setTab] = useState<Tab>("find");
   const [error, setError] = useState<string | null>(null);
 
@@ -42,13 +51,15 @@ export default function App() {
   useEffect(() => {
     setProfile(undefined);
     setWatchlist([]);
+    setMarks([]);
     setTab("find");
     if (uid === null) return;
     setError(null);
-    Promise.all([api.profile(), api.watchlist()]).then(
-      ([p, w]) => {
+    Promise.all([api.profile(), api.watchlist(), api.marks()]).then(
+      ([p, w, m]) => {
         setProfile(p);
         setWatchlist(w);
+        setMarks(m);
       },
       (err) => {
         setProfile(undefined);
@@ -65,7 +76,26 @@ export default function App() {
 
   async function saveProfile(next: Profile) {
     setProfile(await api.saveProfile(next));
+    // An age ban lifts once the youngest reaches its age, so the list depends on the profile.
+    setMarks(await api.marks());
     setTab("find");
+  }
+
+  async function markTitle(
+    info: Pick<TitleResult, "media_type" | "tmdb_id" | "title" | "year" | "poster_url">,
+    change: MarkChange,
+  ) {
+    try {
+      const updated = await api.mark(info, change);
+      const empty =
+        !updated.seen && !updated.liked_adults && !updated.liked_child && !updated.ban;
+      setMarks((all) => [
+        ...(empty ? [] : [updated]),
+        ...all.filter((m) => m.key !== updated.key),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that mark.");
+    }
   }
 
   async function toggleSave(result: TitleResult) {
@@ -157,12 +187,31 @@ export default function App() {
     body = null;
   } else if (profile === null || tab === "family") {
     body = (
-      <ProfileForm
-        config={config}
-        initial={profile ?? { ...EMPTY_PROFILE, regions: config.default_regions }}
-        firstRun={profile === null}
-        onSave={saveProfile}
-      />
+      <>
+        <ProfileForm
+          config={config}
+          initial={profile ?? { ...EMPTY_PROFILE, regions: config.default_regions }}
+          firstRun={profile === null}
+          onSave={saveProfile}
+        />
+        {profile && (
+          <HiddenTitles
+            marks={marks}
+            onMark={(m, change) =>
+              markTitle(
+                {
+                  media_type: m.title.media_type,
+                  tmdb_id: m.title.tmdb_id,
+                  title: m.name,
+                  year: m.year,
+                  poster_url: m.poster_url,
+                },
+                change,
+              )
+            }
+          />
+        )}
+      </>
     );
   } else if (tab === "watchlist") {
     body = <Watchlist items={watchlist} onWatched={setWatched} onRemove={remove} />;
@@ -173,6 +222,8 @@ export default function App() {
         profile={profile}
         savedKeys={new Set(watchlist.map(itemKey))}
         onToggleSave={toggleSave}
+        marks={new Map(marks.map((m) => [m.key, m]))}
+        onMark={markTitle}
       />
     );
   }

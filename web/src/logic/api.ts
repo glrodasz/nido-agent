@@ -2,12 +2,17 @@ import { idToken } from "./auth";
 import type {
   AppConfig,
   ChatReply,
+  MarkChange,
   MediaType,
   Profile,
   SearchResult,
+  TitleMark,
   TitleResult,
   WatchlistItem,
 } from "./types";
+
+/** What the server needs to name a title in the family's lists. */
+export type TitleInfo = Pick<TitleResult, "media_type" | "tmdb_id" | "title" | "year" | "poster_url">;
 
 export class ApiError extends Error {
   constructor(
@@ -53,7 +58,7 @@ export const api = {
   chat: (message: string, sessionId: string | null) =>
     call<ChatReply>("POST", "/chat", { message, session_id: sessionId }),
   watchlist: () => call<{ items: WatchlistItem[] }>("GET", "/watchlist").then((r) => r.items),
-  save: (t: Pick<TitleResult, "media_type" | "tmdb_id" | "title" | "year" | "poster_url">, watched = false) =>
+  save: (t: TitleInfo, watched = false) =>
     call<{ item: WatchlistItem }>("PUT", `/watchlist/${t.media_type}/${t.tmdb_id}`, {
       name: t.title,
       year: t.year,
@@ -62,4 +67,12 @@ export const api = {
     }).then((r) => r.item),
   unsave: (mediaType: MediaType, tmdbId: number) =>
     call<{ ok: boolean }>("DELETE", `/watchlist/${mediaType}/${tmdbId}`),
+  marks: () => call<{ items: TitleMark[] }>("GET", "/titles").then((r) => r.items),
+  mark: (t: TitleInfo, change: MarkChange) =>
+    call<{ item: TitleMark }>("PUT", `/titles/${t.media_type}/${t.tmdb_id}`, {
+      name: t.title,
+      year: t.year,
+      poster_url: t.poster_url,
+      ...change,
+    }).then((r) => r.item),
 };
