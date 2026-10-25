@@ -26,8 +26,8 @@ Netflix, Disney+, HBO Max, Prime Video and Apple TV+.
 ## Stack
 
 Python 3.12+, [Google ADK](https://google.github.io/adk-docs/), Gemini (AI Studio free tier),
-uv, ruff, pytest. Planned: Cloud Run behind Firebase Hosting, Firebase Auth, Firestore, Astro +
-Preact web app.
+uv, ruff, pytest. FastAPI on Cloud Run behind Firebase Hosting, Firebase Auth (Google sign-in,
+email allowlist), Firestore, and an Astro + Preact web app. Setup: [docs/SETUP.md](docs/SETUP.md).
 
 Data: [TMDB](https://www.themoviedb.org/) (metadata, certifications) with streaming availability
 from [JustWatch](https://www.justwatch.com/) via TMDB, and IMDb ratings via
@@ -41,6 +41,8 @@ uv sync
 cp .env.example .env          # add TMDB_API_TOKEN, OMDB_API_KEY, GOOGLE_API_KEY
 uv run nido coverage          # phase 0: data coverage per service in Sweden
 uv run adk web agents         # chat with the agent at http://localhost:8000
+uv run nido serve             # web API on http://127.0.0.1:8080 (NIDO_AUTH=none locally)
+(cd web && npm install && npm run dev)   # web app on http://localhost:4321
 uv run pytest -q
 ```
 
@@ -54,13 +56,19 @@ uv run pytest -q
 | `src/nido/ranking.py` | Deterministic filter and ranking |
 | `src/nido/agent/` | ADK agent, tools, model call budget |
 | `src/nido/coverage.py` | Phase 0 coverage report |
+| `src/nido/server.py` | Web API: profile, search, chat, watchlist |
+| `src/nido/store.py` | Firestore (and in-memory) store, API response cache |
+| `src/nido/auth.py` | Firebase ID token check and email allowlist |
 | `agents/nido_agent/` | Shim for `adk web` / `adk run` |
+| `web/` | Astro + Preact app |
+| `infra/`, `firebase.json` | GCP bootstrap, billing kill switch, Firebase Hosting |
 
 ## Roadmap
 
 1. **Phase 0, data check.** Run `nido coverage --region SE`: rating, IMDb id and watch link coverage per service.
-2. **Phase 1, MVP.** Family profile, Firestore cache, direct watch links, web app, Cloud Run
-   deploy with billing cap.
+2. **Phase 1, MVP.** Family profile, Firestore cache, web app, Cloud Run deploy with billing
+   cap. Still open: direct deep links (Streaming Availability API) and Common Sense Media
+   summaries.
 3. **Phase 2, guidance.** Per-category summaries from Common Sense Media, cited and labeled AI.
 4. **Phase 3, choosing together.** Watchlist, compare, feedback-driven ranking.
 

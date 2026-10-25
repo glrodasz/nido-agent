@@ -1,0 +1,179 @@
+# Builds the API image, deploys it to Cloud Run, then builds the web app and deploys it (with the
+# Firestore rules) to Firebase Hosting. Needs the repository variables printed by
+# infra/bootstrap.sh (docs/SETUP.md); without them the workflow only emits a notice. Workload
+# Identity Federation only trusts the default branch, so a run from another branch is skipped.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "agents/**"
+      - "web/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "firebase.json"
+      - "firestore.rules"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for Workload Identity Federation
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  SERVICE: nido-api
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check repository variables
+        id: cfg
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_GITHUB_SA: ${{ vars.GCP_GITHUB_SA }}
+          GCP_API_SA: ${{ vars.GCP_API_SA }}
+          AR_REPOSITORY: ${{ vars.AR_REPOSITORY }}
+          NIDO_ALLOWED_EMAILS: ${{ vars.NIDO_ALLOWED_EMAILS }}
+          FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          FIREBASE_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/${DEFAULT_BRANCH}" ]; then
+            echo "::notice title=deploy skipped::${GITHUB_REF} is not the default branch; Workload Identity Federation only trusts that one. See docs/SETUP.md."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          missing=""
+          for name in GCP_PROJECT_ID GCP_REGION GCP_WIF_PROVIDER GCP_GITHUB_SA GCP_API_SA \
+                      AR_REPOSITORY NIDO_ALLOWED_EMAILS FIREBASE_API_KEY FIREBASE_AUTH_DOMAIN \
+                      FIREBASE_APP_ID; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::notice title=deploy skipped::Missing repository variables:${missing}. See docs/SETUP.md."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.cfg.outputs.ok == 'true'
+
+      - name: Authenticate to Google Cloud (WIF)
+        if: steps.cfg.outputs.ok == 'true'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_GITHUB_SA }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+        if: steps.cfg.outputs.ok == 'true'
+
+      - name: Build and push image
+        if: steps.cfg.outputs.ok == 'true'
+        id: image
+        env:
+          AR_REPOSITORY: ${{ vars.AR_REPOSITORY }}
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPOSITORY}/nido-api"
+          docker build --pull \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "${image}:${GITHUB_SHA}" .
+          docker push "${image}:${GITHUB_SHA}"
+          echo "ref=${image}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Cloud Run service
+        if: steps.cfg.outputs.ok == 'true'
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+          API_SA: ${{ vars.GCP_API_SA }}
+          ALLOWED_EMAILS: ${{ vars.NIDO_ALLOWED_EMAILS }}
+          # Optional repository variables (defaults in src/nido/config.py).
+          MODEL: ${{ vars.NIDO_MODEL }}
+          REGIONS: ${{ vars.NIDO_REGIONS }}
+        run: |
+          # "@" separates the variables (gcloud's ^@^ syntax) because the email list has commas.
+          env_vars="^@^NIDO_STORE=firestore@NIDO_AUTH=firebase@GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"
+          env_vars="${env_vars}@NIDO_ALLOWED_EMAILS=${ALLOWED_EMAILS}"
+          [ -z "${MODEL}" ] || env_vars="${env_vars}@NIDO_MODEL=${MODEL}"
+          [ -z "${REGIONS}" ] || env_vars="${env_vars}@NIDO_REGIONS=${REGIONS}"
+          # Only secrets that hold a value: a missing Gemini key turns chat off, it does not
+          # break the deploy (the filter search still works).
+          secrets=""
+          for pair in TMDB_API_TOKEN=nido-tmdb-token OMDB_API_KEY=nido-omdb-key \
+                      GOOGLE_API_KEY=nido-gemini-key; do
+            if gcloud secrets versions describe latest --secret="${pair#*=}" >/dev/null 2>&1; then
+              secrets="${secrets:+${secrets},}${pair}:latest"
+            else
+              echo "::warning title=deploy::Secret ${pair#*=} has no value; ${pair%%=*} stays unset. See docs/SETUP.md."
+            fi
+          done
+          # --max-instances 1: cost cap, and the in-memory chat sessions and limits stay on one
+          # instance. --set-env-vars / --set-secrets replace whatever was set by hand.
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE}" \
+            --region "${REGION}" \
+            --service-account "${API_SA}" \
+            --cpu 1 \
+            --memory 1Gi \
+            --min-instances 0 \
+            --max-instances 1 \
+            --concurrency 40 \
+            --timeout 120 \
+            --cpu-throttling \
+            --set-env-vars "${env_vars}" \
+            ${secrets:+--set-secrets "${secrets}"} \
+            --labels "managed-by=github-actions,commit=${GITHUB_SHA::12}" \
+            --quiet
+
+      - uses: actions/setup-node@v6
+        if: steps.cfg.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web app
+        if: steps.cfg.outputs.ok == 'true'
+        working-directory: web
+        env:
+          PUBLIC_FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
+          PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          PUBLIC_FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to Firebase Hosting
+        if: steps.cfg.outputs.ok == 'true'
+        run: |
+          # The rewrite in firebase.json names the service's region; keep it in sync with GCP_REGION.
+          jq --arg region "${REGION}" '.hosting.rewrites[0].run.region = $region' firebase.json \
+            > firebase.deploy.json && mv firebase.deploy.json firebase.json
+          npx --yes firebase-tools@15 deploy --only hosting,firestore:rules \
+            --project "${PROJECT_ID}" --non-interactive
+          {
+            echo "### Deployed"
+            echo ""
+            echo "- App: https://${PROJECT_ID}.web.app"
+            echo "- API: Cloud Run \`${SERVICE}\` (${REGION}), image \`${{ steps.image.outputs.ref }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
