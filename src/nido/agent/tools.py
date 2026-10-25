@@ -140,8 +140,8 @@ class Toolbox:
             region=region,
             provider_ids=provider_ids,
             max_certification=prefilter_certification(profile.youngest),
+            certification_country="US",
             max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
-            min_vote_average=profile.min_imdb_rating,
         )
         return [t.tmdb_id for t in found]
 

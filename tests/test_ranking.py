@@ -170,3 +170,9 @@ def test_offers_count_in_any_profile_region():
     assert evaluate(candidate, PROFILE) is None
     vpn = PROFILE.model_copy(update={"regions": ["SE", "NO"]})
     assert evaluate(candidate, vpn).included
+
+
+def test_unknown_imdb_score_fails_an_explicit_minimum():
+    strict = PROFILE.model_copy(update={"min_imdb_rating": 7.0})
+    assert evaluate(make(1, rating=None), strict) is None
+    assert evaluate(make(1, rating=None), PROFILE) is not None

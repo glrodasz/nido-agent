@@ -110,14 +110,13 @@ def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
         return None
 
     quality = weighted_quality(candidate.rating)
+    if profile.min_imdb_rating is not None and (
+        candidate.rating is None or candidate.rating.score < profile.min_imdb_rating
+    ):
+        # An unknown score cannot meet an explicit minimum.
+        return None
     if quality is None:
         cautions.append("No IMDb rating available.")
-    elif (
-        profile.min_imdb_rating
-        and candidate.rating
-        and (candidate.rating.score < profile.min_imdb_rating)
-    ):
-        return None
 
     flagged = sorted(
         {
