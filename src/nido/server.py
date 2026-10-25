@@ -7,6 +7,11 @@
     GET    /api/watchlist                         saved titles
     PUT    /api/watchlist/{media_type}/{tmdb_id}  save or update one
     DELETE /api/watchlist/{media_type}/{tmdb_id}
+    GET    /api/titles                            the family's marks: seen, liked, banned
+    PUT    /api/titles/{media_type}/{tmdb_id}     change some marks on one title
+
+Banned titles are left out of search and chat by code: the server hands their keys to the
+toolbox (and to chat through session state), so the model can neither see nor undo a ban.
 
 Search and chat return the same result shape (agent.tools._present), so the web app renders the
 shortlist from tool output, never from the model's text. Chat sessions live in memory: a cold
@@ -26,11 +31,20 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from nido.agent.app import APP_NAME, build_app
 from nido.agent.budget import LlmBudgetExceededError
-from nido.agent.tools import Toolbox
+from nido.agent.tools import HIDDEN_STATE_KEY, Toolbox
 from nido.auth import Authenticator, AuthError, FirebaseVerifier, User
 from nido.catalog import SERVICES, SERVICES_BY_KEY
 from nido.config import Settings, llm_credentials_available
-from nido.models import FamilyProfile, GuidanceCategory, MediaType, TitleRef, WatchlistItem
+from nido.models import (
+    Ban,
+    BanScope,
+    FamilyProfile,
+    GuidanceCategory,
+    MediaType,
+    TitleMark,
+    TitleRef,
+    WatchlistItem,
+)
 from nido.store import Store, build_store
 
 log = logging.getLogger(__name__)
@@ -61,6 +75,71 @@ class WatchlistUpdate(BaseModel):
     year: int | None = None
     poster_url: HttpUrl | None = None
     watched: bool = False
+
+
+class BanRequest(BaseModel):
+    scope: BanScope
+    # For scope "age": the youngest child's age at which the ban lifts. Left out, it is the
+    # title's age baseline when that is above the youngest, else the start of the next age range.
+    until_age: int | None = Field(default=None, ge=1, le=18)
+    baseline_age: int | None = Field(default=None, ge=0, le=18)
+
+
+class MarkUpdate(BaseModel):
+    """Only the fields sent change; `"ban": null` lifts a ban."""
+
+    name: str = Field(min_length=1, max_length=300)
+    year: int | None = None
+    poster_url: HttpUrl | None = None
+    seen: bool | None = None
+    liked_adults: bool | None = None
+    liked_child: bool | None = None
+    ban: BanRequest | None = None
+
+
+# Where an age range ends: 0-6, 7-9, 10-12, 13-15, 16-17.
+AGE_RANGE_STARTS = (7, 10, 13, 16, 18)
+
+
+def default_ban_until(youngest: int, baseline_age: int | None) -> int:
+    if baseline_age is not None and baseline_age > youngest:
+        return baseline_age
+    return next((a for a in AGE_RANGE_STARTS if a > youngest), 18)
+
+
+def present_mark(mark: TitleMark, profile: FamilyProfile | None) -> dict[str, Any]:
+    youngest = profile.youngest if profile else 0
+    return {
+        **mark.model_dump(mode="json"),
+        "key": mark.title.key,
+        "ban_active": bool(mark.ban and mark.ban.active(youngest)),
+    }
+
+
+def hidden_keys(marks: list[TitleMark], profile: FamilyProfile) -> list[str]:
+    return [m.title.key for m in marks if m.ban and m.ban.active(profile.youngest)]
+
+
+def with_marks(
+    output: dict[str, Any] | None, marks: list[TitleMark], profile: FamilyProfile | None
+) -> dict[str, Any] | None:
+    """Search output with each title's marks attached, so cards show them without a lookup."""
+    if not output:
+        return output
+    by_key = {m.title.key: m for m in marks}
+
+    def mark_of(item: dict[str, Any]) -> dict[str, Any] | None:
+        key = f"{item.get('media_type')}:{item.get('tmdb_id')}"
+        return present_mark(by_key[key], profile) if key in by_key else None
+
+    return {
+        **output,
+        **{
+            field: [{**item, "mark": mark_of(item)} for item in output.get(field) or []]
+            for field in ("results", "near_misses")
+            if field in output
+        },
+    }
 
 
 def normalize_profile(profile: FamilyProfile) -> FamilyProfile:
@@ -170,9 +249,11 @@ def create_app(
 
     CurrentUser = Annotated[User, Depends(current_user)]
 
-    async def find(profile: FamilyProfile, request: SearchRequest) -> dict[str, Any]:
+    async def find(
+        profile: FamilyProfile, request: SearchRequest, marks: list[TitleMark]
+    ) -> dict[str, Any]:
         try:
-            return await toolbox.find_titles(
+            return await toolbox.search(
                 media_type=request.media_type.value,
                 children_ages=profile.children_ages,
                 services=profile.services,
@@ -191,6 +272,7 @@ def create_app(
                     )
                 ],
                 regions=request.regions or profile.regions,
+                hidden=hidden_keys(marks, profile),
             )
         except RuntimeError as exc:  # missing TMDB token
             raise HTTPException(503, str(exc)) from exc
@@ -232,7 +314,9 @@ def create_app(
 
     @app.post("/api/search")
     async def search(request: SearchRequest, user: CurrentUser) -> dict[str, Any]:
-        return await find(await require_profile(user), request)
+        profile = await require_profile(user)
+        marks = await store.list_marks(user.uid)
+        return with_marks(await find(profile, request, marks), marks, profile) or {}
 
     @app.post("/api/chat")
     async def chat(request: ChatRequest, user: CurrentUser) -> dict[str, Any]:
@@ -243,6 +327,7 @@ def create_app(
         from google.genai import types
 
         profile = await store.get_profile(user.uid)
+        marks = await store.list_marks(user.uid)
         sessions = runner.session_service
         session = None
         if request.session_id:
@@ -260,7 +345,10 @@ def create_app(
                 user_id=user.uid,
                 session_id=session.id,
                 new_message=types.Content(role="user", parts=[types.Part(text=request.message)]),
-                state_delta={"family": describe_family(profile)},
+                state_delta={
+                    "family": describe_family(profile),
+                    HIDDEN_STATE_KEY: hidden_keys(marks, profile) if profile else [],
+                },
             ):
                 for output in _find_titles_outputs(event):
                     results = output
@@ -276,7 +364,7 @@ def create_app(
         return {
             "session_id": session.id,
             "reply": "\n\n".join(reply).strip(),
-            "results": results,
+            "results": with_marks(results, marks, profile),
             "note": note,
         }
 
@@ -308,6 +396,53 @@ def create_app(
             user.uid, TitleRef(media_type=media_type, tmdb_id=tmdb_id).key
         )
         return {"ok": True}
+
+    @app.get("/api/titles")
+    async def list_marks(user: CurrentUser) -> dict[str, Any]:
+        profile = await store.get_profile(user.uid)
+        marks = await store.list_marks(user.uid)
+        return {"items": [present_mark(m, profile) for m in marks]}
+
+    @app.put("/api/titles/{media_type}/{tmdb_id}")
+    async def put_mark(
+        media_type: MediaType, tmdb_id: int, update: MarkUpdate, user: CurrentUser
+    ) -> dict[str, Any]:
+        profile = await store.get_profile(user.uid)
+        ref = TitleRef(media_type=media_type, tmdb_id=tmdb_id)
+        now = datetime.now(UTC)
+        mark = await store.get_mark(user.uid, ref.key) or TitleMark(
+            title=ref, name=update.name, updated_at=now
+        )
+        changes: dict[str, Any] = {
+            "name": update.name,
+            "year": update.year if update.year is not None else mark.year,
+            "poster_url": update.poster_url or mark.poster_url,
+            "updated_at": now,
+        }
+        for flag in ("seen", "liked_adults", "liked_child"):
+            if getattr(update, flag) is not None:
+                changes[flag] = getattr(update, flag)
+        if "ban" in update.model_fields_set:
+            request = update.ban
+            if request is None:
+                changes["ban"] = None
+            elif request.scope is BanScope.ALWAYS:
+                changes["ban"] = Ban(scope=BanScope.ALWAYS, at=now)
+            else:
+                if profile is None:
+                    raise HTTPException(409, "set up the family profile first")
+                until = request.until_age or default_ban_until(
+                    profile.youngest, request.baseline_age
+                )
+                if until <= profile.youngest:
+                    raise HTTPException(422, "until_age must be above the youngest child's age")
+                changes["ban"] = Ban(scope=BanScope.AGE, until_age=until, at=now)
+        mark = mark.model_copy(update=changes)
+        if mark.empty:
+            await store.delete_mark(user.uid, ref.key)
+        else:
+            await store.put_mark(user.uid, mark)
+        return {"item": present_mark(mark, profile)}
 
     if settings.web_dir and Path(settings.web_dir).is_dir():
         app.mount("/", StaticFiles(directory=settings.web_dir, html=True), name="web")
