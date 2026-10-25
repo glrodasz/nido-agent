@@ -29,6 +29,20 @@ export function isIncluded(offer: Offer, services: string[]): boolean {
   );
 }
 
+// Brand colours for the supported services (keys from src/nido/catalog.py), picked so the
+// label text stays readable on them.
+const BRAND: Record<string, { bg: string; fg: string }> = {
+  netflix: { bg: "#e50914", fg: "#ffffff" },
+  disney_plus: { bg: "#113ccf", fg: "#ffffff" },
+  hbo_max: { bg: "#5b2bd6", fg: "#ffffff" },
+  prime_video: { bg: "#0f79af", fg: "#ffffff" },
+  apple_tv_plus: { bg: "#000000", fg: "#ffffff" },
+};
+
+export function serviceBrand(service: string | null): { bg: string; fg: string } | null {
+  return (service && BRAND[service]) || null;
+}
+
 /** Offers the family already pays for first, then the rest; one row per provider and access. */
 export function sortOffers(offers: Offer[], services: string[]): Offer[] {
   const seen = new Set<string>();

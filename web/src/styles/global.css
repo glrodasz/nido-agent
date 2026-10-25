@@ -655,6 +655,16 @@ a.pill-ok:hover {
   filter: brightness(1.08);
 }
 
+.pill-brand {
+  background: var(--brand);
+  border-color: color-mix(in srgb, var(--brand), white 18%);
+  color: var(--brand-text);
+}
+
+a.pill-brand:hover {
+  filter: brightness(1.12);
+}
+
 .pill-muted {
   background: transparent;
   font-weight: 500;

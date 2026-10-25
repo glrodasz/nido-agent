@@ -7,6 +7,7 @@ import {
   formatVotes,
   parseAges,
   parseRegions,
+  serviceBrand,
   sortOffers,
   verifiedAgo,
 } from "./format";
@@ -92,5 +93,13 @@ describe("bans", () => {
     expect(banLabel({ scope: "age", until_age: 7, at }, true)).toContain("until your youngest is 7");
     expect(banLabel({ scope: "age", until_age: 7, at }, false)).toContain("back in results");
     expect(banLabel({ scope: "always", until_age: null, at }, true)).toBe("Hidden at every age");
+  });
+});
+
+describe("serviceBrand", () => {
+  it("knows the supported services and nothing else", () => {
+    expect(serviceBrand("netflix")).toEqual({ bg: "#e50914", fg: "#ffffff" });
+    expect(serviceBrand("mubi")).toBeNull();
+    expect(serviceBrand(null)).toBeNull();
   });
 });
