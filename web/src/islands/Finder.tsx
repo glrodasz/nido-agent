@@ -2,6 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { api } from "../logic/api";
 import { GENRES } from "../logic/format";
 import type { AppConfig, MediaType, Profile, SearchResult, TitleResult } from "../logic/types";
+import Markdown from "./Markdown";
 import TitleCard from "./TitleCard";
 
 interface Props {
@@ -78,30 +79,23 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
   const multiRegion = (results?.regions.length ?? 0) > 1;
   const nearMisses = results?.near_misses ?? [];
 
+  const picks = results ? (results.results.length > 0 ? results.results : nearMisses) : [];
+
   return (
     <div class="finder">
       {config.chat_enabled && (
-        <section class="panel chat" aria-label="Ask Nido">
-          {turns.length === 0 ? (
-            <div class="examples">
-              <p class="muted">Ask in your own words. Nido already knows your family profile.</p>
-              {EXAMPLES.map((ex) => (
-                <button key={ex} type="button" class="chip-btn" onClick={(e) => chat(e, ex)}>
-                  {ex}
-                </button>
-              ))}
-            </div>
-          ) : (
+        <section class="ask-panel" aria-label="Ask Nido">
+          <h1 class="ask-title">What should we watch?</h1>
+          {turns.length > 0 && (
             <ol class="turns" aria-live="polite">
               {turns.map((t, i) => (
                 <li key={i} class={`turn turn-${t.role}`}>
-                  <span class="who">{t.role === "you" ? "You" : "Nido"}</span>
-                  <p>{t.text}</p>
+                  <span class="sr-only">{t.role === "you" ? "You:" : "Nido:"}</span>
+                  {t.role === "you" ? <p>{t.text}</p> : <Markdown text={t.text} />}
                 </li>
               ))}
               {busy === "chat" && (
                 <li class="turn turn-nido">
-                  <span class="who">Nido</span>
                   <p class="muted">Looking through your services…</p>
                 </li>
               )}
@@ -111,7 +105,7 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
             <input
               value={message}
               onInput={(e) => setMessage(e.currentTarget.value)}
-              placeholder="What do you feel like watching?"
+              placeholder={turns.length ? "Ask a follow-up…" : "A feel-good movie for tonight…"}
               maxLength={2000}
               aria-label="Message"
             />
@@ -119,34 +113,36 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
               Ask
             </button>
           </form>
+          {turns.length === 0 && (
+            <div class="examples">
+              {EXAMPLES.map((ex) => (
+                <button key={ex} type="button" class="chip-btn" onClick={(e) => chat(e, ex)}>
+                  {ex}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
-      <form class="panel filters" onSubmit={search} aria-label="Filters">
-        <div class="segmented" role="group" aria-label="Type">
-          {(["movie", "tv"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              aria-pressed={mediaType === t}
-              class={mediaType === t ? "active" : ""}
-              onClick={() => setMediaType(t)}
-            >
-              {t === "movie" ? "Movies" : "Series"}
-            </button>
-          ))}
-        </div>
-        <div class="chips">
-          {GENRES.map((g) => (
-            <label key={g} class="chip">
-              <input type="checkbox" checked={genres.includes(g)} onChange={() => toggleGenre(g)} />
-              {g}
-            </label>
-          ))}
-        </div>
-        <div class="row">
-          <label class="field">
-            <span>Max minutes</span>
+      <form class="filters" onSubmit={search} aria-label="Filters">
+        <p class="eyebrow">{config.chat_enabled ? "Or browse by filters" : "Browse by filters"}</p>
+        <div class="filters-row">
+          <div class="segmented segmented-small" role="group" aria-label="Type">
+            {(["movie", "tv"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={mediaType === t}
+                class={mediaType === t ? "active" : ""}
+                onClick={() => setMediaType(t)}
+              >
+                {t === "movie" ? "Movies" : "Series"}
+              </button>
+            ))}
+          </div>
+          <label class="inline-field">
+            <span>Max min</span>
             <input
               type="number"
               min={1}
@@ -155,7 +151,7 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
               onInput={(e) => setRuntime(e.currentTarget.value)}
             />
           </label>
-          <label class="field">
+          <label class="inline-field">
             <span>Min IMDb</span>
             <input
               type="number"
@@ -167,9 +163,17 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
               onInput={(e) => setMinImdb(e.currentTarget.value)}
             />
           </label>
-          <button class="btn" type="submit" disabled={busy !== null}>
+          <button class="btn btn-small" type="submit" disabled={busy !== null}>
             {busy === "search" ? "Searching…" : "Show picks"}
           </button>
+        </div>
+        <div class="chips chips-small">
+          {GENRES.map((g) => (
+            <label key={g} class="chip">
+              <input type="checkbox" checked={genres.includes(g)} onChange={() => toggleGenre(g)} />
+              {g}
+            </label>
+          ))}
         </div>
       </form>
 
@@ -180,15 +184,25 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
       )}
 
       {results && (
-        <section class="results" aria-label="Shortlist">
+        <section class="results" aria-labelledby="picks-title">
+          <header class="results-head">
+            <h2 id="picks-title">
+              {results.results.length > 0 ? "Picks for your family" : "Closest picks"}
+            </h2>
+            {picks.length > 0 && (
+              <span class="muted">
+                {picks.length} {picks.length === 1 ? "title" : "titles"}
+              </span>
+            )}
+          </header>
           {results.results.length === 0 && (
-            <p class="panel muted">
+            <p class={nearMisses.length > 0 ? "notice notice-warn" : "notice"}>
               {nearMisses.length > 0
                 ? "Nothing fits your family profile. These are the closest, with what each one misses."
                 : "Nothing passed the filters. Try fewer genres, a longer runtime or another type."}
             </p>
           )}
-          {(results.results.length > 0 ? results.results : nearMisses).map((r) => (
+          {picks.map((r) => (
             <TitleCard
               key={`${r.media_type}:${r.tmdb_id}`}
               result={r}
