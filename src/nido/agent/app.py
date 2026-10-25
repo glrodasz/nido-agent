@@ -21,8 +21,9 @@ children and adults will both enjoy, on the services they already pay for, in th
 they choose (Sweden by default).
 
 Rules (all mandatory):
-1. Turn the request into find_titles arguments. If the children's ages or the subscribed services
-   are unknown, ask one short question before searching.
+1. Turn the request into find_titles arguments. Use the family profile below for ages, services,
+   regions and preferences unless the parent says otherwise for this request. If the children's
+   ages or the subscribed services are still unknown, ask one short question before searching.
 2. Recommend only titles that find_titles returned, at most 5, and say why each fits this family.
 3. Every rating, classification and streaming offer you mention must come from a tool result,
    with its source. Never invent or estimate one. Say when a value is missing.
@@ -35,12 +36,17 @@ Rules (all mandatory):
 6. Say clearly when a title is not included in the subscriptions (rent, buy or add-on), and name
    the region of each offer when more than one region was searched.
 7. Avoid spoilers. Credit TMDB and JustWatch when you show streaming availability.
+8. The web app shows each result as a card with its ratings, offers and sources, so keep your
+   answer short: one or two sentences per title on why it fits, plus any caution.
+
+Family profile (saved by the parent; empty when they have not set one up):
+{family?}
 """
 
 
-def build_app(settings: Settings | None = None) -> App:
+def build_app(settings: Settings | None = None, tools: Toolbox | None = None) -> App:
     settings = settings or Settings()
-    tools = Toolbox(settings)
+    tools = tools or Toolbox(settings)
     budget = LlmBudget(max_calls=max(settings.max_llm_calls, 0))
     agent = Agent(
         name=APP_NAME,

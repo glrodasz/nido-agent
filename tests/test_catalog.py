@@ -32,3 +32,12 @@ def test_provider_names_match_services_but_not_channels():
     assert service_for_provider("Amazon Prime Video").key == "prime_video"
     assert service_for_provider("Apple TV Plus").key == "apple_tv_plus"
     assert service_for_provider("HBO Max Amazon Channel") is None
+
+
+def test_series_prefilter_is_one_step_looser_in_tmdb_order():
+    from nido.models import MediaType
+
+    assert prefilter_certification(6, MediaType.TV) == "TV-PG"  # TV-G is the last one allowed
+    assert prefilter_certification(7, MediaType.TV) == "TV-PG"
+    assert prefilter_certification(10, MediaType.TV) == "TV-14"
+    assert prefilter_certification(17, MediaType.TV) == "TV-MA"

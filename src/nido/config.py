@@ -11,6 +11,10 @@ def _env_int(name: str, default: int) -> int:
     return int(value) if value else default
 
 
+def _env_list(name: str) -> tuple[str, ...]:
+    return tuple(v.strip() for v in os.getenv(name, "").split(",") if v.strip())
+
+
 def _env_regions(name: str, default: tuple[str, ...] = ("SE",)) -> tuple[str, ...]:
     """ "SE,NO" -> ("SE", "NO"); unset, empty or only separators keeps the default."""
     regions = tuple(r.strip().upper() for r in os.getenv(name, "").split(",") if r.strip())
@@ -23,7 +27,6 @@ class Settings:
     tmdb_token: str | None = field(default_factory=lambda: os.getenv("TMDB_API_TOKEN"))
     omdb_key: str | None = field(default_factory=lambda: os.getenv("OMDB_API_KEY"))
 
-    # Family defaults until profiles live in Firestore.
     # Default catalog regions (comma-separated ISO codes) when a request names none.
     regions: tuple[str, ...] = field(default_factory=lambda: _env_regions("NIDO_REGIONS"))
     language: str = field(default_factory=lambda: os.getenv("NIDO_LANGUAGE", "en-US"))
@@ -35,6 +38,33 @@ class Settings:
     max_llm_calls: int = field(default_factory=lambda: _env_int("NIDO_MAX_LLM_CALLS", 8))
 
     http_timeout_s: float = 20.0
+
+    # Web service (`nido serve`, Cloud Run).
+    # "memory" (local, lost on restart) or "firestore" (Cloud Run).
+    store: str = field(default_factory=lambda: os.getenv("NIDO_STORE", "memory"))
+    gcp_project: str | None = field(default_factory=lambda: os.getenv("GOOGLE_CLOUD_PROJECT"))
+    firestore_database: str = field(
+        default_factory=lambda: os.getenv("NIDO_FIRESTORE_DATABASE", "(default)")
+    )
+    # "firebase" verifies Firebase Auth ID tokens; "none" is for local runs only (one fixed user).
+    auth: str = field(default_factory=lambda: os.getenv("NIDO_AUTH", "firebase"))
+    firebase_project: str | None = field(
+        default_factory=lambda: (
+            os.getenv("NIDO_FIREBASE_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
+        )
+    )
+    # Verified Google emails allowed to sign in. Empty denies everyone under "firebase" auth, so a
+    # forgotten setting cannot open the model quota to the internet.
+    allowed_emails: tuple[str, ...] = field(
+        default_factory=lambda: tuple(e.lower() for e in _env_list("NIDO_ALLOWED_EMAILS"))
+    )
+    # Chat turns per user per UTC day (each turn is itself capped at max_llm_calls).
+    max_chat_turns_per_day: int = field(
+        default_factory=lambda: _env_int("NIDO_MAX_CHAT_TURNS_PER_DAY", 60)
+    )
+    # Built web app (web/dist) to serve at "/", for single-origin local runs. Firebase Hosting
+    # serves it in production.
+    web_dir: str | None = field(default_factory=lambda: os.getenv("NIDO_WEB_DIR"))
 
 
 def llm_credentials_available() -> bool:

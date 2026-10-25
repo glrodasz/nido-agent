@@ -147,3 +147,15 @@ async def test_provider_ids_by_service():
     ids = await client.provider_ids(MediaType.MOVIE, "SE")
     await client.aclose()
     assert ids == {"netflix": [8], "disney_plus": [337]}
+
+
+def test_resolve_genres_matches_compound_series_genres():
+    from nido.sources.tmdb import resolve_genres
+
+    tv = {"Action & Adventure": 10759, "Sci-Fi & Fantasy": 10765, "Comedy": 35}
+    assert resolve_genres(["Adventure", "comedy"], tv) == {
+        "Action & Adventure": 10759,
+        "Comedy": 35,
+    }
+    assert resolve_genres(["Science Fiction", "Fantasy"], tv) == {"Sci-Fi & Fantasy": 10765}
+    assert resolve_genres(["Music"], tv) == {}
