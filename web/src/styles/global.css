@@ -871,3 +871,12 @@ a.pill-brand:hover {
     flex: 1 1 calc(100% - 46px - 0.75rem);
   }
 }
+
+.icon {
+  flex: none;
+}
+
+.hidden-note .icon {
+  vertical-align: -3px;
+  margin-right: 0.35rem;
+}

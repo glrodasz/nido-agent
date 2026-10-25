@@ -1,6 +1,7 @@
 import { useId, useState } from "preact/hooks";
 import { MAX_CHILD_AGE, banLabel, defaultBanUntil } from "../logic/format";
 import type { MarkChange, TitleMark } from "../logic/types";
+import Icon from "./Icon";
 
 interface Props {
   mark: TitleMark | null;
@@ -10,9 +11,9 @@ interface Props {
 }
 
 const VOTES = [
-  ["seen", "Seen"],
-  ["liked_adults", "We liked it"],
-  ["liked_child", "Our kid liked it"],
+  ["seen", "Seen", "eye"],
+  ["liked_adults", "We liked it", "heart"],
+  ["liked_child", "Our kid liked it", "smile"],
 ] as const;
 
 /** Seen, the two independent likes, and "don't suggest this" for one title. */
@@ -38,7 +39,8 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
   if (mark?.ban && mark.ban_active) {
     return (
       <div class="marks">
-        <p class="notice notice-warn">
+        <p class="notice notice-warn hidden-note">
+          <Icon name="eye-off" />
           {banLabel(mark.ban, true)}. Nido won't suggest it.{" "}
           <button type="button" class="link" disabled={busy} onClick={() => change({ ban: null })}>
             Undo
@@ -52,7 +54,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
   return (
     <div class="marks">
       <div class="mark-row" role="group" aria-label="Your marks">
-        {VOTES.map(([field, label]) => {
+        {VOTES.map(([field, label, icon]) => {
           const on = Boolean(mark?.[field]);
           return (
             <button
@@ -63,6 +65,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
               disabled={busy}
               onClick={() => change({ [field]: !on })}
             >
+              <Icon name={icon} />
               {label}
             </button>
           );
@@ -74,6 +77,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
           disabled={busy}
           onClick={() => setChoosing(!choosing)}
         >
+          <Icon name="eye-off" />
           Don't suggest…
         </button>
       </div>
