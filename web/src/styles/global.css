@@ -865,3 +865,9 @@ a.pill-brand:hover {
 .lifted {
   font-style: italic;
 }
+
+@media (max-width: 560px) {
+  .hidden-titles .wl-text {
+    flex: 1 1 calc(100% - 46px - 0.75rem);
+  }
+}
