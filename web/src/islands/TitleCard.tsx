@@ -1,5 +1,12 @@
 import { useState } from "preact/hooks";
-import { accessLabel, formatVotes, isIncluded, sortOffers, verifiedAgo } from "../logic/format";
+import {
+  accessLabel,
+  formatVotes,
+  isIncluded,
+  serviceBrand,
+  sortOffers,
+  verifiedAgo,
+} from "../logic/format";
 import type { TitleResult } from "../logic/types";
 
 interface Props {
@@ -107,13 +114,17 @@ export default function TitleCard({ result, services, showRegion, saved, onToggl
                 {showRegion && <span class="pill-note"> {o.region}</span>}
               </>
             );
-            const cls = isIncluded(o, services) ? "pill pill-ok" : "pill";
+            const included = isIncluded(o, services);
+            const brand = included ? serviceBrand(o.service) : null;
+            const cls = brand ? "pill pill-brand" : included ? "pill pill-ok" : "pill";
+            const style = brand ? { "--brand": brand.bg, "--brand-text": brand.fg } : undefined;
+            const key = `${o.region}-${o.provider}-${o.access}`;
             return o.link ? (
-              <a key={`${o.region}-${o.provider}-${o.access}`} class={cls} href={o.link} target="_blank" rel="noopener">
+              <a key={key} class={cls} style={style} href={o.link} target="_blank" rel="noopener">
                 {label}
               </a>
             ) : (
-              <span key={`${o.region}-${o.provider}-${o.access}`} class={cls}>
+              <span key={key} class={cls} style={style}>
                 {label}
               </span>
             );

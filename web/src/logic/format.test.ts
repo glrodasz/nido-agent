@@ -5,6 +5,7 @@ import {
   formatVotes,
   parseAges,
   parseRegions,
+  serviceBrand,
   sortOffers,
   verifiedAgo,
 } from "./format";
@@ -70,5 +71,13 @@ describe("labels", () => {
     expect(categoryLabel("frightening")).toBe("Scary scenes");
     expect(formatVotes(1_234_567)).toBe("1.2M votes");
     expect(formatVotes(45_600)).toBe("46k votes");
+  });
+});
+
+describe("serviceBrand", () => {
+  it("knows the supported services and nothing else", () => {
+    expect(serviceBrand("netflix")).toEqual({ bg: "#e50914", fg: "#ffffff" });
+    expect(serviceBrand("mubi")).toBeNull();
+    expect(serviceBrand(null)).toBeNull();
   });
 });
