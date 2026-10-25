@@ -12,7 +12,7 @@ from urllib.parse import quote_plus
 from nido.catalog import SERVICES_BY_KEY, SYSTEMS
 from nido.config import Settings
 from nido.models import FamilyProfile, GuidanceCategory, MediaType, Rating, TitleRef
-from nido.ranking import Candidate, Ranked, shortlist
+from nido.ranking import Candidate, Ranked, near_misses, shortlist
 from nido.sources import tmdb as tmdb_source
 from nido.sources.omdb import OmdbClient
 from nido.sources.tmdb import TmdbClient
@@ -199,11 +199,14 @@ class Toolbox:
             *(self._candidate(kind, tmdb_id, regions) for tmdb_id in tmdb_ids)
         )
         ranked = shortlist(list(candidates), profile)
+        # Nothing to suggest is a dead end: show the closest titles, labelled with what they miss.
+        missed = [] if ranked else near_misses(list(candidates), profile)
         ignored = [g for g in genres or [] if not tmdb_source.resolve_genres([g], available)]
         return {
             "regions": regions,
             **({"ignored_genres": ignored} if ignored else {}),
             "results": [_present(r, regions) for r in ranked],
+            "near_misses": [_present(r, regions) for r in missed],
             "attribution": "Metadata: TMDB. Streaming availability: JustWatch via TMDB.",
         }
 
@@ -302,4 +305,5 @@ def _present(ranked: Ranked, regions: list[str]) -> dict[str, Any]:
         "included_in_subscriptions": ranked.included,
         "why": ranked.reasons,
         "cautions": ranked.cautions,
+        "misses": ranked.misses,
     }

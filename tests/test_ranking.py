@@ -13,7 +13,14 @@ from nido.models import (
     Title,
     TitleRef,
 )
-from nido.ranking import Candidate, age_baseline, evaluate, shortlist, weighted_quality
+from nido.ranking import (
+    Candidate,
+    age_baseline,
+    evaluate,
+    near_misses,
+    shortlist,
+    weighted_quality,
+)
 
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
 PROFILE = FamilyProfile(children_ages=[6, 9], services=["netflix"], max_runtime_min=110)
@@ -176,3 +183,22 @@ def test_unknown_imdb_score_fails_an_explicit_minimum():
     strict = PROFILE.model_copy(update={"min_imdb_rating": 7.0})
     assert evaluate(make(1, rating=None), strict) is None
     assert evaluate(make(1, rating=None), PROFILE) is not None
+
+
+def test_near_misses_explain_the_broken_rules_closest_first():
+    young = FamilyProfile(children_ages=[4], services=["netflix"], max_runtime_min=110)
+    seven = make(1, min_age=7)
+    eleven = make(2, min_age=11)
+    seven_and_long = make(3, min_age=7, runtime=150)
+    unwatchable = make(4, min_age=7)
+    unwatchable.availability = []
+    candidates = [eleven, seven_and_long, seven, unwatchable]
+    assert shortlist(candidates, young) == []
+    missed = near_misses(candidates, young)
+    assert [r.candidate.title.tmdb_id for r in missed] == [1, 2, 3]
+    assert missed[0].misses == ["Rated 7+, and your youngest is 4."]
+    assert len(missed[2].misses) == 2 and "150 min" in missed[2].misses[1]
+
+
+def test_titles_that_pass_have_no_misses():
+    assert evaluate(make(1), PROFILE).misses == []
