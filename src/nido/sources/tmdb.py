@@ -98,8 +98,7 @@ class TmdbClient:
             "vote_average.gte": min_vote_average,
             "vote_count.gte": 200 if min_vote_average else None,
         }
-        # TMDB only filters certifications on movies; series are filtered after details load.
-        if media_type is MediaType.MOVIE and max_certification:
+        if max_certification:
             # The certification scale is a country's own: "PG-13" means nothing in SE.
             params["certification_country"] = certification_country or region
             params["certification.lte"] = max_certification
@@ -113,6 +112,11 @@ class TmdbClient:
         data = await self._get(f"/discover/{media_type}", **params)
         return [parse_title(media_type, item) for item in data.get("results", [])]
 
+    async def genres(self, media_type: MediaType) -> dict[str, int]:
+        """TMDB genre name -> id. Movies and series have different lists."""
+        data = await self._get(f"/genre/{media_type}/list")
+        return {g["name"]: int(g["id"]) for g in data.get("genres", []) if "name" in g}
+
     async def details(self, media_type: MediaType, tmdb_id: int) -> dict[str, Any]:
         """Raw details with certifications, external ids and watch providers in one request."""
         ratings = "release_dates" if media_type is MediaType.MOVIE else "content_ratings"
@@ -120,6 +124,28 @@ class TmdbClient:
             f"/{media_type}/{tmdb_id}",
             append_to_response=f"{ratings},external_ids,watch/providers",
         )
+
+
+# Series genres are compound ("Action & Adventure", "Sci-Fi & Fantasy"); these spellings name
+# the same part.
+_GENRE_ALIASES = {"science fiction": "sci-fi"}
+
+
+def resolve_genres(requested: Iterable[str], available: dict[str, int]) -> dict[str, int]:
+    """Requested genre names -> the matching TMDB genres (name -> id) for one media type.
+
+    "Adventure" matches the movie genre "Adventure" and the series genre "Action & Adventure".
+    Names TMDB does not have for this media type are dropped.
+    """
+    out: dict[str, int] = {}
+    for wanted in requested:
+        key = wanted.strip().lower()
+        key = _GENRE_ALIASES.get(key, key)
+        for name, genre_id in available.items():
+            parts = {p.strip().lower() for p in name.split("&")}
+            if key == name.lower() or key in parts:
+                out[name] = genre_id
+    return out
 
 
 def _access_for(bucket: str, provider_name: str) -> AccessType:

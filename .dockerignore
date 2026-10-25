@@ -1,0 +1,23 @@
+# Keep the build context small and free of local state and secrets. The Dockerfile copies only
+# pyproject.toml, uv.lock, .python-version, README.md, LICENSE, src/ and agents/.
+.git
+.github
+.venv
+web
+tests
+docs
+infra
+node_modules
+**/node_modules
+.env
+.env.*
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.adk
+dist
+firebase.json
+firestore.rules
+Dockerfile
+.dockerignore

@@ -38,3 +38,35 @@ jobs:
 
       - name: ADK agent shim imports
         run: PYTHONPATH=agents uv run --frozen python -c "import nido_agent"
+
+      - name: API server imports
+        run: uv run --frozen python -c "from nido.server import create_app; from nido.config import Settings; create_app(Settings(auth='none'))"
+
+  web:
+    name: web (astro check, vitest, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+
+  image:
+    name: image (docker build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build --tag nido-api:ci .

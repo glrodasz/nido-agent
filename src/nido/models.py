@@ -174,3 +174,14 @@ class Feedback(BaseModel):
     rejected: bool = False
     stars: int | None = Field(default=None, ge=1, le=5)
     at: datetime
+
+
+class WatchlistItem(BaseModel):
+    """A title the family saved, with enough to show it without another API call."""
+
+    title: TitleRef
+    name: str
+    year: int | None = None
+    poster_url: HttpUrl | None = None
+    watched: bool = False
+    added_at: datetime
