@@ -17,7 +17,7 @@ Disney+, HBO Max, Prime Video and Apple TV+.
 | Principle | In practice |
 |---|---|
 | **The LLM proposes, code decides** | Gemini turns a request into search criteria and explains the result. Filtering and ranking are deterministic ([`ranking.py`](src/nido/ranking.py)). |
-| **Official rating first** | Statens medieråd's classification is the baseline, kept apart from any AI assessment. Fitting the age threshold never means "appropriate for your child". |
+| **Official ratings first** | Ratings from nine countries (US, GB, DE, NL, FR, SE, NO, DK, FI) are homologated onto one age scale and the median is the baseline ([`catalog.py`](src/nido/catalog.py)). Originals are always shown, and the baseline is kept apart from any AI assessment. Fitting it never means "appropriate for your child". |
 | **Every claim has a source** | Ratings, classifications, offers and guidance carry their source and retrieval date ([`models.py`](src/nido/models.py)). Missing data is shown as missing, never guessed. |
 | **Evidence and AI stay apart** | Guidance observations (official, editorial, user, AI inference) are append-only; AI summaries cite them and can be regenerated. |
 | **Free tier** | One ADK agent, Gemini Flash-Lite, per-turn model call cap, cached API responses. |
@@ -57,7 +57,7 @@ uv run pytest -q
 
 ## Roadmap
 
-1. **Phase 0, data check.** Run `nido coverage`; decide on gaps in Swedish ratings.
+1. **Phase 0, data check.** Run `nido coverage`: Swedish versus reference-country rating coverage.
 2. **Phase 1, MVP.** Family profile, Firestore cache, direct watch links, web app, Cloud Run
    deploy with billing cap.
 3. **Phase 2, guidance.** Per-category summaries from Common Sense Media, cited and labeled AI.

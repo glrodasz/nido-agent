@@ -1,4 +1,4 @@
-from nido.agent.tools import max_certification
+from nido.agent.tools import prefilter_certification
 from nido.catalog import min_age_for, service_for_provider
 
 
@@ -6,15 +6,23 @@ def test_swedish_ratings_map_to_minimum_ages():
     assert min_age_for("SE", "Btl") == 0
     assert min_age_for("se", "11") == 11
     assert min_age_for("SE", "PG-13") is None
-    assert min_age_for("US", "PG") is None
+    assert min_age_for("JP", "G") is None
 
 
-def test_max_certification_for_youngest_child():
-    assert max_certification("SE", 4) == "Btl"
-    assert max_certification("SE", 7) == "7"
-    assert max_certification("SE", 12) == "11"
-    assert max_certification("SE", 16) == "15"
-    assert max_certification("US", 10) is None
+def test_homologation_covers_reference_countries():
+    assert min_age_for("US", "PG-13") == 13
+    assert min_age_for("US", "TV-Y7") == 7
+    assert min_age_for("GB", "12A") == 12
+    assert min_age_for("DE", "6") == 6
+    assert min_age_for("NL", "AL") == 0
+    assert min_age_for("FI", "K-16") == 16
+
+
+def test_us_prefilter_is_one_step_looser_than_the_child():
+    assert prefilter_certification(4) == "PG"
+    assert prefilter_certification(8) == "PG-13"
+    assert prefilter_certification(13) == "R"
+    assert prefilter_certification(18) == "NC-17"
 
 
 def test_provider_names_match_services_but_not_channels():

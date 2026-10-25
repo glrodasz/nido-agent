@@ -6,6 +6,8 @@ Weights are a first guess, to be tuned against the eval scenarios.
 
 from __future__ import annotations
 
+import math
+import statistics
 from dataclasses import dataclass, field
 
 from nido.models import (
@@ -40,18 +42,34 @@ class Ranked:
     candidate: Candidate
     score: float
     included: bool
+    baseline: AgeBaseline | None
     reasons: list[str]
     cautions: list[str]
 
 
-def official_min_age(candidate: Candidate, region: str) -> int | None:
-    """The strictest official classification for `region` (versions can differ)."""
-    ages = [
-        c.min_age
-        for c in candidate.classifications
-        if c.region == region.upper() and c.min_age is not None
-    ]
-    return max(ages) if ages else None
+@dataclass(frozen=True)
+class AgeBaseline:
+    """Official ratings homologated onto one age scale (catalog.SYSTEMS)."""
+
+    age: int
+    # Country -> its strictest homologated age, the inputs of the median.
+    by_country: dict[str, int]
+
+    def describe(self) -> str:
+        countries = ", ".join(f"{c} {a}+" for c, a in sorted(self.by_country.items()))
+        return f"age {self.age}+ (median of {len(self.by_country)} countries: {countries})"
+
+
+def age_baseline(classifications: list[Classification]) -> AgeBaseline | None:
+    """Median of the homologated ages across countries, rounded up. Within a country the strictest
+    version counts. One country's rating alone (say only Sweden's) is used as is."""
+    by_country: dict[str, int] = {}
+    for c in classifications:
+        if c.min_age is not None:
+            by_country[c.region] = max(by_country.get(c.region, 0), c.min_age)
+    if not by_country:
+        return None
+    return AgeBaseline(age=math.ceil(statistics.median(by_country.values())), by_country=by_country)
 
 
 def weighted_quality(rating: Rating | None) -> float | None:
@@ -67,13 +85,15 @@ def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
     reasons: list[str] = []
     cautions: list[str] = []
 
-    min_age = official_min_age(candidate, profile.region)
-    if min_age is None:
-        cautions.append(f"No official {profile.region} classification found.")
-    elif min_age > profile.youngest:
+    baseline = age_baseline(candidate.classifications)
+    if baseline is None:
+        cautions.append("No official age rating found in any reference country.")
+    elif baseline.age > profile.youngest:
         return None
     else:
-        reasons.append(f"Official {profile.region} classification fits age {profile.youngest}.")
+        reasons.append(f"Official ratings put it at {baseline.describe()}.")
+        if len(baseline.by_country) == 1:
+            cautions.append("Only one country's rating was found.")
 
     offers = [a for a in candidate.availability if a.region == profile.region.upper()]
     included = any(a.access in INCLUDED and a.service_key in profile.services for a in offers)
@@ -119,7 +139,7 @@ def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
         + 0.15 * genre_match
         - 0.2 * len(flagged)
     )
-    return Ranked(candidate, round(score, 4), included, reasons, cautions)
+    return Ranked(candidate, round(score, 4), included, baseline, reasons, cautions)
 
 
 def shortlist(

@@ -13,7 +13,7 @@ from nido.models import (
     Title,
     TitleRef,
 )
-from nido.ranking import Candidate, evaluate, shortlist, weighted_quality
+from nido.ranking import Candidate, age_baseline, evaluate, shortlist, weighted_quality
 
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
 PROFILE = FamilyProfile(children_ages=[6, 9], services=["netflix"], max_runtime_min=110)
@@ -86,7 +86,7 @@ def test_excludes_titles_rated_above_youngest_child():
 def test_missing_classification_is_kept_with_a_caution():
     ranked = evaluate(make(1, cert=None), PROFILE)
     assert ranked is not None
-    assert any("No official SE classification" in c for c in ranked.cautions)
+    assert any("No official age rating" in c for c in ranked.cautions)
 
 
 def test_rent_only_is_kept_but_ranked_below_included():
@@ -121,3 +121,44 @@ def test_shortlist_is_capped_and_sorted():
     result = shortlist(candidates, PROFILE)
     assert len(result) == 5
     assert [r.score for r in result] == sorted((r.score for r in result), reverse=True)
+
+
+def rated(**ages: int) -> list[Classification]:
+    ref = TitleRef(media_type=MediaType.MOVIE, tmdb_id=1)
+    return [
+        Classification(
+            title=ref,
+            region=country,
+            issuer="x",
+            value=str(age),
+            min_age=age,
+            source="TMDB",
+            retrieved_at=NOW,
+        )
+        for country, age in ages.items()
+    ]
+
+
+def test_baseline_is_the_median_across_countries_rounded_up():
+    assert age_baseline(rated(US=8, GB=8, SE=7, DE=6)).age == 8
+    assert age_baseline(rated(US=13, SE=11)).age == 12
+    assert age_baseline(rated(SE=7)).age == 7
+    assert age_baseline([]) is None
+
+
+def test_strictest_version_counts_within_a_country():
+    classifications = rated(SE=7) + rated(SE=11)
+    assert age_baseline(classifications).by_country == {"SE": 11}
+
+
+def test_median_lets_a_lone_strict_country_through_with_reasons():
+    candidate = make(1)
+    candidate.classifications = rated(US=8, GB=8, SE=7, DE=12)
+    ranked = evaluate(candidate, FamilyProfile(children_ages=[8], services=["netflix"]))
+    assert ranked is not None
+    assert any("median of 4 countries" in r for r in ranked.reasons)
+
+
+def test_single_country_rating_is_flagged():
+    ranked = evaluate(make(1), PROFILE)
+    assert any("Only one country" in c for c in ranked.cautions)

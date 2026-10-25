@@ -73,14 +73,22 @@ def test_parse_series_title_uses_episode_runtime_and_external_imdb_id():
     assert (title.runtime_min, title.season_count, title.imdb_id) == (7, 3, "tt7678620")
 
 
-def test_classifications_keep_only_region_and_collapse_duplicates():
-    found = parse_classifications(MediaType.MOVIE, MOVIE, "SE", now=NOW)
+def test_classifications_for_one_region_collapse_duplicates():
+    found = parse_classifications(MediaType.MOVIE, MOVIE, ["SE"], now=NOW)
     assert [(c.value, c.min_age, c.issuer) for c in found] == [("Btl", 0, "Statens medieråd")]
     assert found[0].retrieved_at == NOW
 
 
+def test_classifications_default_to_all_reference_countries():
+    found = parse_classifications(MediaType.MOVIE, MOVIE, now=NOW)
+    assert sorted((c.region, c.value, c.min_age) for c in found) == [
+        ("GB", "PG", 8),
+        ("SE", "Btl", 0),
+    ]
+
+
 def test_series_classification():
-    found = parse_classifications(MediaType.TV, SERIES, "SE", now=NOW)
+    found = parse_classifications(MediaType.TV, SERIES, now=NOW)
     assert [c.value for c in found] == ["Btl"]
 
 

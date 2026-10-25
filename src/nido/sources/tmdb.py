@@ -156,47 +156,53 @@ def parse_title(media_type: MediaType, data: dict[str, Any]) -> Title:
 
 
 def parse_classifications(
-    media_type: MediaType, data: dict[str, Any], region: str, *, now: datetime | None = None
+    media_type: MediaType,
+    data: dict[str, Any],
+    regions: Iterable[str] | None = None,
+    *,
+    now: datetime | None = None,
 ) -> list[Classification]:
-    """Official certifications for `region` from a details payload. Empty values are dropped;
-    the same value from several release types collapses into one record per value."""
+    """Official certifications from a details payload, for `regions` (default: every country in
+    catalog.SYSTEMS). Empty values are dropped; one record per (country, value)."""
     now = now or datetime.now(UTC)
+    wanted = {r.upper() for r in regions} if regions is not None else set(SYSTEMS)
     ref = TitleRef(media_type=media_type, tmdb_id=int(data["id"]))
-    system = SYSTEMS.get(region.upper())
-    issuer = system.issuer if system else f"{region.upper()} classification (via TMDB)"
-    out: dict[str, Classification] = {}
+    out: dict[tuple[str, str], Classification] = {}
+
+    def add(country: str, value: str, descriptors: list[str], version: str | None) -> None:
+        value = value.strip()
+        if country not in wanted or not value or (country, value) in out:
+            return
+        system = SYSTEMS.get(country)
+        out[(country, value)] = Classification(
+            title=ref,
+            region=country,
+            issuer=system.issuer if system else f"{country} classification (via TMDB)",
+            value=value,
+            min_age=min_age_for(country, value),
+            descriptors=descriptors,
+            version=version,
+            source=SOURCE,
+            retrieved_at=now,
+        )
+
     if media_type is MediaType.MOVIE:
         for country in (data.get("release_dates") or {}).get("results", []):
-            if country.get("iso_3166_1") != region.upper():
-                continue
             for release in country.get("release_dates", []):
-                value = (release.get("certification") or "").strip()
-                if value and value not in out:
-                    out[value] = Classification(
-                        title=ref,
-                        region=region.upper(),
-                        issuer=issuer,
-                        value=value,
-                        min_age=min_age_for(region, value),
-                        descriptors=list(release.get("descriptors") or []),
-                        version=release.get("note") or None,
-                        source=SOURCE,
-                        retrieved_at=now,
-                    )
+                add(
+                    country.get("iso_3166_1", ""),
+                    release.get("certification") or "",
+                    list(release.get("descriptors") or []),
+                    release.get("note") or None,
+                )
     else:
         for rating in (data.get("content_ratings") or {}).get("results", []):
-            value = (rating.get("rating") or "").strip()
-            if rating.get("iso_3166_1") == region.upper() and value:
-                out[value] = Classification(
-                    title=ref,
-                    region=region.upper(),
-                    issuer=issuer,
-                    value=value,
-                    min_age=min_age_for(region, value),
-                    descriptors=list(rating.get("descriptors") or []),
-                    source=SOURCE,
-                    retrieved_at=now,
-                )
+            add(
+                rating.get("iso_3166_1", ""),
+                rating.get("rating") or "",
+                list(rating.get("descriptors") or []),
+                None,
+            )
     return list(out.values())
 
 

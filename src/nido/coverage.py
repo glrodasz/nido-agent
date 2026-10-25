@@ -1,7 +1,8 @@
 """Phase 0 data check: how much of each service's catalog in a region has what Nido needs.
 
 For the most popular titles per service it measures the share with an official classification
-for the region, an IMDb id (needed for ratings) and a watch link. Run: `nido coverage`.
+for the region and for any reference country (catalog.SYSTEMS), an IMDb id (needed for ratings)
+and a watch link. Run: `nido coverage`.
 """
 
 from __future__ import annotations
@@ -20,7 +21,8 @@ class CoverageRow:
     service: str
     media_type: MediaType
     sampled: int
-    classified: int
+    rated_local: int
+    rated_any: int
     imdb_ids: int
     links: int
 
@@ -47,8 +49,11 @@ async def measure(
                     service=service.name,
                     media_type=kind,
                     sampled=len(details),
-                    classified=sum(
-                        bool(tmdb_source.parse_classifications(kind, d, region)) for d in details
+                    rated_local=sum(
+                        bool(tmdb_source.parse_classifications(kind, d, [region])) for d in details
+                    ),
+                    rated_any=sum(
+                        bool(tmdb_source.parse_classifications(kind, d)) for d in details
                     ),
                     imdb_ids=sum(bool(tmdb_source.parse_title(kind, d).imdb_id) for d in details),
                     links=sum(
@@ -63,12 +68,14 @@ def report(rows: list[CoverageRow], unmatched: list[str], region: str) -> str:
     lines = [
         f"# Data coverage, region {region}",
         "",
-        "| Service | Type | Sampled | Official rating | IMDb id | Watch link |",
-        "| --- | --- | --- | --- | --- | --- |",
+        f"| Service | Type | Sampled | {region} rating | Any reference rating "
+        "| IMDb id | Watch link |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for r in rows:
         lines.append(
-            f"| {r.service} | {r.media_type} | {r.sampled} | {r.pct(r.classified)} "
+            f"| {r.service} | {r.media_type} | {r.sampled} | {r.pct(r.rated_local)} "
+            f"| {r.pct(r.rated_any)} "
             f"| {r.pct(r.imdb_ids)} | {r.pct(r.links)} |"
         )
     if unmatched:

@@ -19,14 +19,18 @@ from nido.sources.tmdb import TmdbClient
 MAX_DETAILS = 12
 
 
-def max_certification(region: str, youngest: int) -> str | None:
-    """Highest official value the youngest child is old enough for, in TMDB's spelling."""
-    system = SYSTEMS.get(region.upper())
-    if system is None:
-        return None
-    allowed = [(age, value) for value, age in system.min_age.items() if age <= youngest]
-    value = max(allowed)[1] if allowed else None
-    return value.capitalize() if value == "btl" else value
+# Discover can only filter movies by one country's certification. US ratings are the most
+# complete on TMDB, so they pre-filter the pool one step looser than the child's age (a title
+# that is US PG-13 can still have a median of 11); the homologated baseline decides afterwards.
+US_MOVIE_ORDER = ("G", "PG", "PG-13", "R", "NC-17")
+
+
+def prefilter_certification(youngest: int) -> str:
+    """Loosest US movie rating worth fetching details for, given the youngest child's age."""
+    us = SYSTEMS["US"]
+    allowed = [v for v in US_MOVIE_ORDER if (us.age_for(v) or 0) <= youngest]
+    step = min(len(allowed), len(US_MOVIE_ORDER) - 1)
+    return US_MOVIE_ORDER[step]
 
 
 class Toolbox:
@@ -61,7 +65,7 @@ class Toolbox:
             )
         return Candidate(
             title=title,
-            classifications=tmdb_source.parse_classifications(media_type, data, region),
+            classifications=tmdb_source.parse_classifications(media_type, data),
             availability=tmdb_source.parse_availability(media_type, data, region),
             rating=rating,
         )
@@ -108,7 +112,7 @@ class Toolbox:
             kind,
             region=region,
             provider_ids=provider_ids,
-            max_certification=max_certification(region, profile.youngest),
+            max_certification=prefilter_certification(profile.youngest),
             max_runtime_min=max_runtime_min if kind is MediaType.MOVIE else None,
             min_vote_average=min_imdb_rating,
         )
@@ -157,8 +161,9 @@ def _present(ranked: Ranked, region: str) -> dict[str, Any]:
             if c.rating
             else None
         ),
-        "official_classification": [
-            {"value": x.value, "issuer": x.issuer, "region": x.region, "source": x.source}
+        "age_baseline": ranked.baseline.describe() if ranked.baseline else None,
+        "official_classifications": [
+            {"value": x.value, "issuer": x.issuer, "country": x.region, "source": x.source}
             for x in c.classifications
         ],
         "where_to_watch": [
