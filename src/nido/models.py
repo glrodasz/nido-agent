@@ -152,7 +152,9 @@ class FamilyProfile(BaseModel):
     """Minimal personal data: ages, never names or birthdates."""
 
     children_ages: list[int] = Field(min_length=1)
-    region: str = "SE"
+    # Catalog regions whose streaming offers count (a VPN can add more than the home one).
+    # Age ratings do not depend on them: they come from every reference country.
+    regions: list[str] = Field(default_factory=lambda: ["SE"], min_length=1)
     services: list[str] = Field(default_factory=list)
     preferred_genres: list[str] = Field(default_factory=list)
     avoid_categories: list[GuidanceCategory] = Field(default_factory=list)

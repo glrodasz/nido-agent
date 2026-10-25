@@ -62,7 +62,7 @@ class AgeBaseline:
 
 def age_baseline(classifications: list[Classification]) -> AgeBaseline | None:
     """Median of the homologated ages across countries, rounded up. Within a country the strictest
-    version counts. One country's rating alone (say only Sweden's) is used as is."""
+    version counts. A single country's rating is used as is."""
     by_country: dict[str, int] = {}
     for c in classifications:
         if c.min_age is not None:
@@ -95,7 +95,8 @@ def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
         if len(baseline.by_country) == 1:
             cautions.append("Only one country's rating was found.")
 
-    offers = [a for a in candidate.availability if a.region == profile.region.upper()]
+    regions = {r.upper() for r in profile.regions}
+    offers = [a for a in candidate.availability if a.region in regions]
     included = any(a.access in INCLUDED and a.service_key in profile.services for a in offers)
     if not offers:
         return None
@@ -109,14 +110,13 @@ def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
         return None
 
     quality = weighted_quality(candidate.rating)
+    if profile.min_imdb_rating is not None and (
+        candidate.rating is None or candidate.rating.score < profile.min_imdb_rating
+    ):
+        # An unknown score cannot meet an explicit minimum.
+        return None
     if quality is None:
         cautions.append("No IMDb rating available.")
-    elif (
-        profile.min_imdb_rating
-        and candidate.rating
-        and (candidate.rating.score < profile.min_imdb_rating)
-    ):
-        return None
 
     flagged = sorted(
         {

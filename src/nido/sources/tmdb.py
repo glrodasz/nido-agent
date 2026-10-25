@@ -80,6 +80,7 @@ class TmdbClient:
         provider_ids: Iterable[int] = (),
         genre_ids: Iterable[int] = (),
         max_certification: str | None = None,
+        certification_country: str | None = None,
         max_runtime_min: int | None = None,
         min_vote_average: float | None = None,
         min_year: int | None = None,
@@ -99,7 +100,8 @@ class TmdbClient:
         }
         # TMDB only filters certifications on movies; series are filtered after details load.
         if media_type is MediaType.MOVIE and max_certification:
-            params["certification_country"] = region
+            # The certification scale is a country's own: "PG-13" means nothing in SE.
+            params["certification_country"] = certification_country or region
             params["certification.lte"] = max_certification
         if min_year:
             key = (

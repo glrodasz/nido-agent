@@ -162,3 +162,17 @@ def test_median_lets_a_lone_strict_country_through_with_reasons():
 def test_single_country_rating_is_flagged():
     ranked = evaluate(make(1), PROFILE)
     assert any("Only one country" in c for c in ranked.cautions)
+
+
+def test_offers_count_in_any_profile_region():
+    candidate = make(1)
+    candidate.availability[0].region = "NO"
+    assert evaluate(candidate, PROFILE) is None
+    vpn = PROFILE.model_copy(update={"regions": ["SE", "NO"]})
+    assert evaluate(candidate, vpn).included
+
+
+def test_unknown_imdb_score_fails_an_explicit_minimum():
+    strict = PROFILE.model_copy(update={"min_imdb_rating": 7.0})
+    assert evaluate(make(1, rating=None), strict) is None
+    assert evaluate(make(1, rating=None), PROFILE) is not None

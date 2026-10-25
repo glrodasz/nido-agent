@@ -11,6 +11,12 @@ def _env_int(name: str, default: int) -> int:
     return int(value) if value else default
 
 
+def _env_regions(name: str, default: tuple[str, ...] = ("SE",)) -> tuple[str, ...]:
+    """ "SE,NO" -> ("SE", "NO"); unset, empty or only separators keeps the default."""
+    regions = tuple(r.strip().upper() for r in os.getenv(name, "").split(",") if r.strip())
+    return regions or default
+
+
 @dataclass(frozen=True)
 class Settings:
     # Data sources. TMDB takes the v4 "API Read Access Token" (a bearer token), not the v3 key.
@@ -18,7 +24,8 @@ class Settings:
     omdb_key: str | None = field(default_factory=lambda: os.getenv("OMDB_API_KEY"))
 
     # Family defaults until profiles live in Firestore.
-    region: str = field(default_factory=lambda: os.getenv("NIDO_REGION", "SE"))
+    # Default catalog regions (comma-separated ISO codes) when a request names none.
+    regions: tuple[str, ...] = field(default_factory=lambda: _env_regions("NIDO_REGIONS"))
     language: str = field(default_factory=lambda: os.getenv("NIDO_LANGUAGE", "en-US"))
 
     # LLM. GOOGLE_API_KEY (AI Studio, free tier) or GOOGLE_GENAI_USE_VERTEXAI=1 is read by ADK.

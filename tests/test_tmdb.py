@@ -107,18 +107,23 @@ def test_no_availability_outside_region():
 
 
 @respx.mock
-async def test_discover_sends_swedish_certification_filter():
+async def test_discover_pairs_certification_with_its_own_country():
     route = respx.get(f"{BASE_URL}/discover/movie").mock(
         return_value=httpx.Response(200, json={"results": [MOVIE]})
     )
     client = TmdbClient("token")
     titles = await client.discover(
-        MediaType.MOVIE, region="SE", provider_ids=[8, 337], max_certification="7"
+        MediaType.MOVIE,
+        region="SE",
+        provider_ids=[8, 337],
+        max_certification="PG",
+        certification_country="US",
     )
     await client.aclose()
     params = route.calls.last.request.url.params
-    assert params["certification_country"] == "SE"
-    assert params["certification.lte"] == "7"
+    assert params["watch_region"] == "SE"
+    assert params["certification_country"] == "US"
+    assert params["certification.lte"] == "PG"
     assert params["with_watch_providers"] == "8|337"
     assert route.calls.last.request.headers["Authorization"] == "Bearer token"
     assert [t.name for t in titles] == ["Paddington 2"]

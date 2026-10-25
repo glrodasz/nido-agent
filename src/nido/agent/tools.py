@@ -4,6 +4,7 @@ every value carries its source so the model can cite it and never has to invent 
 from __future__ import annotations
 
 import asyncio
+from itertools import zip_longest
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -54,7 +55,9 @@ class Toolbox:
             )
         return self._tmdb, self._omdb
 
-    async def _candidate(self, media_type: MediaType, tmdb_id: int, region: str) -> Candidate:
+    async def _candidate(
+        self, media_type: MediaType, tmdb_id: int, regions: list[str]
+    ) -> Candidate:
         tmdb, omdb = self._clients()
         data = await tmdb.details(media_type, tmdb_id)
         title = tmdb_source.parse_title(media_type, data)
@@ -66,7 +69,11 @@ class Toolbox:
         return Candidate(
             title=title,
             classifications=tmdb_source.parse_classifications(media_type, data),
-            availability=tmdb_source.parse_availability(media_type, data, region),
+            availability=[
+                offer
+                for region in regions
+                for offer in tmdb_source.parse_availability(media_type, data, region)
+            ],
             rating=rating,
         )
 
@@ -79,6 +86,7 @@ class Toolbox:
         max_runtime_min: int | None = None,
         min_imdb_rating: float | None = None,
         avoid: list[str] | None = None,
+        regions: list[str] | None = None,
     ) -> dict[str, Any]:
         """Find a short, ranked list of movies or series for the family.
 
@@ -93,12 +101,14 @@ class Toolbox:
             avoid: content categories to avoid, any of: violence, frightening, language,
                 sex_nudity, romance, substances, bullying_discrimination, death_grief,
                 imitable_behavior.
+            regions: catalog regions to search, ISO codes like ["SE"]; omit for the family's
+                default. Only affects where titles can be watched, not age ratings.
         """
         kind = MediaType(media_type)
-        region = self._settings.region
+        regions = [r.upper() for r in regions or self._settings.regions]
         profile = FamilyProfile(
             children_ages=children_ages,
-            region=region,
+            regions=regions,
             services=[s for s in services if s in SERVICES_BY_KEY],
             preferred_genres=genres or [],
             avoid_categories=[GuidanceCategory(a) for a in avoid or [] if a in GuidanceCategory],
@@ -106,6 +116,23 @@ class Toolbox:
             min_imdb_rating=min_imdb_rating,
         )
         tmdb, _ = self._clients()
+        per_region = await asyncio.gather(
+            *(self._discover(tmdb, kind, region, profile) for region in regions)
+        )
+        tmdb_ids = _interleave(per_region)[:MAX_DETAILS]
+        candidates = await asyncio.gather(
+            *(self._candidate(kind, tmdb_id, regions) for tmdb_id in tmdb_ids)
+        )
+        ranked = shortlist(list(candidates), profile)
+        return {
+            "regions": regions,
+            "results": [_present(r, regions) for r in ranked],
+            "attribution": "Metadata: TMDB. Streaming availability: JustWatch via TMDB.",
+        }
+
+    async def _discover(
+        self, tmdb: TmdbClient, kind: MediaType, region: str, profile: FamilyProfile
+    ) -> list[int]:
         providers = await tmdb.provider_ids(kind, region)
         provider_ids = [pid for key in profile.services for pid in providers.get(key, [])]
         found = await tmdb.discover(
@@ -113,18 +140,10 @@ class Toolbox:
             region=region,
             provider_ids=provider_ids,
             max_certification=prefilter_certification(profile.youngest),
-            max_runtime_min=max_runtime_min if kind is MediaType.MOVIE else None,
-            min_vote_average=min_imdb_rating,
+            certification_country="US",
+            max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
         )
-        candidates = await asyncio.gather(
-            *(self._candidate(kind, t.tmdb_id, region) for t in found[:MAX_DETAILS])
-        )
-        ranked = shortlist(list(candidates), profile)
-        return {
-            "region": region,
-            "results": [_present(r, region) for r in ranked],
-            "attribution": "Metadata: TMDB. Streaming availability: JustWatch via TMDB.",
-        }
+        return [t.tmdb_id for t in found]
 
     def guidance_links(self, title: str, imdb_id: str | None = None) -> dict[str, Any]:
         """Links to parental guidance sources for one title. Use them to point parents to the
@@ -137,14 +156,25 @@ class Toolbox:
         q = quote_plus(title)
         links = {
             "Common Sense Media": f"https://www.commonsensemedia.org/search/{q}",
-            "Statens medieråd": "https://www.statensmedierad.se/",
         }
         if imdb_id:
             links["IMDb Parents Guide"] = f"https://www.imdb.com/title/{imdb_id}/parentalguide"
         return {"links": links, "evidence": "none collected yet; links only"}
 
 
-def _present(ranked: Ranked, region: str) -> dict[str, Any]:
+def _interleave(lists: list[list[int]]) -> list[int]:
+    """Round-robin merge without duplicates, so every region contributes its top titles."""
+    seen: set[int] = set()
+    out: list[int] = []
+    for group in zip_longest(*lists):
+        for tmdb_id in group:
+            if tmdb_id is not None and tmdb_id not in seen:
+                seen.add(tmdb_id)
+                out.append(tmdb_id)
+    return out
+
+
+def _present(ranked: Ranked, regions: list[str]) -> dict[str, Any]:
     c = ranked.candidate
     t = c.title
     return {
@@ -168,12 +198,13 @@ def _present(ranked: Ranked, region: str) -> dict[str, Any]:
         ],
         "where_to_watch": [
             {
+                "region": a.region,
                 "provider": a.provider_name,
                 "access": a.access,
                 "link": str(a.link) if a.link else None,
             }
             for a in c.availability
-            if a.region == region.upper()
+            if a.region in regions
         ],
         "included_in_subscriptions": ranked.included,
         "why": ranked.reasons,

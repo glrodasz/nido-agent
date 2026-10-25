@@ -10,6 +10,11 @@ class LlmBudgetExceededError(RuntimeError):
     pass
 
 
+# Invocations remembered at once: enough for overlapping turns under `adk web`, small enough that
+# finished ones fall off without explicit cleanup.
+MAX_TRACKED_INVOCATIONS = 256
+
+
 @dataclass
 class LlmBudget:
     max_calls: int
@@ -20,6 +25,10 @@ class LlmBudget:
         used = self._calls.get(invocation, 0)
         if used >= self.max_calls:
             raise LlmBudgetExceededError(f"NIDO_MAX_LLM_CALLS={self.max_calls} reached this turn")
-        # Only the current turn matters: drop counters of finished invocations.
-        self._calls = {invocation: used + 1}
+        self._calls.pop(invocation, None)
+        self._calls[invocation] = used + 1
+        # Dicts keep insertion order, and the line above moves this invocation to the end: drop the
+        # least recently used ones.
+        while len(self._calls) > MAX_TRACKED_INVOCATIONS:
+            del self._calls[next(iter(self._calls))]
         return None
