@@ -88,6 +88,17 @@ export default function TitleCard({ result, services, showRegion, saved, onToggl
           )}
         </div>
 
+        {result.misses.length > 0 && (
+          <div class="misses">
+            <strong>Outside your family profile</strong>
+            <ul>
+              {result.misses.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {result.synopsis && <p class="synopsis">{result.synopsis}</p>}
 
         <section class="facts">

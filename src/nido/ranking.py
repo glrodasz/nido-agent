@@ -26,6 +26,7 @@ INCLUDED = {AccessType.SUBSCRIPTION, AccessType.ADS}
 PRIOR_VOTES = 5_000
 PRIOR_SCORE = 6.5
 SHORTLIST_SIZE = 5
+NEAR_MISS_SIZE = 3
 
 
 @dataclass
@@ -45,6 +46,8 @@ class Ranked:
     baseline: AgeBaseline | None
     reasons: list[str]
     cautions: list[str]
+    # Family profile rules the title breaks; only near misses (see near_misses) have any.
+    misses: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -82,14 +85,22 @@ def weighted_quality(rating: Rating | None) -> float | None:
 
 def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
     """None when the title is excluded; otherwise its score and the reasons behind it."""
+    ranked = _assess(candidate, profile)
+    return None if ranked is None or ranked.misses else ranked
+
+
+def _assess(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
+    """Score every title that can be watched in the family's regions, listing the profile rules
+    it breaks in `misses`. None when there is nowhere to watch it at all."""
     reasons: list[str] = []
     cautions: list[str] = []
+    misses: list[str] = []
 
     baseline = age_baseline(candidate.classifications)
     if baseline is None:
         cautions.append("No official age rating found in any reference country.")
     elif baseline.age > profile.youngest:
-        return None
+        misses.append(f"Rated {baseline.age}+, and your youngest is {profile.youngest}.")
     else:
         reasons.append(f"Official ratings put it at {baseline.describe()}.")
         if len(baseline.by_country) == 1:
@@ -107,14 +118,19 @@ def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
 
     runtime = candidate.title.runtime_min
     if profile.max_runtime_min and runtime and runtime > profile.max_runtime_min:
-        return None
+        misses.append(f"Runs {runtime} min, longer than your {profile.max_runtime_min} min limit.")
 
     quality = weighted_quality(candidate.rating)
-    if profile.min_imdb_rating is not None and (
-        candidate.rating is None or candidate.rating.score < profile.min_imdb_rating
-    ):
+    if profile.min_imdb_rating is not None:
         # An unknown score cannot meet an explicit minimum.
-        return None
+        if candidate.rating is None:
+            misses.append(
+                f"No IMDb score to check against your minimum of {profile.min_imdb_rating}."
+            )
+        elif candidate.rating.score < profile.min_imdb_rating:
+            misses.append(
+                f"IMDb {candidate.rating.score}, below your minimum of {profile.min_imdb_rating}."
+            )
     if quality is None:
         cautions.append("No IMDb rating available.")
 
@@ -139,7 +155,7 @@ def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
         + 0.15 * genre_match
         - 0.2 * len(flagged)
     )
-    return Ranked(candidate, round(score, 4), included, baseline, reasons, cautions)
+    return Ranked(candidate, round(score, 4), included, baseline, reasons, cautions, misses)
 
 
 def shortlist(
@@ -148,3 +164,17 @@ def shortlist(
     ranked = [r for c in candidates if (r := evaluate(c, profile)) is not None]
     ranked.sort(key=lambda r: r.score, reverse=True)
     return ranked[:size]
+
+
+def near_misses(
+    candidates: list[Candidate], profile: FamilyProfile, size: int = NEAR_MISS_SIZE
+) -> list[Ranked]:
+    """The closest titles that break the family profile, for when the shortlist is empty: fewest
+    broken rules first, then the smallest age gap, then the score."""
+
+    def gap(r: Ranked) -> int:
+        return max(0, r.baseline.age - profile.youngest) if r.baseline else 0
+
+    missed = [r for c in candidates if (r := _assess(c, profile)) is not None and r.misses]
+    missed.sort(key=lambda r: (len(r.misses), gap(r), -r.score))
+    return missed[:size]

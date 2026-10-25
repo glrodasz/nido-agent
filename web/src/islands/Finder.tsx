@@ -76,6 +76,7 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
   const toggleGenre = (g: string) =>
     setGenres(genres.includes(g) ? genres.filter((x) => x !== g) : [...genres, g]);
   const multiRegion = (results?.regions.length ?? 0) > 1;
+  const nearMisses = results?.near_misses ?? [];
 
   return (
     <div class="finder">
@@ -180,22 +181,23 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
 
       {results && (
         <section class="results" aria-label="Shortlist">
-          {results.results.length === 0 ? (
+          {results.results.length === 0 && (
             <p class="panel muted">
-              Nothing passed the filters. Try fewer genres, a longer runtime or another type.
+              {nearMisses.length > 0
+                ? "Nothing fits your family profile. These are the closest, with what each one misses."
+                : "Nothing passed the filters. Try fewer genres, a longer runtime or another type."}
             </p>
-          ) : (
-            results.results.map((r) => (
-              <TitleCard
-                key={`${r.media_type}:${r.tmdb_id}`}
-                result={r}
-                services={profile.services}
-                showRegion={multiRegion}
-                saved={savedKeys.has(`${r.media_type}:${r.tmdb_id}`)}
-                onToggleSave={onToggleSave}
-              />
-            ))
           )}
+          {(results.results.length > 0 ? results.results : nearMisses).map((r) => (
+            <TitleCard
+              key={`${r.media_type}:${r.tmdb_id}`}
+              result={r}
+              services={profile.services}
+              showRegion={multiRegion}
+              saved={savedKeys.has(`${r.media_type}:${r.tmdb_id}`)}
+              onToggleSave={onToggleSave}
+            />
+          ))}
           <p class="attribution muted">{config.attribution}</p>
         </section>
       )}

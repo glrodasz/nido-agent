@@ -53,11 +53,15 @@ export interface TitleResult {
   included_in_subscriptions: boolean;
   why: string[];
   cautions: string[];
+  // Family profile rules a near miss breaks; empty for real results.
+  misses: string[];
 }
 
 export interface SearchResult {
   regions: string[];
   results: TitleResult[];
+  // The closest titles that break the profile, sent only when results is empty.
+  near_misses?: TitleResult[];
   attribution: string;
 }
 
