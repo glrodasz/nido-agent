@@ -8,13 +8,16 @@ import ProfileForm from "./ProfileForm";
 import Watchlist from "./Watchlist";
 
 type Tab = "find" | "watchlist" | "family";
-type Session = { state: "loading" } | { state: "signed-out" } | { state: "in"; email: string | null };
+type Session =
+  | { state: "loading" }
+  | { state: "signed-out" }
+  | { state: "in"; uid: string; email: string | null };
 
 const itemKey = (i: WatchlistItem) => `${i.title.media_type}:${i.title.tmdb_id}`;
 
 export default function App() {
   const [session, setSession] = useState<Session>(
-    authEnabled ? { state: "loading" } : { state: "in", email: null },
+    authEnabled ? { state: "loading" } : { state: "in", uid: "local", email: null },
   );
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
@@ -27,13 +30,20 @@ export default function App() {
     if (!authEnabled) return;
     let stop: (() => void) | undefined;
     watchUser((user) =>
-      setSession(user ? { state: "in", email: user.email } : { state: "signed-out" }),
+      setSession(
+        user ? { state: "in", uid: user.uid, email: user.email } : { state: "signed-out" },
+      ),
     ).then((unsubscribe) => (stop = unsubscribe));
     return () => stop?.();
   }, []);
 
+  // Keyed on the user, not just "signed in": another account must never see this one's family.
+  const uid = session.state === "in" ? session.uid : null;
   useEffect(() => {
-    if (session.state !== "in") return;
+    setProfile(undefined);
+    setWatchlist([]);
+    setTab("find");
+    if (uid === null) return;
     setError(null);
     Promise.all([api.profile(), api.watchlist()]).then(
       ([p, w]) => {
@@ -51,7 +61,7 @@ export default function App() {
         );
       },
     );
-  }, [session.state]);
+  }, [uid]);
 
   async function saveProfile(next: Profile) {
     setProfile(await api.saveProfile(next));
