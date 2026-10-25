@@ -1,0 +1,228 @@
+"""TMDB API v3: titles, per-country certifications and watch providers.
+
+Watch provider data on TMDB comes from JustWatch; anything that displays it must credit JustWatch.
+TMDB's free API is for non-commercial use with attribution (https://www.themoviedb.org/api-terms-of-use).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import Any
+
+import httpx
+
+from nido.catalog import SYSTEMS, min_age_for, service_for_provider
+from nido.models import (
+    AccessType,
+    Availability,
+    Classification,
+    MediaType,
+    Title,
+    TitleRef,
+)
+
+BASE_URL = "https://api.themoviedb.org/3"
+IMAGE_BASE = "https://image.tmdb.org/t/p/w342"
+SOURCE = "TMDB"
+PROVIDER_SOURCE = "TMDB (JustWatch)"
+
+# TMDB watch provider buckets -> how the family would get the title.
+_ACCESS = {
+    "flatrate": AccessType.SUBSCRIPTION,
+    "ads": AccessType.ADS,
+    "rent": AccessType.RENT,
+    "buy": AccessType.BUY,
+}
+
+
+class TmdbClient:
+    def __init__(
+        self,
+        token: str,
+        *,
+        language: str = "en-US",
+        timeout_s: float = 20.0,
+        http: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._language = language
+        self._http = http or httpx.AsyncClient(
+            base_url=BASE_URL,
+            timeout=timeout_s,
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
+
+    async def aclose(self) -> None:
+        await self._http.aclose()
+
+    async def _get(self, path: str, **params: Any) -> dict[str, Any]:
+        params = {k: v for k, v in params.items() if v is not None}
+        params.setdefault("language", self._language)
+        response = await self._http.get(path, params=params)
+        response.raise_for_status()
+        return response.json()
+
+    async def provider_ids(self, media_type: MediaType, region: str) -> dict[str, list[int]]:
+        """Supported service key -> TMDB provider ids in `region`."""
+        data = await self._get(f"/watch/providers/{media_type}", watch_region=region)
+        out: dict[str, list[int]] = {}
+        for provider in data.get("results", []):
+            service = service_for_provider(provider.get("provider_name", ""))
+            if service:
+                out.setdefault(service.key, []).append(int(provider["provider_id"]))
+        return out
+
+    async def discover(
+        self,
+        media_type: MediaType,
+        *,
+        region: str,
+        provider_ids: Iterable[int] = (),
+        genre_ids: Iterable[int] = (),
+        max_certification: str | None = None,
+        max_runtime_min: int | None = None,
+        min_vote_average: float | None = None,
+        min_year: int | None = None,
+        page: int = 1,
+    ) -> list[Title]:
+        params: dict[str, Any] = {
+            "watch_region": region,
+            "sort_by": "popularity.desc",
+            "include_adult": "false",
+            "page": page,
+            "with_watch_providers": "|".join(str(p) for p in provider_ids) or None,
+            "with_watch_monetization_types": "flatrate|ads" if provider_ids else None,
+            "with_genres": "|".join(str(g) for g in genre_ids) or None,
+            "with_runtime.lte": max_runtime_min,
+            "vote_average.gte": min_vote_average,
+            "vote_count.gte": 200 if min_vote_average else None,
+        }
+        # TMDB only filters certifications on movies; series are filtered after details load.
+        if media_type is MediaType.MOVIE and max_certification:
+            params["certification_country"] = region
+            params["certification.lte"] = max_certification
+        if min_year:
+            key = (
+                "primary_release_date.gte"
+                if media_type is MediaType.MOVIE
+                else "first_air_date.gte"
+            )
+            params[key] = f"{min_year}-01-01"
+        data = await self._get(f"/discover/{media_type}", **params)
+        return [parse_title(media_type, item) for item in data.get("results", [])]
+
+    async def details(self, media_type: MediaType, tmdb_id: int) -> dict[str, Any]:
+        """Raw details with certifications, external ids and watch providers in one request."""
+        ratings = "release_dates" if media_type is MediaType.MOVIE else "content_ratings"
+        return await self._get(
+            f"/{media_type}/{tmdb_id}",
+            append_to_response=f"{ratings},external_ids,watch/providers",
+        )
+
+
+def _access_for(bucket: str, provider_name: str) -> AccessType:
+    """Subscription channels sold inside another service ("HBO Max Amazon Channel") cost extra."""
+    if bucket == "flatrate" and "channel" in provider_name.lower():
+        return AccessType.ADDON
+    return _ACCESS[bucket]
+
+
+def _year(date: str | None) -> int | None:
+    return int(date[:4]) if date and len(date) >= 4 and date[:4].isdigit() else None
+
+
+def parse_title(media_type: MediaType, data: dict[str, Any]) -> Title:
+    """A discover result or a details payload -> Title."""
+    is_movie = media_type is MediaType.MOVIE
+    runtime = data.get("runtime")
+    if not is_movie and not runtime:
+        episode_runtimes = data.get("episode_run_time") or []
+        runtime = episode_runtimes[0] if episode_runtimes else None
+    genres = [g["name"] for g in data.get("genres", []) if "name" in g]
+    poster = data.get("poster_path")
+    imdb_id = data.get("imdb_id") or (data.get("external_ids") or {}).get("imdb_id")
+    return Title(
+        media_type=media_type,
+        tmdb_id=int(data["id"]),
+        imdb_id=imdb_id or None,
+        name=data.get("title") or data.get("name") or "",
+        year=_year(data.get("release_date") if is_movie else data.get("first_air_date")),
+        runtime_min=runtime or None,
+        season_count=None if is_movie else data.get("number_of_seasons"),
+        genres=genres,
+        synopsis=data.get("overview") or "",
+        poster_url=f"{IMAGE_BASE}{poster}" if poster else None,
+    )
+
+
+def parse_classifications(
+    media_type: MediaType, data: dict[str, Any], region: str, *, now: datetime | None = None
+) -> list[Classification]:
+    """Official certifications for `region` from a details payload. Empty values are dropped;
+    the same value from several release types collapses into one record per value."""
+    now = now or datetime.now(UTC)
+    ref = TitleRef(media_type=media_type, tmdb_id=int(data["id"]))
+    system = SYSTEMS.get(region.upper())
+    issuer = system.issuer if system else f"{region.upper()} classification (via TMDB)"
+    out: dict[str, Classification] = {}
+    if media_type is MediaType.MOVIE:
+        for country in (data.get("release_dates") or {}).get("results", []):
+            if country.get("iso_3166_1") != region.upper():
+                continue
+            for release in country.get("release_dates", []):
+                value = (release.get("certification") or "").strip()
+                if value and value not in out:
+                    out[value] = Classification(
+                        title=ref,
+                        region=region.upper(),
+                        issuer=issuer,
+                        value=value,
+                        min_age=min_age_for(region, value),
+                        descriptors=list(release.get("descriptors") or []),
+                        version=release.get("note") or None,
+                        source=SOURCE,
+                        retrieved_at=now,
+                    )
+    else:
+        for rating in (data.get("content_ratings") or {}).get("results", []):
+            value = (rating.get("rating") or "").strip()
+            if rating.get("iso_3166_1") == region.upper() and value:
+                out[value] = Classification(
+                    title=ref,
+                    region=region.upper(),
+                    issuer=issuer,
+                    value=value,
+                    min_age=min_age_for(region, value),
+                    descriptors=list(rating.get("descriptors") or []),
+                    source=SOURCE,
+                    retrieved_at=now,
+                )
+    return list(out.values())
+
+
+def parse_availability(
+    media_type: MediaType, data: dict[str, Any], region: str, *, now: datetime | None = None
+) -> list[Availability]:
+    now = now or datetime.now(UTC)
+    ref = TitleRef(media_type=media_type, tmdb_id=int(data["id"]))
+    country = ((data.get("watch/providers") or {}).get("results") or {}).get(region.upper())
+    if not country:
+        return []
+    out: list[Availability] = []
+    for bucket in _ACCESS:
+        for provider in country.get(bucket, []):
+            name = provider.get("provider_name", "")
+            service = service_for_provider(name)
+            out.append(
+                Availability(
+                    title=ref,
+                    region=region.upper(),
+                    service_key=service.key if service else None,
+                    provider_name=name,
+                    access=_access_for(bucket, name),
+                    link=country.get("link"),
+                    source=PROVIDER_SOURCE,
+                    verified_at=now,
+                )
+            )
+    return out

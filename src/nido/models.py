@@ -1,0 +1,174 @@
+"""Data model: identity, availability, classifications, ratings, evidence and AI assessments are
+separate records so every claim keeps its provenance and AI summaries can be regenerated when the
+evidence under them changes."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from enum import StrEnum
+
+from pydantic import BaseModel, Field, HttpUrl
+
+
+class MediaType(StrEnum):
+    MOVIE = "movie"
+    TV = "tv"
+
+
+class AccessType(StrEnum):
+    SUBSCRIPTION = "subscription"
+    ADS = "ads"
+    RENT = "rent"
+    BUY = "buy"
+    ADDON = "addon"
+
+
+class EvidenceType(StrEnum):
+    OFFICIAL = "official"
+    EDITORIAL = "editorial"
+    USER = "user"
+    AI_INFERENCE = "ai_inference"
+
+
+class GuidanceCategory(StrEnum):
+    VIOLENCE = "violence"
+    FRIGHTENING = "frightening"
+    LANGUAGE = "language"
+    SEX_NUDITY = "sex_nudity"
+    ROMANCE = "romance"
+    SUBSTANCES = "substances"
+    BULLYING_DISCRIMINATION = "bullying_discrimination"
+    DEATH_GRIEF = "death_grief"
+    IMITABLE_BEHAVIOR = "imitable_behavior"
+    OTHER = "other"
+
+
+class Frequency(StrEnum):
+    BRIEF = "brief"
+    RECURRING = "recurring"
+    CENTRAL = "central"
+
+
+class TitleRef(BaseModel):
+    media_type: MediaType
+    tmdb_id: int
+    season: int | None = None
+
+    @property
+    def key(self) -> str:
+        base = f"{self.media_type}:{self.tmdb_id}"
+        return base if self.season is None else f"{base}:s{self.season}"
+
+
+class Title(BaseModel):
+    media_type: MediaType
+    tmdb_id: int
+    imdb_id: str | None = None
+    name: str
+    year: int | None = None
+    runtime_min: int | None = None
+    season_count: int | None = None
+    genres: list[str] = Field(default_factory=list)
+    synopsis: str = ""
+    poster_url: HttpUrl | None = None
+
+
+class Availability(BaseModel):
+    title: TitleRef
+    region: str
+    service_key: str | None = Field(
+        default=None, description="Supported service this offer belongs to, if any."
+    )
+    provider_name: str
+    access: AccessType
+    link: HttpUrl | None = None
+    source: str
+    verified_at: datetime
+
+
+class Classification(BaseModel):
+    title: TitleRef
+    region: str
+    issuer: str
+    value: str
+    min_age: int | None = None
+    descriptors: list[str] = Field(default_factory=list)
+    version: str | None = Field(default=None, description="Cut or release, e.g. 'theatrical'.")
+    source: str
+    source_url: HttpUrl | None = None
+    retrieved_at: datetime
+
+
+class Rating(BaseModel):
+    title: TitleRef
+    source: str
+    score: float
+    scale: float = 10.0
+    votes: int | None = None
+    source_url: HttpUrl | None = None
+    retrieved_at: datetime
+
+
+class GuidanceObservation(BaseModel):
+    """One sourced claim about a title's content. Append-only; never edited by the AI layer."""
+
+    title: TitleRef
+    source: str
+    source_url: HttpUrl
+    evidence: EvidenceType
+    category: GuidanceCategory
+    observation: str = Field(description="Own short paraphrase, never copied review text.")
+    intensity: str | None = Field(default=None, description="Only when the source states it.")
+    frequency: Frequency | None = None
+    spoiler: bool = False
+    region: str | None = None
+    published_at: datetime | None = None
+    retrieved_at: datetime
+    confidence: float = Field(ge=0, le=1)
+
+
+class CategoryAssessment(BaseModel):
+    category: GuidanceCategory
+    summary: str
+    observation_ids: list[str] = Field(
+        min_length=1, description="Every statement must cite at least one observation."
+    )
+    disagreement: str | None = None
+    uncertainty: str | None = None
+
+
+class Assessment(BaseModel):
+    """AI synthesis for one title and one family profile version. Regenerable from evidence."""
+
+    title: TitleRef
+    profile_version: str
+    categories: list[CategoryAssessment]
+    why_recommended: str
+    model: str
+    generated_at: datetime
+
+
+class FamilyProfile(BaseModel):
+    """Minimal personal data: ages, never names or birthdates."""
+
+    children_ages: list[int] = Field(min_length=1)
+    region: str = "SE"
+    services: list[str] = Field(default_factory=list)
+    preferred_genres: list[str] = Field(default_factory=list)
+    avoid_categories: list[GuidanceCategory] = Field(default_factory=list)
+    max_runtime_min: int | None = None
+    mood: str | None = None
+    min_imdb_rating: float | None = None
+
+    @property
+    def youngest(self) -> int:
+        return min(self.children_ages)
+
+
+class Feedback(BaseModel):
+    title: TitleRef
+    saved: bool = False
+    watched: bool = False
+    rejected: bool = False
+    stars: int | None = Field(default=None, ge=1, le=5)
+    at: datetime
