@@ -110,11 +110,15 @@ jobs:
           MODEL: ${{ vars.NIDO_MODEL }}
           REGIONS: ${{ vars.NIDO_REGIONS }}
         run: |
-          # "@" separates the variables (gcloud's ^@^ syntax) because the email list has commas.
-          env_vars="^@^NIDO_STORE=firestore@NIDO_AUTH=firebase@GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"
-          env_vars="${env_vars}@NIDO_ALLOWED_EMAILS=${ALLOWED_EMAILS}"
-          [ -z "${MODEL}" ] || env_vars="${env_vars}@NIDO_MODEL=${MODEL}"
-          [ -z "${REGIONS}" ] || env_vars="${env_vars}@NIDO_REGIONS=${REGIONS}"
+          # A file, not --set-env-vars: values hold commas (email list, regions) and "@" (emails),
+          # which collide with any inline delimiter. JSON is valid YAML for --env-vars-file.
+          env_file="${RUNNER_TEMP}/nido-env.yaml"
+          jq -n --arg project "${PROJECT_ID}" --arg emails "${ALLOWED_EMAILS}" \
+                --arg model "${MODEL}" --arg regions "${REGIONS}" '
+            {NIDO_STORE: "firestore", NIDO_AUTH: "firebase",
+             GOOGLE_CLOUD_PROJECT: $project, NIDO_ALLOWED_EMAILS: $emails}
+            + (if $model == "" then {} else {NIDO_MODEL: $model} end)
+            + (if $regions == "" then {} else {NIDO_REGIONS: $regions} end)' > "${env_file}"
           # Only secrets that hold a value: a missing Gemini key turns chat off, it does not
           # break the deploy (the filter search still works).
           secrets=""
@@ -127,7 +131,7 @@ jobs:
             fi
           done
           # --max-instances 1: cost cap, and the in-memory chat sessions and limits stay on one
-          # instance. --set-env-vars / --set-secrets replace whatever was set by hand.
+          # instance. --env-vars-file / --set-secrets replace whatever was set by hand.
           gcloud run deploy "${SERVICE}" \
             --image "${IMAGE}" \
             --region "${REGION}" \
@@ -139,7 +143,7 @@ jobs:
             --concurrency 40 \
             --timeout 120 \
             --cpu-throttling \
-            --set-env-vars "${env_vars}" \
+            --env-vars-file "${env_file}" \
             ${secrets:+--set-secrets "${secrets}"} \
             --labels "managed-by=github-actions,commit=${GITHUB_SHA::12}" \
             --quiet
