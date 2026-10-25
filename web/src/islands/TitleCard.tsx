@@ -7,7 +7,8 @@ import {
   sortOffers,
   verifiedAgo,
 } from "../logic/format";
-import type { TitleResult } from "../logic/types";
+import type { MarkChange, TitleMark, TitleResult } from "../logic/types";
+import TitleMarks from "./TitleMarks";
 
 interface Props {
   result: TitleResult;
@@ -15,6 +16,9 @@ interface Props {
   showRegion: boolean;
   saved: boolean;
   onToggleSave: (result: TitleResult) => void;
+  mark: TitleMark | null;
+  youngest: number;
+  onMark: (change: MarkChange) => Promise<void>;
 }
 
 function guidanceLinks(result: TitleResult): { name: string; url: string }[] {
@@ -33,7 +37,16 @@ function guidanceLinks(result: TitleResult): { name: string; url: string }[] {
   return links;
 }
 
-export default function TitleCard({ result, services, showRegion, saved, onToggleSave }: Props) {
+export default function TitleCard({
+  result,
+  services,
+  showRegion,
+  saved,
+  onToggleSave,
+  mark,
+  youngest,
+  onMark,
+}: Props) {
   const [posterFailed, setPosterFailed] = useState(false);
   const sorted = sortOffers(result.where_to_watch, services);
   const included = sorted.filter((o) => isIncluded(o, services));
@@ -139,6 +152,13 @@ export default function TitleCard({ result, services, showRegion, saved, onToggl
             <span class="pill pill-muted">No IMDb rating</span>
           )}
         </div>
+
+        <TitleMarks
+          mark={mark}
+          youngest={youngest}
+          baselineAge={result.age_baseline_min ?? null}
+          onMark={onMark}
+        />
 
         {result.synopsis && <p class="synopsis">{result.synopsis}</p>}
 

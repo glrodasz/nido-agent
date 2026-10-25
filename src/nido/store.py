@@ -5,6 +5,7 @@ Two implementations behind one interface: `MemoryStore` for tests and local runs
 
     families/{uid}                    the family profile (FamilyProfile fields + updated_at)
     families/{uid}/watchlist/{key}    one WatchlistItem per saved title (key: "movie:123")
+    families/{uid}/titles/{key}       one TitleMark per marked title: seen, liked, banned
     cache/{key}                       {payload (JSON), retrieved_at, expire_at}; a TTL policy
                                       on expire_at deletes stale entries (infra/bootstrap.sh)
 
@@ -19,7 +20,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
-from nido.models import FamilyProfile, WatchlistItem
+from nido.models import FamilyProfile, TitleMark, WatchlistItem
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,10 @@ class Store(Protocol):
     async def list_watchlist(self, uid: str) -> list[WatchlistItem]: ...
     async def put_watchlist_item(self, uid: str, item: WatchlistItem) -> None: ...
     async def delete_watchlist_item(self, uid: str, key: str) -> None: ...
+    async def list_marks(self, uid: str) -> list[TitleMark]: ...
+    async def get_mark(self, uid: str, key: str) -> TitleMark | None: ...
+    async def put_mark(self, uid: str, mark: TitleMark) -> None: ...
+    async def delete_mark(self, uid: str, key: str) -> None: ...
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None: ...
     async def cache_put(self, key: str, data: dict[str, Any], ttl: timedelta) -> datetime:
         """Stores `data` and returns its retrieval time."""
@@ -48,6 +53,7 @@ class MemoryStore:
     def __init__(self) -> None:
         self._profiles: dict[str, FamilyProfile] = {}
         self._watchlists: dict[str, dict[str, WatchlistItem]] = {}
+        self._marks: dict[str, dict[str, TitleMark]] = {}
         self._cache: dict[str, Cached] = {}
 
     async def get_profile(self, uid: str) -> FamilyProfile | None:
@@ -65,6 +71,19 @@ class MemoryStore:
 
     async def delete_watchlist_item(self, uid: str, key: str) -> None:
         self._watchlists.get(uid, {}).pop(key, None)
+
+    async def list_marks(self, uid: str) -> list[TitleMark]:
+        items = self._marks.get(uid, {}).values()
+        return sorted(items, key=lambda m: m.updated_at, reverse=True)
+
+    async def get_mark(self, uid: str, key: str) -> TitleMark | None:
+        return self._marks.get(uid, {}).get(key)
+
+    async def put_mark(self, uid: str, mark: TitleMark) -> None:
+        self._marks.setdefault(uid, {})[mark.title.key] = mark
+
+    async def delete_mark(self, uid: str, key: str) -> None:
+        self._marks.get(uid, {}).pop(key, None)
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         hit = self._cache.get(key)
@@ -118,6 +137,25 @@ class FirestoreStore:
 
     async def delete_watchlist_item(self, uid: str, key: str) -> None:
         await self._family(uid).collection("watchlist").document(_doc_id(key)).delete()
+
+    async def list_marks(self, uid: str) -> list[TitleMark]:
+        query = (
+            self._family(uid).collection("titles").order_by("updated_at", direction="DESCENDING")
+        )
+        return [TitleMark.model_validate(snap.to_dict()) async for snap in query.stream()]
+
+    async def get_mark(self, uid: str, key: str) -> TitleMark | None:
+        snap = await self._family(uid).collection("titles").document(_doc_id(key)).get()
+        return TitleMark.model_validate(snap.to_dict()) if snap.exists else None
+
+    async def put_mark(self, uid: str, mark: TitleMark) -> None:
+        doc = self._family(uid).collection("titles").document(_doc_id(mark.title.key))
+        data = mark.model_dump(mode="json")
+        data["updated_at"] = mark.updated_at  # a real timestamp, so order_by sorts by time
+        await doc.set(data)
+
+    async def delete_mark(self, uid: str, key: str) -> None:
+        await self._family(uid).collection("titles").document(_doc_id(key)).delete()
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         snap = await self._db.collection("cache").document(_doc_id(key)).get()

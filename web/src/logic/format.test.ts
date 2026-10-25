@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   accessLabel,
+  banLabel,
+  defaultBanUntil,
   categoryLabel,
   formatVotes,
   parseAges,
@@ -71,6 +73,27 @@ describe("labels", () => {
     expect(categoryLabel("frightening")).toBe("Scary scenes");
     expect(formatVotes(1_234_567)).toBe("1.2M votes");
     expect(formatVotes(45_600)).toBe("46k votes");
+  });
+});
+
+describe("bans", () => {
+  it("defaults to the title's baseline when it is above the youngest", () => {
+    expect(defaultBanUntil(4, 11)).toBe(11);
+  });
+
+  it("otherwise lifts at the start of the next age range", () => {
+    expect(defaultBanUntil(4, 0)).toBe(7);
+    expect(defaultBanUntil(4, null)).toBe(7);
+    expect(defaultBanUntil(7, 7)).toBe(10);
+    expect(defaultBanUntil(16, null)).toBe(17);
+    expect(defaultBanUntil(4, 18)).toBe(17);
+  });
+
+  it("labels active, lifted and permanent bans", () => {
+    const at = "2026-10-25T00:00:00Z";
+    expect(banLabel({ scope: "age", until_age: 7, at }, true)).toContain("until your youngest is 7");
+    expect(banLabel({ scope: "age", until_age: 7, at }, false)).toContain("back in results");
+    expect(banLabel({ scope: "always", until_age: null, at }, true)).toBe("Hidden at every age");
   });
 });
 

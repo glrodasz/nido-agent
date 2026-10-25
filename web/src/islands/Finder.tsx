@@ -1,7 +1,15 @@
 import { useRef, useState } from "preact/hooks";
 import { api } from "../logic/api";
 import { GENRES } from "../logic/format";
-import type { AppConfig, MediaType, Profile, SearchResult, TitleResult } from "../logic/types";
+import type {
+  AppConfig,
+  MarkChange,
+  MediaType,
+  Profile,
+  SearchResult,
+  TitleMark,
+  TitleResult,
+} from "../logic/types";
 import Markdown from "./Markdown";
 import TitleCard from "./TitleCard";
 
@@ -10,6 +18,8 @@ interface Props {
   profile: Profile;
   savedKeys: Set<string>;
   onToggleSave: (result: TitleResult) => void;
+  marks: Map<string, TitleMark>;
+  onMark: (result: TitleResult, change: MarkChange) => Promise<void>;
 }
 
 interface Turn {
@@ -23,7 +33,14 @@ const EXAMPLES = [
   "A feel-good animated movie the adults will enjoy too",
 ];
 
-export default function Finder({ config, profile, savedKeys, onToggleSave }: Props) {
+export default function Finder({
+  config,
+  profile,
+  savedKeys,
+  onToggleSave,
+  marks,
+  onMark,
+}: Props) {
   const [mediaType, setMediaType] = useState<MediaType>("movie");
   const [genres, setGenres] = useState<string[]>([]);
   const [runtime, setRuntime] = useState("");
@@ -210,6 +227,9 @@ export default function Finder({ config, profile, savedKeys, onToggleSave }: Pro
               showRegion={multiRegion}
               saved={savedKeys.has(`${r.media_type}:${r.tmdb_id}`)}
               onToggleSave={onToggleSave}
+              mark={marks.get(`${r.media_type}:${r.tmdb_id}`) ?? null}
+              youngest={Math.min(...profile.children_ages)}
+              onMark={(change) => onMark(r, change)}
             />
           ))}
           <p class="attribution muted">{config.attribution}</p>

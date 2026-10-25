@@ -48,6 +48,8 @@ export interface TitleResult {
     retrieved_at: string;
   } | null;
   age_baseline: string | null;
+  // The baseline's age alone, to default an age-range ban.
+  age_baseline_min: number | null;
   official_classifications: Classification[];
   where_to_watch: Offer[];
   included_in_subscriptions: boolean;
@@ -55,6 +57,8 @@ export interface TitleResult {
   cautions: string[];
   // Family profile rules a near miss breaks; empty for real results.
   misses: string[];
+  // The family's own marks on this title, attached by the server; null when unmarked.
+  mark?: TitleMark | null;
 }
 
 export interface SearchResult {
@@ -79,6 +83,42 @@ export interface WatchlistItem {
   poster_url: string | null;
   watched: boolean;
   added_at: string;
+}
+
+export interface Ban {
+  // "age": hidden until the youngest child turns until_age; "always": for every age.
+  scope: "age" | "always";
+  until_age: number | null;
+  at: string;
+}
+
+export interface TitleMark {
+  key: string;
+  title: { media_type: MediaType; tmdb_id: number };
+  name: string;
+  year: number | null;
+  poster_url: string | null;
+  seen: boolean;
+  liked_adults: boolean;
+  liked_child: boolean;
+  ban: Ban | null;
+  // False for a lifted age ban: kept so the family can still review it.
+  ban_active: boolean;
+  updated_at: string;
+}
+
+export interface BanRequest {
+  scope: "age" | "always";
+  until_age?: number;
+  baseline_age?: number | null;
+}
+
+/** Only the fields sent change; `ban: null` lifts a ban. */
+export interface MarkChange {
+  seen?: boolean;
+  liked_adults?: boolean;
+  liked_child?: boolean;
+  ban?: BanRequest | null;
 }
 
 export interface AppConfig {

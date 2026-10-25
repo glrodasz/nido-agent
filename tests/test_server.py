@@ -20,16 +20,25 @@ PROFILE = {
     "max_runtime_min": 110,
     "preferred_genres": ["Comedy"],
 }
-RESULT = {"regions": ["SE"], "results": [{"title": "Paddington 2", "tmdb_id": 1}]}
+RESULT = {
+    "regions": ["SE"],
+    "results": [{"title": "Paddington 2", "media_type": "movie", "tmdb_id": 1}],
+}
 
 
 class FakeToolbox:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
 
-    async def find_titles(self, **kwargs: Any) -> dict[str, Any]:
+    async def search(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(kwargs)
         return RESULT
+
+    async def find_titles(self, **kwargs: Any) -> dict[str, Any]:
+        return await self.search(**kwargs)
+
+    def guidance_links(self, title: str) -> dict[str, Any]:
+        return {}
 
 
 def client(**kwargs: Any) -> tuple[TestClient, FakeToolbox]:
@@ -67,7 +76,7 @@ def test_search_needs_a_profile_then_uses_it():
     assert c.post("/api/search", json={"media_type": "movie"}).status_code == 409
     c.put("/api/profile", json=PROFILE)
     response = c.post("/api/search", json={"media_type": "tv", "max_runtime_min": 30})
-    assert response.json() == RESULT
+    assert response.json()["results"] == [{**RESULT["results"][0], "mark": None}]
     call = toolbox.calls[-1]
     assert call["media_type"] == "tv"
     assert call["children_ages"] == [9, 6]
@@ -145,7 +154,7 @@ def test_chat_returns_tool_results_and_reply_and_keeps_the_session():
     c.put("/api/profile", json=PROFILE)
     body = c.post("/api/chat", json={"message": "something funny"}).json()
     assert body["reply"] == "Try Paddington 2."
-    assert body["results"] == RESULT
+    assert body["results"]["results"][0]["title"] == "Paddington 2"
     assert "Children's ages: 6, 9" in runner.state_deltas[0]["family"]
     again = c.post("/api/chat", json={"message": "more", "session_id": body["session_id"]})
     assert again.json()["session_id"] == body["session_id"]
@@ -155,7 +164,7 @@ def test_chat_budget_stop_keeps_partial_results():
     runner = FakeRunner([event(tool_output=RESULT)], fail=LlmBudgetExceededError("cap"))
     c, _ = client(runner=runner)
     body = c.post("/api/chat", json={"message": "x"}).json()
-    assert body["results"] == RESULT
+    assert body["results"]["results"][0]["title"] == "Paddington 2"
     assert "limit" in body["note"]
 
 
@@ -215,3 +224,146 @@ async def test_toolbox_serves_details_from_cache_with_original_retrieval_time():
     hit = await store.cache_get("tmdb:details:movie:7:en-US", timedelta(days=1))
     assert hit is not None
     assert await store.cache_get("tmdb:details:movie:7:en-US", timedelta(0)) is None
+
+
+def put_mark(c: TestClient, tmdb_id: int = 1, **fields: Any) -> dict[str, Any]:
+    response = c.put(f"/api/titles/movie/{tmdb_id}", json={"name": "Paddington 2", **fields})
+    assert response.status_code == 200, response.text
+    return response.json()["item"]
+
+
+def test_marks_are_independent_and_partial_updates_keep_the_rest():
+    c, _ = client()
+    put_mark(c, seen=True, year=2017)
+    put_mark(c, liked_child=True)
+    item = put_mark(c, liked_adults=False)
+    assert (item["seen"], item["liked_adults"], item["liked_child"]) == (True, False, True)
+    assert item["year"] == 2017 and item["ban"] is None and item["ban_active"] is False
+    assert [i["key"] for i in c.get("/api/titles").json()["items"]] == ["movie:1"]
+
+
+def test_clearing_every_mark_forgets_the_title():
+    c, _ = client()
+    put_mark(c, seen=True)
+    put_mark(c, seen=False)
+    assert c.get("/api/titles").json()["items"] == []
+
+
+def test_age_ban_defaults_to_the_baseline_or_the_next_age_range():
+    c, _ = client()
+    c.put("/api/profile", json=PROFILE)  # youngest is 6
+    assert put_mark(c, 1, ban={"scope": "age"})["ban"]["until_age"] == 7
+    assert put_mark(c, 2, ban={"scope": "age", "baseline_age": 11})["ban"]["until_age"] == 11
+    assert put_mark(c, 3, ban={"scope": "age", "until_age": 9})["ban"]["until_age"] == 9
+    bad = c.put("/api/titles/movie/4", json={"name": "X", "ban": {"scope": "age", "until_age": 6}})
+    assert bad.status_code == 422
+    assert put_mark(c, 6, ban={"scope": "age", "baseline_age": 18})["ban"]["until_age"] == 17
+    always = put_mark(c, 5, ban={"scope": "always"})["ban"]
+    assert always["scope"] == "always" and always["until_age"] is None
+
+
+def test_a_seventeen_year_old_can_only_be_banned_for_every_age():
+    c, _ = client()
+    c.put("/api/profile", json={**PROFILE, "children_ages": [17]})
+    response = c.put("/api/titles/movie/1", json={"name": "X", "ban": {"scope": "age"}})
+    assert response.status_code == 422
+    assert put_mark(c, 1, ban={"scope": "always"})["ban_active"] is True
+
+
+def test_age_ban_needs_a_profile():
+    c, _ = client()
+    response = c.put("/api/titles/movie/1", json={"name": "X", "ban": {"scope": "age"}})
+    assert response.status_code == 409
+
+
+def test_search_hides_active_bans_and_age_bans_lift_with_the_profile():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    put_mark(c, 1, ban={"scope": "age", "until_age": 8})
+    put_mark(c, 2, ban={"scope": "always"})
+    put_mark(c, 3, seen=True, liked_adults=True)  # seen and liked never hide a title
+    c.post("/api/search", json={})
+    assert sorted(toolbox.calls[-1]["hidden"]) == ["movie:1", "movie:2"]
+
+    c.put("/api/profile", json={**PROFILE, "children_ages": [9, 8]})
+    c.post("/api/search", json={})
+    assert toolbox.calls[-1]["hidden"] == ["movie:2"]
+    lifted = {i["key"]: i["ban_active"] for i in c.get("/api/titles").json()["items"]}
+    assert lifted == {"movie:1": False, "movie:2": True, "movie:3": False}  # still listed
+
+
+def test_unban_with_null():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    put_mark(c, 1, ban={"scope": "always"}, seen=True)
+    item = put_mark(c, 1, ban=None)
+    assert item["ban"] is None and item["seen"] is True
+    c.post("/api/search", json={})
+    assert toolbox.calls[-1]["hidden"] == []
+
+
+def test_results_carry_their_marks():
+    c, _ = client()
+    c.put("/api/profile", json=PROFILE)
+    put_mark(c, 1, liked_child=True)
+    result = c.post("/api/search", json={}).json()["results"][0]
+    assert result["mark"]["liked_child"] is True
+
+
+def test_chat_hands_bans_to_the_tool_through_session_state():
+    runner = FakeRunner([event(tool_output=RESULT), event(text="ok")])
+    c, _ = client(runner=runner)
+    c.put("/api/profile", json=PROFILE)
+    put_mark(c, 2, ban={"scope": "always"})
+    put_mark(c, 1, seen=True)
+    body = c.post("/api/chat", json={"message": "x"}).json()
+    assert runner.state_deltas[0]["hidden_titles"] == ["movie:2"]
+    assert body["results"]["results"][0]["mark"]["seen"] is True
+
+
+async def test_find_titles_reads_bans_from_state_not_from_the_model():
+    from nido.agent.tools import Toolbox
+
+    toolbox = Toolbox(Settings(tmdb_token="t"))
+    seen: list[Any] = []
+
+    async def search(**kwargs: Any) -> dict[str, Any]:
+        seen.append(kwargs["hidden"])
+        return {}
+
+    toolbox.search = search  # type: ignore[method-assign]
+    context = SimpleNamespace(state={"hidden_titles": ["movie:2"]})
+    await toolbox.find_titles("movie", [4], ["netflix"], tool_context=context)  # type: ignore[arg-type]
+    await toolbox.find_titles("movie", [4], ["netflix"])
+    assert seen == [["movie:2"], []]
+
+
+async def test_discover_skips_banned_titles_and_pages_on_when_they_thin_the_pool():
+    from nido.agent.tools import MAX_DETAILS, Toolbox
+    from nido.models import Title
+
+    toolbox = Toolbox(Settings(tmdb_token="t"))
+    pages: list[int] = []
+
+    class Tmdb:
+        async def discover(self, kind, *, page, **_: Any):
+            pages.append(page)
+            start = (page - 1) * 20
+            return [
+                Title(media_type=kind, tmdb_id=i, name=str(i)) for i in range(start, start + 20)
+            ]
+
+    async def provider_ids(kind, region):
+        return {}
+
+    toolbox._provider_ids = provider_ids  # type: ignore[method-assign]
+    profile = FamilyProfile(children_ages=[4])
+    hidden = {f"movie:{i}" for i in range(15)}  # page one keeps only 5 titles
+    ids = await toolbox._discover(Tmdb(), MediaType.MOVIE, "SE", profile, [], hidden)  # type: ignore[arg-type]
+    assert pages == [1, 2]
+    assert ids[:5] == [15, 16, 17, 18, 19] and len(ids) >= MAX_DETAILS
+    assert not set(ids) & set(range(15))
+
+    pages.clear()
+    await toolbox._discover(Tmdb(), MediaType.MOVIE, "SE", profile, [], set())  # type: ignore[arg-type]
+    assert pages == [1]  # no bans, no extra requests

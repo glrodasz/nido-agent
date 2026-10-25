@@ -176,6 +176,46 @@ class Feedback(BaseModel):
     at: datetime
 
 
+class BanScope(StrEnum):
+    AGE = "age"  # for the youngest child's current age range; lifts at `until_age`
+    ALWAYS = "always"
+
+
+class Ban(BaseModel):
+    scope: BanScope
+    until_age: int | None = Field(
+        default=None,
+        ge=1,
+        le=17,
+        description="Only for scope 'age': lifts once the youngest is this old.",
+    )
+    at: datetime
+
+    def active(self, youngest: int) -> bool:
+        if self.scope is BanScope.ALWAYS:
+            return True
+        return self.until_age is None or youngest < self.until_age
+
+
+class TitleMark(BaseModel):
+    """The family's own marks on one title. Seen and liked never hide a title; an active ban
+    keeps it out of every search and chat shortlist."""
+
+    title: TitleRef
+    name: str
+    year: int | None = None
+    poster_url: HttpUrl | None = None
+    seen: bool = False
+    liked_adults: bool = False
+    liked_child: bool = False
+    ban: Ban | None = None
+    updated_at: datetime
+
+    @property
+    def empty(self) -> bool:
+        return not (self.seen or self.liked_adults or self.liked_child or self.ban)
+
+
 class WatchlistItem(BaseModel):
     """A title the family saved, with enough to show it without another API call."""
 

@@ -9,6 +9,8 @@ from itertools import zip_longest
 from typing import Any
 from urllib.parse import quote_plus
 
+from google.adk.tools import ToolContext
+
 from nido.catalog import SERVICES_BY_KEY, SYSTEMS
 from nido.config import Settings
 from nido.models import FamilyProfile, GuidanceCategory, MediaType, Rating, TitleRef
@@ -18,8 +20,14 @@ from nido.sources.omdb import OmdbClient
 from nido.sources.tmdb import TmdbClient
 from nido.store import Store
 
+# Session state key holding the family's banned title keys; the server sets it on every chat turn.
+HIDDEN_STATE_KEY = "hidden_titles"
+
 # Details requests per search: discover returns 20 per page, the shortlist needs 5.
 MAX_DETAILS = 12
+DISCOVER_PAGE_SIZE = 20
+# Extra discover pages are fetched only when banned titles leave fewer than MAX_DETAILS.
+MAX_DISCOVER_PAGES = 3
 
 
 # Cache lifetimes. Offers change monthly, so details (which carry them) are re-fetched daily; the
@@ -154,6 +162,7 @@ class Toolbox:
         avoid: list[str] | None = None,
         regions: list[str] | None = None,
         prefer_genres: list[str] | None = None,
+        tool_context: ToolContext | None = None,
     ) -> dict[str, Any]:
         """Find a short, ranked list of movies or series for the family.
 
@@ -173,6 +182,36 @@ class Toolbox:
             prefer_genres: genres to rank higher without excluding others, e.g. the family's
                 favourites.
         """
+        # Banned titles come from session state the server writes each turn, never from the model.
+        hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
+        return await self.search(
+            media_type=media_type,
+            children_ages=children_ages,
+            services=services,
+            genres=genres,
+            max_runtime_min=max_runtime_min,
+            min_imdb_rating=min_imdb_rating,
+            avoid=avoid,
+            regions=regions,
+            prefer_genres=prefer_genres,
+            hidden=hidden,
+        )
+
+    async def search(
+        self,
+        media_type: str,
+        children_ages: list[int],
+        services: list[str],
+        genres: list[str] | None = None,
+        max_runtime_min: int | None = None,
+        min_imdb_rating: float | None = None,
+        avoid: list[str] | None = None,
+        regions: list[str] | None = None,
+        prefer_genres: list[str] | None = None,
+        hidden: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """find_titles without the model: `hidden` lists title keys ("movie:123") the family
+        banned, which never reach details, ranking or near misses."""
         kind = MediaType(media_type)
         regions = [r.upper() for r in regions or self._settings.regions]
         available = await self._genres(kind) if genres or prefer_genres else {}
@@ -190,7 +229,9 @@ class Toolbox:
         tmdb, _ = self._clients()
         per_region = await asyncio.gather(
             *(
-                self._discover(tmdb, kind, region, profile, list(required.values()))
+                self._discover(
+                    tmdb, kind, region, profile, list(required.values()), set(hidden or [])
+                )
                 for region in regions
             )
         )
@@ -217,19 +258,31 @@ class Toolbox:
         region: str,
         profile: FamilyProfile,
         genre_ids: list[int],
+        hidden: set[str],
     ) -> list[int]:
+        """Top discover ids, skipping banned titles; more pages only when bans thin the pool."""
         providers = await self._provider_ids(kind, region)
         provider_ids = [pid for key in profile.services for pid in providers.get(key, [])]
-        found = await tmdb.discover(
-            kind,
-            region=region,
-            provider_ids=provider_ids,
-            genre_ids=genre_ids,
-            max_certification=prefilter_certification(profile.youngest, kind),
-            certification_country="US",
-            max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
-        )
-        return [t.tmdb_id for t in found]
+        ids: list[int] = []
+        for page in range(1, MAX_DISCOVER_PAGES + 1):
+            found = await tmdb.discover(
+                kind,
+                region=region,
+                provider_ids=provider_ids,
+                genre_ids=genre_ids,
+                max_certification=prefilter_certification(profile.youngest, kind),
+                certification_country="US",
+                max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
+                page=page,
+            )
+            ids += [
+                t.tmdb_id
+                for t in found
+                if TitleRef(media_type=kind, tmdb_id=t.tmdb_id).key not in hidden
+            ]
+            if len(ids) >= MAX_DETAILS or len(found) < DISCOVER_PAGE_SIZE:
+                break
+        return ids
 
     def guidance_links(self, title: str, imdb_id: str | None = None) -> dict[str, Any]:
         """Links to parental guidance sources for one title. Use them to point parents to the
@@ -285,6 +338,7 @@ def _present(ranked: Ranked, regions: list[str]) -> dict[str, Any]:
             else None
         ),
         "age_baseline": ranked.baseline.describe() if ranked.baseline else None,
+        "age_baseline_min": ranked.baseline.age if ranked.baseline else None,
         "official_classifications": [
             {"value": x.value, "issuer": x.issuer, "country": x.region, "source": x.source}
             for x in c.classifications
