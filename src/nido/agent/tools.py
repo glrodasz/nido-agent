@@ -39,12 +39,17 @@ US_ORDER = {
 }
 
 
-def prefilter_certification(youngest: int, kind: MediaType = MediaType.MOVIE) -> str:
-    """Loosest US rating worth fetching details for, given the youngest child's age."""
+def prefilter_certification(
+    youngest: int, kind: MediaType = MediaType.MOVIE, *, strict: bool = False
+) -> str:
+    """Loosest US rating worth fetching details for, given the youngest child's age. By default one
+    step looser than the child's age, since the median of other countries can be milder than the
+    US; `strict` stops at the last rating the age itself allows."""
     us = SYSTEMS["US"]
     order = US_ORDER[kind]
     allowed = [i for i, v in enumerate(order) if (us.age_for(v) or 0) <= youngest]
-    return order[min(max(allowed, default=-1) + 1, len(order) - 1)]
+    last = max(allowed, default=-1)
+    return order[max(last, 0) if strict else min(last + 1, len(order) - 1)]
 
 
 class Toolbox:
@@ -220,16 +225,28 @@ class Toolbox:
     ) -> list[int]:
         providers = await self._provider_ids(kind, region)
         provider_ids = [pid for key in profile.services for pid in providers.get(key, [])]
-        found = await tmdb.discover(
-            kind,
-            region=region,
-            provider_ids=provider_ids,
-            genre_ids=genre_ids,
-            max_certification=prefilter_certification(profile.youngest, kind),
-            certification_country="US",
-            max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
+        # The looser pool alone is dominated by its most popular rating: for a 4-year-old, recent
+        # PG hits that rate 6-7+ elsewhere crowd out every G title. Fetch the pool the age itself
+        # allows too, and put it first.
+        certifications = dict.fromkeys(
+            prefilter_certification(profile.youngest, kind, strict=strict)
+            for strict in (True, False)
         )
-        return [t.tmdb_id for t in found]
+        pools = await asyncio.gather(
+            *(
+                tmdb.discover(
+                    kind,
+                    region=region,
+                    provider_ids=provider_ids,
+                    genre_ids=genre_ids,
+                    max_certification=certification,
+                    certification_country="US",
+                    max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
+                )
+                for certification in certifications
+            )
+        )
+        return _interleave([[t.tmdb_id for t in pool] for pool in pools])
 
     def guidance_links(self, title: str, imdb_id: str | None = None) -> dict[str, Any]:
         """Links to parental guidance sources for one title. Use them to point parents to the
