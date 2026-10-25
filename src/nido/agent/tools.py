@@ -25,6 +25,9 @@ HIDDEN_STATE_KEY = "hidden_titles"
 
 # Details requests per search: discover returns 20 per page, the shortlist needs 5.
 MAX_DETAILS = 12
+DISCOVER_PAGE_SIZE = 20
+# Extra discover pages are fetched only when banned titles leave fewer than MAX_DETAILS.
+MAX_DISCOVER_PAGES = 3
 
 
 # Cache lifetimes. Offers change monthly, so details (which carry them) are re-fetched daily; the
@@ -226,16 +229,13 @@ class Toolbox:
         tmdb, _ = self._clients()
         per_region = await asyncio.gather(
             *(
-                self._discover(tmdb, kind, region, profile, list(required.values()))
+                self._discover(
+                    tmdb, kind, region, profile, list(required.values()), set(hidden or [])
+                )
                 for region in regions
             )
         )
-        skip = set(hidden or [])
-        tmdb_ids = [
-            tmdb_id
-            for tmdb_id in _interleave(per_region)
-            if TitleRef(media_type=kind, tmdb_id=tmdb_id).key not in skip
-        ][:MAX_DETAILS]
+        tmdb_ids = _interleave(per_region)[:MAX_DETAILS]
         candidates = await asyncio.gather(
             *(self._candidate(kind, tmdb_id, regions) for tmdb_id in tmdb_ids)
         )
@@ -258,19 +258,31 @@ class Toolbox:
         region: str,
         profile: FamilyProfile,
         genre_ids: list[int],
+        hidden: set[str],
     ) -> list[int]:
+        """Top discover ids, skipping banned titles; more pages only when bans thin the pool."""
         providers = await self._provider_ids(kind, region)
         provider_ids = [pid for key in profile.services for pid in providers.get(key, [])]
-        found = await tmdb.discover(
-            kind,
-            region=region,
-            provider_ids=provider_ids,
-            genre_ids=genre_ids,
-            max_certification=prefilter_certification(profile.youngest, kind),
-            certification_country="US",
-            max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
-        )
-        return [t.tmdb_id for t in found]
+        ids: list[int] = []
+        for page in range(1, MAX_DISCOVER_PAGES + 1):
+            found = await tmdb.discover(
+                kind,
+                region=region,
+                provider_ids=provider_ids,
+                genre_ids=genre_ids,
+                max_certification=prefilter_certification(profile.youngest, kind),
+                certification_country="US",
+                max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
+                page=page,
+            )
+            ids += [
+                t.tmdb_id
+                for t in found
+                if TitleRef(media_type=kind, tmdb_id=t.tmdb_id).key not in hidden
+            ]
+            if len(ids) >= MAX_DETAILS or len(found) < DISCOVER_PAGE_SIZE:
+                break
+        return ids
 
     def guidance_links(self, title: str, imdb_id: str | None = None) -> dict[str, Any]:
         """Links to parental guidance sources for one title. Use them to point parents to the

@@ -81,7 +81,7 @@ class BanRequest(BaseModel):
     scope: BanScope
     # For scope "age": the youngest child's age at which the ban lifts. Left out, it is the
     # title's age baseline when that is above the youngest, else the start of the next age range.
-    until_age: int | None = Field(default=None, ge=1, le=18)
+    until_age: int | None = Field(default=None, ge=1, le=17)
     baseline_age: int | None = Field(default=None, ge=0, le=18)
 
 
@@ -97,14 +97,16 @@ class MarkUpdate(BaseModel):
     ban: BanRequest | None = None
 
 
-# Where an age range ends: 0-6, 7-9, 10-12, 13-15, 16-17.
-AGE_RANGE_STARTS = (7, 10, 13, 16, 18)
+# Where an age range starts: 0-6, 7-9, 10-12, 13-15, 16-17. Profiles stop at 17, so an age ban
+# lifts at 17 at the latest; for a 17-year-old only a ban at every age makes sense.
+AGE_RANGE_STARTS = (7, 10, 13, 16)
+MAX_CHILD_AGE = 17
 
 
 def default_ban_until(youngest: int, baseline_age: int | None) -> int:
     if baseline_age is not None and baseline_age > youngest:
-        return baseline_age
-    return next((a for a in AGE_RANGE_STARTS if a > youngest), 18)
+        return min(baseline_age, MAX_CHILD_AGE)
+    return next((a for a in AGE_RANGE_STARTS if a > youngest), MAX_CHILD_AGE)
 
 
 def present_mark(mark: TitleMark, profile: FamilyProfile | None) -> dict[str, Any]:
@@ -146,7 +148,7 @@ def normalize_profile(profile: FamilyProfile) -> FamilyProfile:
     regions = list(dict.fromkeys(r.strip().upper() for r in profile.regions if r.strip()))
     if not regions or any(len(r) != 2 or not r.isalpha() for r in regions):
         raise HTTPException(422, "regions must be two-letter country codes, e.g. SE")
-    if any(a < 0 or a > 17 for a in profile.children_ages):
+    if any(a < 0 or a > MAX_CHILD_AGE for a in profile.children_ages):
         raise HTTPException(422, "children's ages must be between 0 and 17")
     return profile.model_copy(
         update={
@@ -435,7 +437,11 @@ def create_app(
                     profile.youngest, request.baseline_age
                 )
                 if until <= profile.youngest:
-                    raise HTTPException(422, "until_age must be above the youngest child's age")
+                    raise HTTPException(
+                        422,
+                        "until_age must be above the youngest child's age (at most 17); "
+                        "use scope 'always' instead",
+                    )
                 changes["ban"] = Ban(scope=BanScope.AGE, until_age=until, at=now)
         mark = mark.model_copy(update=changes)
         if mark.empty:

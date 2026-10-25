@@ -118,14 +118,16 @@ export const GENRES = [
   "Music",
 ];
 
-// Where an age range ends: 0-6, 7-9, 10-12, 13-15, 16-17 (server.AGE_RANGE_STARTS).
-const AGE_RANGE_STARTS = [7, 10, 13, 16, 18];
+// Where an age range starts: 0-6, 7-9, 10-12, 13-15, 16-17 (server.AGE_RANGE_STARTS). Profiles
+// stop at 17, so an age ban lifts at 17 at the latest.
+const AGE_RANGE_STARTS = [7, 10, 13, 16];
+export const MAX_CHILD_AGE = 17;
 
 /** Default age at which an age-range ban lifts: the title's baseline when it is above the
  * youngest child, else the start of the next age range. Mirrors server.default_ban_until. */
 export function defaultBanUntil(youngest: number, baselineAge: number | null): number {
-  if (baselineAge !== null && baselineAge > youngest) return baselineAge;
-  return AGE_RANGE_STARTS.find((a) => a > youngest) ?? 18;
+  if (baselineAge !== null && baselineAge > youngest) return Math.min(baselineAge, MAX_CHILD_AGE);
+  return AGE_RANGE_STARTS.find((a) => a > youngest) ?? MAX_CHILD_AGE;
 }
 
 export function banLabel(ban: Ban, active: boolean): string {

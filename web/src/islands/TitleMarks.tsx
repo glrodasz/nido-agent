@@ -1,5 +1,5 @@
 import { useId, useState } from "preact/hooks";
-import { banLabel, defaultBanUntil } from "../logic/format";
+import { MAX_CHILD_AGE, banLabel, defaultBanUntil } from "../logic/format";
 import type { MarkChange, TitleMark } from "../logic/types";
 
 interface Props {
@@ -18,7 +18,9 @@ const VOTES = [
 /** Seen, the two independent likes, and "don't suggest this" for one title. */
 export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Props) {
   const [choosing, setChoosing] = useState(false);
-  const [scope, setScope] = useState<"age" | "always">("age");
+  // Profiles stop at 17, so a 17-year-old's ban can only be for every age.
+  const canAgeBan = youngest < MAX_CHILD_AGE;
+  const [scope, setScope] = useState<"age" | "always">(canAgeBan ? "age" : "always");
   const [untilAge, setUntilAge] = useState(() => defaultBanUntil(youngest, baselineAge));
   const [busy, setBusy] = useState(false);
   const group = useId();
@@ -46,7 +48,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
     );
   }
 
-  const ages = Array.from({ length: 18 - youngest }, (_, i) => youngest + 1 + i);
+  const ages = Array.from({ length: MAX_CHILD_AGE - youngest }, (_, i) => youngest + 1 + i);
   return (
     <div class="marks">
       <div class="mark-row" role="group" aria-label="Your marks">
@@ -78,29 +80,31 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
       {choosing && (
         <fieldset class="ban-choice">
           <legend class="sr-only">How long to hide it</legend>
-          <label>
-            <input
-              type="radio"
-              name={group}
-              checked={scope === "age"}
-              onChange={() => setScope("age")}
-            />
-            Until our youngest is{" "}
-            <select
-              value={untilAge}
-              aria-label="Age"
-              onChange={(e) => {
-                setScope("age");
-                setUntilAge(Number(e.currentTarget.value));
-              }}
-            >
-              {ages.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </label>
+          {canAgeBan && (
+            <label>
+              <input
+                type="radio"
+                name={group}
+                checked={scope === "age"}
+                onChange={() => setScope("age")}
+              />
+              Until our youngest is{" "}
+              <select
+                value={untilAge}
+                aria-label="Age"
+                onChange={(e) => {
+                  setScope("age");
+                  setUntilAge(Number(e.currentTarget.value));
+                }}
+              >
+                {ages.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             <input
               type="radio"

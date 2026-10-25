@@ -257,8 +257,17 @@ def test_age_ban_defaults_to_the_baseline_or_the_next_age_range():
     assert put_mark(c, 3, ban={"scope": "age", "until_age": 9})["ban"]["until_age"] == 9
     bad = c.put("/api/titles/movie/4", json={"name": "X", "ban": {"scope": "age", "until_age": 6}})
     assert bad.status_code == 422
+    assert put_mark(c, 6, ban={"scope": "age", "baseline_age": 18})["ban"]["until_age"] == 17
     always = put_mark(c, 5, ban={"scope": "always"})["ban"]
     assert always["scope"] == "always" and always["until_age"] is None
+
+
+def test_a_seventeen_year_old_can_only_be_banned_for_every_age():
+    c, _ = client()
+    c.put("/api/profile", json={**PROFILE, "children_ages": [17]})
+    response = c.put("/api/titles/movie/1", json={"name": "X", "ban": {"scope": "age"}})
+    assert response.status_code == 422
+    assert put_mark(c, 1, ban={"scope": "always"})["ban_active"] is True
 
 
 def test_age_ban_needs_a_profile():
@@ -327,3 +336,34 @@ async def test_find_titles_reads_bans_from_state_not_from_the_model():
     await toolbox.find_titles("movie", [4], ["netflix"], tool_context=context)  # type: ignore[arg-type]
     await toolbox.find_titles("movie", [4], ["netflix"])
     assert seen == [["movie:2"], []]
+
+
+async def test_discover_skips_banned_titles_and_pages_on_when_they_thin_the_pool():
+    from nido.agent.tools import MAX_DETAILS, Toolbox
+    from nido.models import Title
+
+    toolbox = Toolbox(Settings(tmdb_token="t"))
+    pages: list[int] = []
+
+    class Tmdb:
+        async def discover(self, kind, *, page, **_: Any):
+            pages.append(page)
+            start = (page - 1) * 20
+            return [
+                Title(media_type=kind, tmdb_id=i, name=str(i)) for i in range(start, start + 20)
+            ]
+
+    async def provider_ids(kind, region):
+        return {}
+
+    toolbox._provider_ids = provider_ids  # type: ignore[method-assign]
+    profile = FamilyProfile(children_ages=[4])
+    hidden = {f"movie:{i}" for i in range(15)}  # page one keeps only 5 titles
+    ids = await toolbox._discover(Tmdb(), MediaType.MOVIE, "SE", profile, [], hidden)  # type: ignore[arg-type]
+    assert pages == [1, 2]
+    assert ids[:5] == [15, 16, 17, 18, 19] and len(ids) >= MAX_DETAILS
+    assert not set(ids) & set(range(15))
+
+    pages.clear()
+    await toolbox._discover(Tmdb(), MediaType.MOVIE, "SE", profile, [], set())  # type: ignore[arg-type]
+    assert pages == [1]  # no bans, no extra requests

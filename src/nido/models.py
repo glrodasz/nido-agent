@@ -186,7 +186,7 @@ class Ban(BaseModel):
     until_age: int | None = Field(
         default=None,
         ge=1,
-        le=18,
+        le=17,
         description="Only for scope 'age': lifts once the youngest is this old.",
     )
     at: datetime

@@ -85,7 +85,8 @@ describe("bans", () => {
     expect(defaultBanUntil(4, 0)).toBe(7);
     expect(defaultBanUntil(4, null)).toBe(7);
     expect(defaultBanUntil(7, 7)).toBe(10);
-    expect(defaultBanUntil(17, null)).toBe(18);
+    expect(defaultBanUntil(16, null)).toBe(17);
+    expect(defaultBanUntil(4, 18)).toBe(17);
   });
 
   it("labels active, lifted and permanent bans", () => {
