@@ -9,8 +9,9 @@ Nido answers three questions in one place:
 2. Is it appropriate for my child's age and sensitivities?
 3. Where can we watch it with our existing subscriptions?
 
-Scope today: personal, non-commercial use, region Sweden, English UI. Services: Netflix,
-Disney+, HBO Max, Prime Video and Apple TV+.
+Scope today: personal, non-commercial use, English UI, Swedish catalog by default. Catalog
+regions are a family setting (a VPN can add more); age ratings never depend on them. Services:
+Netflix, Disney+, HBO Max, Prime Video and Apple TV+.
 
 ## Design principles
 
@@ -57,7 +58,7 @@ uv run pytest -q
 
 ## Roadmap
 
-1. **Phase 0, data check.** Run `nido coverage`: Swedish versus reference-country rating coverage.
+1. **Phase 0, data check.** Run `nido coverage --region SE`: rating, IMDb id and watch link coverage per service.
 2. **Phase 1, MVP.** Family profile, Firestore cache, direct watch links, web app, Cloud Run
    deploy with billing cap.
 3. **Phase 2, guidance.** Per-category summaries from Common Sense Media, cited and labeled AI.

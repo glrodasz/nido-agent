@@ -52,8 +52,8 @@ class ClassificationSystem:
         return None
 
 
-# The countries whose ratings are homologated onto one age scale. TMDB carries US ratings for
-# most titles; the European systems add a second opinion and cover what Sweden lacks.
+# The countries whose ratings are homologated onto one age scale, independent of the catalog
+# region. TMDB carries US ratings for most titles; the European systems add more opinions.
 SYSTEMS: dict[str, ClassificationSystem] = {
     s.region: s
     for s in (

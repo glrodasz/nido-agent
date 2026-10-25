@@ -22,3 +22,9 @@ def test_budget_caps_calls_per_turn_and_resets_on_next_turn():
     with pytest.raises(LlmBudgetExceededError):
         budget.before_model(Ctx("a"), None)
     budget.before_model(Ctx("b"), None)
+
+
+def test_interleave_merges_regions_without_duplicates():
+    from nido.agent.tools import _interleave
+
+    assert _interleave([[1, 2, 3], [2, 4], []]) == [1, 2, 4, 3]

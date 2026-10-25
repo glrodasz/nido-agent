@@ -18,7 +18,12 @@ class Settings:
     omdb_key: str | None = field(default_factory=lambda: os.getenv("OMDB_API_KEY"))
 
     # Family defaults until profiles live in Firestore.
-    region: str = field(default_factory=lambda: os.getenv("NIDO_REGION", "SE"))
+    # Default catalog regions (comma-separated ISO codes) when a request names none.
+    regions: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            r.strip().upper() for r in os.getenv("NIDO_REGIONS", "SE").split(",") if r.strip()
+        )
+    )
     language: str = field(default_factory=lambda: os.getenv("NIDO_LANGUAGE", "en-US"))
 
     # LLM. GOOGLE_API_KEY (AI Studio, free tier) or GOOGLE_GENAI_USE_VERTEXAI=1 is read by ADK.
