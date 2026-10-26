@@ -94,3 +94,15 @@ async def test_look_up_reports_missing_and_hidden_titles():
     assert missing["not_found"] == "x"
     hidden = await lookup_box([7], set()).look_up("x", "tv", [4], ["netflix"], hidden=["tv:7"])
     assert hidden["hidden"] == "T7"
+
+
+async def test_look_up_applies_runtime_and_imdb_limits():
+    box = lookup_box([7], set())
+    result = await box.look_up(
+        "x", "tv", [4], ["netflix"], max_runtime_min=60, min_imdb_rating=8, regions=["SE"]
+    )
+    assert result["results"] == []
+    assert result["near_misses"][0]["misses"] == [
+        "Runs 95 min, longer than your 60 min limit.",
+        "IMDb 7.5, below your minimum of 8.0.",
+    ]

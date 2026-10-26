@@ -312,6 +312,8 @@ class Toolbox:
         media_type: str,
         children_ages: list[int],
         services: list[str],
+        max_runtime_min: int | None = None,
+        min_imdb_rating: float | None = None,
         avoid: list[str] | None = None,
         regions: list[str] | None = None,
         tool_context: ToolContext | None = None,
@@ -325,12 +327,22 @@ class Toolbox:
             children_ages: ages of the children who will watch, e.g. [6, 9].
             services: subscribed services, any of: netflix, disney_plus, hbo_max, prime_video,
                 apple_tv_plus.
+            max_runtime_min: longest acceptable runtime in minutes (episode length for series).
+            min_imdb_rating: lowest acceptable IMDb score, 0-10.
             avoid: content categories to avoid (same values as find_titles).
             regions: catalog regions, ISO codes like ["SE"]; omit for the family's default.
         """
         hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
         return await self.look_up(
-            name, media_type, children_ages, services, avoid=avoid, regions=regions, hidden=hidden
+            name,
+            media_type,
+            children_ages,
+            services,
+            max_runtime_min=max_runtime_min,
+            min_imdb_rating=min_imdb_rating,
+            avoid=avoid,
+            regions=regions,
+            hidden=hidden,
         )
 
     async def look_up(
@@ -339,6 +351,8 @@ class Toolbox:
         media_type: str,
         children_ages: list[int],
         services: list[str],
+        max_runtime_min: int | None = None,
+        min_imdb_rating: float | None = None,
         avoid: list[str] | None = None,
         regions: list[str] | None = None,
         hidden: list[str] | None = None,
@@ -352,6 +366,8 @@ class Toolbox:
             regions=regions,
             services=[s for s in services if s in SERVICES_BY_KEY],
             avoid_categories=[GuidanceCategory(a) for a in avoid or [] if a in GuidanceCategory],
+            max_runtime_min=max_runtime_min,
+            min_imdb_rating=min_imdb_rating,
         )
         out: dict[str, Any] = {
             "regions": regions,
