@@ -13,8 +13,10 @@ def toolbox(pages: dict[int, list[int]], too_old: set[int], calls: list) -> Tool
     """Discover serves `pages`; titles in `too_old` are rated 15+."""
     box = Toolbox(Settings(tmdb_token="t"))
 
-    async def discover(tmdb, kind, region, profile, genre_ids, page):
+    async def discover(tmdb, kind, region, profile, genre_ids, page, released_since=None):
         calls.append(page)
+        if released_since:
+            calls.append(("since", released_since))
         return pages.get(page, [])
 
     async def candidate(kind, tmdb_id, regions):
@@ -55,6 +57,15 @@ async def test_pool_stops_when_discover_runs_out(monkeypatch):
 
     assert [c.title.tmdb_id for c in candidates] == [1, 2]
     assert calls == [1]
+
+
+async def test_released_since_reaches_discover():
+    calls: list = []
+    box = toolbox({1: [1]}, too_old=set(), calls=calls)
+
+    await box.search("movie", [4], ["netflix"], regions=["SE"], released_since=2022)
+
+    assert ("since", 2022) in calls
 
 
 async def test_pool_skips_banned_titles():

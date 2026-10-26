@@ -95,6 +95,8 @@ export default function Finder({
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [results, setResults] = useState<SearchResult | null>(null);
+  // The question the cards answer when they came from Ask Nido; null for the filters.
+  const [answering, setAnswering] = useState<string | null>(null);
   const [busy, setBusy] = useState<"search" | "chat" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const session = useRef<string | null>(null);
@@ -132,7 +134,10 @@ export default function Finder({
         min_imdb_rating: f.minImdb ? Number(f.minImdb) : undefined,
       }),
     );
-    if (found) setResults(found);
+    if (found) {
+      setResults(found);
+      setAnswering(null);
+    }
   }
 
   function quick(toggle: (f: Filters) => Filters) {
@@ -152,7 +157,10 @@ export default function Finder({
     session.current = reply.session_id;
     const text2 = [reply.reply, reply.note].filter(Boolean).join("\n\n");
     if (text2) setTurns((t) => [...t, { role: "nido", text: text2 }]);
-    if (reply.results) setResults(reply.results);
+    if (reply.results) {
+      setResults(reply.results);
+      setAnswering(ask);
+    }
   }
 
   const toggleGenre = (g: string) =>
@@ -326,6 +334,12 @@ export default function Finder({
               )}
             </div>
           </header>
+          {answering && (
+            <p class="results-for muted">
+              <Icon name="search" />
+              Answering “{answering}”
+            </p>
+          )}
           {results.results.length === 0 && (
             <p class="notice">
               {nearMisses.length > 0

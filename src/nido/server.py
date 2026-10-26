@@ -23,12 +23,16 @@ Banned titles are left out of search and chat by code: the server hands their ke
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
 
 Search and chat return the same result shape (agent.tools._present), so the web app renders the
-shortlist from tool output, never from the model's text. Chat sessions live in memory: a cold
+shortlist from tool output, never from the model's text. Chat orders those cards by the answer:
+the titles the reply names come first (see chat_cards). Chat sessions live in memory: a cold
 start forgets the conversation, not the profile or the watchlist.
 """
 
 import logging
+import re
 import secrets
+import unicodedata
+from collections import OrderedDict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
@@ -224,11 +228,68 @@ TITLE_TOOLS = ("find_titles", "look_up_title")
 def _find_titles_outputs(event: Any) -> list[dict[str, Any]]:
     out = []
     for response in event.get_function_responses() or []:
-        if response.name in ("find_titles", "look_up_title") and isinstance(
-            response.response, dict
-        ):
+        if response.name in TITLE_TOOLS and isinstance(response.response, dict):
             out.append(response.response)
     return out
+
+
+MAX_CARDS = 12
+# Chat sessions whose titles are remembered for the cards; the sessions themselves live in memory
+# too, so this only has to outlast a conversation.
+MAX_REMEMBERED_SESSIONS = 500
+
+
+def _key(item: dict[str, Any]) -> str:
+    return f"{item.get('media_type')}:{item.get('tmdb_id')}"
+
+
+def _normalized(text: str) -> str:
+    """Lowercase words separated by single spaces: "WALL·E" and "Wall-E" both become "wall e"."""
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(re.findall(r"[^\W_]+", text.lower()))
+
+
+def titles_named(reply: str, known: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The known titles the reply names, in the order it names them. A name inside a longer one
+    it also matched ("Toy Story" in "Toy Story 4") does not count on its own."""
+    text = f" {_normalized(reply)} "
+    spans: list[tuple[int, int, dict[str, Any]]] = []
+    for item in known:
+        name = _normalized(str(item.get("title") or ""))
+        if not name:
+            continue
+        at = text.find(f" {name} ")
+        if at >= 0:
+            spans.append((at, at + len(name) + 2, item))
+    spans.sort(key=lambda s: (s[0], s[0] - s[1]))
+    named: list[dict[str, Any]] = []
+    for start, end, item in spans:
+        inside = any(s <= start and end <= e and (s, e) != (start, end) for s, e, _ in spans)
+        if not inside and all(_key(n) != _key(item) for n in named):
+            named.append(item)
+    return named
+
+
+def chat_cards(
+    reply: str, output: dict[str, Any] | None, known: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    """The shortlist the web app shows after a chat turn, so the cards follow the answer: the
+    titles the reply recommends come first, in its order, then the rest of this turn's search.
+    `known` holds every title the tools returned in this conversation, so an answer drawn from an
+    earlier search still gets its cards. Only tool output becomes a card, never the model's text.
+    """
+    named = titles_named(reply, list(known.values()))
+    if not named:
+        return output
+    picked = {_key(n) for n in named}
+    rest = [r for r in (output or {}).get("results") or [] if _key(r) not in picked]
+    base = output or {"regions": [], "attribution": ""}
+    # Near misses only show when nothing fits, and a named title that fits replaces them.
+    fits = [n for n in named if not n.get("misses")]
+    if fits:
+        return {**base, "results": (fits + rest)[:MAX_CARDS], "near_misses": []}
+    return {**base, "results": rest[:MAX_CARDS], "near_misses": named[:MAX_CARDS]}
 
 
 def _final_text(event: Any) -> str:
@@ -263,6 +324,8 @@ def create_app(
 
         runner = Runner(app=build_app(settings, toolbox), session_service=InMemorySessionService())
     limiter = ChatLimiter(settings.max_chat_turns_per_day)
+    # Per chat session: every title the tools returned, by key, so later answers get cards.
+    session_titles: OrderedDict[tuple[str, str], dict[str, dict[str, Any]]] = OrderedDict()
 
     app = FastAPI(title="Nido", docs_url=None, redoc_url=None)
 
@@ -389,6 +452,10 @@ def create_app(
 
         reply: list[str] = []
         results: dict[str, Any] | None = None
+        known = session_titles.setdefault((user.uid, session.id), {})
+        session_titles.move_to_end((user.uid, session.id))
+        while len(session_titles) > MAX_REMEMBERED_SESSIONS:
+            session_titles.popitem(last=False)
         note = None
         try:
             async for event in runner.run_async(
@@ -397,11 +464,14 @@ def create_app(
                 new_message=types.Content(role="user", parts=[types.Part(text=request.message)]),
                 state_delta={
                     "family": describe_family(profile),
+                    "today": date.today().isoformat(),
                     HIDDEN_STATE_KEY: hidden_keys(marks, profile) if profile else [],
                 },
             ):
                 for output in _find_titles_outputs(event):
                     results = output
+                    for field in ("results", "near_misses"):
+                        known.update({_key(item): item for item in output.get(field) or []})
                 if text := _final_text(event):
                     reply.append(text)
         except LlmBudgetExceededError:
@@ -412,10 +482,11 @@ def create_app(
                 busy = "The assistant is busy right now. Try again in a minute, or use the filters."
                 raise HTTPException(503, busy) from exc
             note = "The assistant stopped before finishing."
+        text = "\n\n".join(reply).strip()
         return {
             "session_id": session.id,
-            "reply": "\n\n".join(reply).strip(),
-            "results": with_marks(results, marks, profile),
+            "reply": text,
+            "results": with_marks(chat_cards(text, results, known), marks, profile),
             "note": note,
         }
 
