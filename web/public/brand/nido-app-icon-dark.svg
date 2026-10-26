@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Nido">
+  <title>Nido</title>
+  <rect width="128" height="128" rx="28" fill="#1F2A35"/>
+  <g transform="translate(23.5 27.2) scale(0.8)">
+    <path fill="#F5F1EA" d="M48.5 90C23 90 2 76 2 55C2 28 25 7.5 49 7.5C60 7.5 67.5 14 74 20C70 21.5 66.5 24 65.5 28.5C63.5 36 65 45 70 52.5C81 66 89 77.5 88 90.5C80 84 67.5 80 57 79.5C59 72.5 61 64 65 56C61 50 55.5 47 49 47C34 47 20 57.5 19.5 70C19 81 31 89 48.5 90Z"/>
+    <g fill="none" stroke-linecap="round">
+      <path stroke="#1F2A35" stroke-width="2.5" d="M48 25.3C48 20.3 58 20.3 58 25.3"/>
+      <path stroke="#F5F1EA" stroke-width="2.25" d="M49.2 58.3C49.2 54.6 56.8 54.6 56.8 58.3"/>
+    </g>
+    <path fill="#F0795A" d="M79 7.5C79 5 81.3 3.8 83.4 5L97.2 13.6C99.2 14.8 99.2 18.2 97.2 19.4L83.4 28C81.3 29.2 79 28 79 25.5Z"/>
+  </g>
+</svg>
