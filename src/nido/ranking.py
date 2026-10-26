@@ -25,7 +25,9 @@ INCLUDED = {AccessType.SUBSCRIPTION, AccessType.ADS}
 # Bayesian average: a 9.0 from 300 votes should not outrank an 8.1 from 400,000.
 PRIOR_VOTES = 5_000
 PRIOR_SCORE = 6.5
-SHORTLIST_SIZE = 5
+# Enough for a real choice on one evening without a long scroll; the chat shows them all as cards
+# while the model comments on 5 at most. Stays below tools.ENOUGH_ELIGIBLE, so the pool can fill it.
+SHORTLIST_SIZE = 12
 NEAR_MISS_SIZE = 3
 
 
