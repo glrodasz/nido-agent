@@ -1,6 +1,6 @@
-import { useRef, useState } from "preact/hooks";
+import { useMemo, useRef, useState } from "preact/hooks";
 import { api } from "../logic/api";
-import { familyLine, GENRES } from "../logic/format";
+import { familyLine, GENRES, seenLast } from "../logic/format";
 import type {
   AppConfig,
   MarkChange,
@@ -10,6 +10,7 @@ import type {
   TitleMark,
   TitleResult,
 } from "../logic/types";
+import { Fragment } from "preact";
 import Icon from "./Icon";
 import Markdown from "./Markdown";
 import TitleCard from "./TitleCard";
@@ -64,6 +65,17 @@ const QUICK: { label: string; on: (f: Filters) => boolean; toggle: (f: Filters) 
   },
 ];
 
+// Seen titles sink to the end unless the family turned that off; remembered in this browser only.
+const SEEN_LAST_KEY = "nido-seen-last";
+
+function loadSeenLast(): boolean {
+  try {
+    return localStorage.getItem(SEEN_LAST_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
 export default function Finder({
   config,
   profile,
@@ -86,6 +98,17 @@ export default function Finder({
   const [busy, setBusy] = useState<"search" | "chat" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const session = useRef<string | null>(null);
+  const [sinkSeen, setSinkSeen] = useState(loadSeenLast);
+
+  function toggleSinkSeen() {
+    const next = !sinkSeen;
+    setSinkSeen(next);
+    try {
+      localStorage.setItem(SEEN_LAST_KEY, next ? "on" : "off");
+    } catch {
+      // Private windows can refuse storage; the order still changes for this visit.
+    }
+  }
 
   async function run<T>(kind: "search" | "chat", work: () => Promise<T>): Promise<T | undefined> {
     setBusy(kind);
@@ -138,7 +161,16 @@ export default function Finder({
   const multiRegion = (results?.regions.length ?? 0) > 1;
   const nearMisses = results?.near_misses ?? [];
 
-  const picks = results ? (results.results.length > 0 ? results.results : nearMisses) : [];
+  const ranked = results ? (results.results.length > 0 ? results.results : nearMisses) : [];
+  const isSeen = (r: TitleResult) => marks.get(`${r.media_type}:${r.tmdb_id}`)?.seen ?? false;
+  // Ordered when results arrive or the toggle flips, not on every mark: a card the family just
+  // marked as seen stays put instead of jumping away under their finger.
+  const { picks, sunk } = useMemo(() => {
+    const ordered = sinkSeen ? seenLast(ranked, isSeen) : ranked;
+    return { picks: ordered, sunk: sinkSeen ? ranked.filter(isSeen).length : 0 };
+  }, [results, sinkSeen]);
+  const anySeen = picks.some(isSeen);
+  const firstSunk = picks.length - sunk;
 
   return (
     <div class="finder">
@@ -275,11 +307,24 @@ export default function Finder({
             <h2 id="picks-title">
               {results.results.length > 0 ? "Picks for your family" : "Closest picks"}
             </h2>
-            {picks.length > 0 && (
-              <span class="muted">
-                {picks.length} {picks.length === 1 ? "title" : "titles"}
-              </span>
-            )}
+            <div class="results-tools">
+              {(anySeen || sunk > 0) && (
+                <button
+                  type="button"
+                  class={sinkSeen ? "chip-btn chip-on" : "chip-btn"}
+                  aria-pressed={sinkSeen}
+                  onClick={toggleSinkSeen}
+                >
+                  <Icon name="eye" />
+                  Seen last
+                </button>
+              )}
+              {picks.length > 0 && (
+                <span class="muted">
+                  {picks.length} {picks.length === 1 ? "title" : "titles"}
+                </span>
+              )}
+            </div>
           </header>
           {results.results.length === 0 && (
             <p class="notice">
@@ -288,18 +333,22 @@ export default function Finder({
                 : "Nothing passed the filters. Try fewer genres, a longer runtime or another type."}
             </p>
           )}
-          {picks.map((r) => (
-            <TitleCard
-              key={`${r.media_type}:${r.tmdb_id}`}
-              result={r}
-              services={profile.services}
-              showRegion={multiRegion}
-              saved={savedKeys.has(`${r.media_type}:${r.tmdb_id}`)}
-              onToggleSave={onToggleSave}
-              mark={marks.get(`${r.media_type}:${r.tmdb_id}`) ?? null}
-              youngest={Math.min(...profile.children_ages)}
-              onMark={(change) => onMark(r, change)}
-            />
+          {picks.map((r, i) => (
+            <Fragment key={`${r.media_type}:${r.tmdb_id}`}>
+              {sunk > 0 && i === firstSunk && (
+                <p class="eyebrow seen-divider">Already seen · {sunk}</p>
+              )}
+              <TitleCard
+                result={r}
+                services={profile.services}
+                showRegion={multiRegion}
+                saved={savedKeys.has(`${r.media_type}:${r.tmdb_id}`)}
+                onToggleSave={onToggleSave}
+                mark={marks.get(`${r.media_type}:${r.tmdb_id}`) ?? null}
+                youngest={Math.min(...profile.children_ages)}
+                onMark={(change) => onMark(r, change)}
+              />
+            </Fragment>
           ))}
           <p class="attribution muted">{config.attribution}</p>
         </section>

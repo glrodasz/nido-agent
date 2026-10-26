@@ -184,3 +184,8 @@ export function familyLine(profile: Profile, serviceNames: Record<string, string
 export function posterHue(tmdbId: number): number {
   return (tmdbId * 47) % 360;
 }
+
+/** Unseen titles first, seen ones after; the ranking order holds within each group. */
+export function seenLast<T>(items: T[], isSeen: (item: T) => boolean): T[] {
+  return [...items.filter((i) => !isSeen(i)), ...items.filter(isSeen)];
+}

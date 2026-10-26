@@ -14,6 +14,7 @@ from nido.models import (
     TitleRef,
 )
 from nido.ranking import (
+    SHORTLIST_SIZE,
     Candidate,
     age_baseline,
     evaluate,
@@ -124,9 +125,9 @@ def test_few_votes_do_not_outrank_many():
 
 
 def test_shortlist_is_capped_and_sorted():
-    candidates = [make(i, rating=6 + i / 10) for i in range(10)]
+    candidates = [make(i, rating=6 + i / 10) for i in range(SHORTLIST_SIZE + 3)]
     result = shortlist(candidates, PROFILE)
-    assert len(result) == 5
+    assert len(result) == SHORTLIST_SIZE
     assert [r.score for r in result] == sorted((r.score for r in result), reverse=True)
 
 
@@ -202,3 +203,9 @@ def test_near_misses_explain_the_broken_rules_closest_first():
 
 def test_titles_that_pass_have_no_misses():
     assert evaluate(make(1), PROFILE).misses == []
+
+
+def test_search_pool_gathers_enough_titles_to_fill_the_shortlist():
+    from nido.agent.tools import ENOUGH_ELIGIBLE
+
+    assert SHORTLIST_SIZE <= ENOUGH_ELIGIBLE
