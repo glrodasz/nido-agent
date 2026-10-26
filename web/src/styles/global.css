@@ -14,6 +14,7 @@
   --radius: 14px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
   --logo-ink: #1f2a35;
+  --logo-paper: #f5f1ea;
   --logo-accent: #f0795a;
   color-scheme: light;
 }
@@ -35,6 +36,7 @@
     --error: #ff8a7e;
     --shadow: none;
     --logo-ink: #f5f1ea;
+    --logo-paper: #1f2a35;
     color-scheme: dark;
   }
 }
@@ -108,9 +110,12 @@ h4 {
   stroke: var(--logo-ink);
 }
 
-/* The big bird's eye is a cut-out, so it takes the page colour. */
+.logo-paper {
+  fill: var(--logo-paper);
+}
+
 .logo-paper-stroke {
-  stroke: var(--bg);
+  stroke: var(--logo-paper);
 }
 
 .logo-accent {
