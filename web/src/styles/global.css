@@ -13,6 +13,9 @@
   --error: #a3352b;
   --radius: 14px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --logo-ink: #1f2a35;
+  --logo-paper: #f5f1ea;
+  --logo-accent: #f0795a;
   color-scheme: light;
 }
 
@@ -32,6 +35,8 @@
     --warn-text: #f0c879;
     --error: #ff8a7e;
     --shadow: none;
+    --logo-ink: #f5f1ea;
+    --logo-paper: #1f2a35;
     color-scheme: dark;
   }
 }
@@ -91,9 +96,30 @@ h4 {
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  font-size: 1.25rem;
+}
+
+.logo {
+  display: block;
+}
+
+.logo-ink {
+  fill: var(--logo-ink);
+}
+
+.logo-ink-stroke {
+  stroke: var(--logo-ink);
+}
+
+.logo-paper {
+  fill: var(--logo-paper);
+}
+
+.logo-paper-stroke {
+  stroke: var(--logo-paper);
+}
+
+.logo-accent {
+  fill: var(--logo-accent);
 }
 
 .tabs {
