@@ -10,6 +10,7 @@ from google.adk import Agent
 from google.adk.apps import App
 
 from nido.agent.budget import LlmBudget
+from nido.agent.model import build_model
 from nido.agent.tools import Toolbox
 from nido.config import Settings
 
@@ -56,7 +57,7 @@ def build_app(settings: Settings | None = None, tools: Toolbox | None = None) ->
     budget = LlmBudget(max_calls=max(settings.max_llm_calls, 0))
     agent = Agent(
         name=APP_NAME,
-        model=settings.model,
+        model=build_model(settings.model, settings.fallback_model),
         description="Finds family movies and series across the family's streaming services.",
         instruction=INSTRUCTION,
         tools=[tools.find_titles, tools.look_up_title, tools.guidance_links],

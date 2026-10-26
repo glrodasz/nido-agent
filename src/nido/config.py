@@ -33,6 +33,11 @@ class Settings:
 
     # LLM. GOOGLE_API_KEY (AI Studio, free tier) or GOOGLE_GENAI_USE_VERTEXAI=1 is read by ADK.
     model: str = field(default_factory=lambda: os.getenv("NIDO_MODEL", "gemini-3.1-flash-lite"))
+    # Used when the main model stays overloaded (503) or over quota (429) after retries.
+    # Empty or "none" disables the fallback ("none" because a repository variable cannot be empty).
+    fallback_model: str = field(
+        default_factory=lambda: _env_model("NIDO_FALLBACK_MODEL", "gemini-3.5-flash-lite")
+    )
     # Model requests allowed per conversation turn, enforced in before_model_callback so the cap
     # also holds under `adk web`. <= 0 disables the model.
     max_llm_calls: int = field(default_factory=lambda: _env_int("NIDO_MAX_LLM_CALLS", 8))
@@ -65,6 +70,11 @@ class Settings:
     # Built web app (web/dist) to serve at "/", for single-origin local runs. Firebase Hosting
     # serves it in production.
     web_dir: str | None = field(default_factory=lambda: os.getenv("NIDO_WEB_DIR"))
+
+
+def _env_model(name: str, default: str) -> str:
+    value = os.getenv(name, default).strip()
+    return "" if value.lower() == "none" else value
 
 
 def llm_credentials_available() -> bool:

@@ -100,7 +100,7 @@ bootstrap prints the `gh variable set` commands with the values filled in.
 | `FIREBASE_API_KEY` | from step 1.4 |
 | `FIREBASE_AUTH_DOMAIN` | `my-project.firebaseapp.com` |
 | `FIREBASE_APP_ID` | `1:123:web:abc` |
-| `NIDO_MODEL`, `NIDO_REGIONS` | optional overrides of the defaults in `src/nido/config.py` |
+| `NIDO_MODEL`, `NIDO_FALLBACK_MODEL`, `NIDO_REGIONS` | optional overrides of the defaults in `src/nido/config.py` (`NIDO_FALLBACK_MODEL=none` turns the fallback off) |
 
 Until they are all set, `deploy.yml` only leaves a notice.
 
