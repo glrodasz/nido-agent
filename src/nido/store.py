@@ -5,7 +5,7 @@ Two implementations behind one interface: `MemoryStore` for tests and local runs
 
     families/{uid}                    the family profile (FamilyProfile fields + updated_at)
     families/{uid}/watchlist/{key}    one WatchlistItem per saved title (key: "movie:123")
-    families/{uid}/titles/{key}       one TitleMark per marked title: seen, liked, banned
+    families/{uid}/titles/{key}       one TitleMark per marked title: seen, liked, rewatch, banned
     cache/{key}                       {payload (JSON), retrieved_at, expire_at}; a TTL policy
                                       on expire_at deletes stale entries (infra/bootstrap.sh)
 

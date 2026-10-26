@@ -245,6 +245,16 @@ def test_marks_are_independent_and_partial_updates_keep_the_rest():
     assert [i["key"] for i in c.get("/api/titles").json()["items"]] == ["movie:1"]
 
 
+def test_on_repeat_is_its_own_mark_and_never_hides_a_title():
+    c, _ = client()
+    item = put_mark(c, rewatch=True, seen=True)
+    assert (item["rewatch"], item["seen"], item["ban_active"]) == (True, True, False)
+    item = put_mark(c, seen=False)
+    assert item["rewatch"] is True
+    put_mark(c, rewatch=False)
+    assert c.get("/api/titles").json()["items"] == []
+
+
 def test_clearing_every_mark_forgets_the_title():
     c, _ = client()
     put_mark(c, seen=True)

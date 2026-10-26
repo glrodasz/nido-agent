@@ -101,6 +101,8 @@ export interface TitleMark {
   seen: boolean;
   liked_adults: boolean;
   liked_child: boolean;
+  // The kids love to watch it again and again.
+  rewatch: boolean;
   ban: Ban | null;
   // False for a lifted age ban: kept so the family can still review it.
   ban_active: boolean;
@@ -118,6 +120,7 @@ export interface MarkChange {
   seen?: boolean;
   liked_adults?: boolean;
   liked_child?: boolean;
+  rewatch?: boolean;
   ban?: BanRequest | null;
 }
 

@@ -7,7 +7,7 @@
     GET    /api/watchlist                         saved titles
     PUT    /api/watchlist/{media_type}/{tmdb_id}  save or update one
     DELETE /api/watchlist/{media_type}/{tmdb_id}
-    GET    /api/titles                            the family's marks: seen, liked, banned
+    GET    /api/titles                            the family's marks: seen, liked, rewatch, banned
     PUT    /api/titles/{media_type}/{tmdb_id}     change some marks on one title
 
 Banned titles are left out of search and chat by code: the server hands their keys to the
@@ -94,6 +94,7 @@ class MarkUpdate(BaseModel):
     seen: bool | None = None
     liked_adults: bool | None = None
     liked_child: bool | None = None
+    rewatch: bool | None = None
     ban: BanRequest | None = None
 
 
@@ -427,7 +428,7 @@ def create_app(
             "poster_url": update.poster_url or mark.poster_url,
             "updated_at": now,
         }
-        for flag in ("seen", "liked_adults", "liked_child"):
+        for flag in ("seen", "liked_adults", "liked_child", "rewatch"):
             if getattr(update, flag) is not None:
                 changes[flag] = getattr(update, flag)
         if "ban" in update.model_fields_set:

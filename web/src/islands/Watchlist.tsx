@@ -1,15 +1,22 @@
 import { posterHue } from "../logic/format";
-import type { WatchlistItem } from "../logic/types";
+import type { MarkChange, TitleMark, WatchlistItem } from "../logic/types";
+import { Poster } from "./HiddenTitles";
 import Icon from "./Icon";
 
 interface Props {
   items: WatchlistItem[];
   onWatched: (item: WatchlistItem, watched: boolean) => void;
   onRemove: (item: WatchlistItem) => void;
+  marks: TitleMark[];
+  onMark: (mark: TitleMark, change: MarkChange) => void;
 }
 
-export default function Watchlist({ items, onWatched, onRemove }: Props) {
-  if (items.length === 0) {
+export default function Watchlist({ items, onWatched, onRemove, marks, onMark }: Props) {
+  // A hidden title stays out of every list that suggests what to put on.
+  const onRepeat = marks
+    .filter((m) => m.rewatch && !m.ban_active)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (items.length === 0 && onRepeat.length === 0) {
     return (
       <div class="empty">
         <h2 class="section-title">Your watchlist is empty</h2>
@@ -58,6 +65,36 @@ export default function Watchlist({ items, onWatched, onRemove }: Props) {
   );
   return (
     <div class="lists">
+      {onRepeat.length > 0 && (
+        <section class="on-repeat">
+          <h2 class="section-title">
+            <Icon name="repeat" /> On repeat
+          </h2>
+          <p class="muted">Already seen, but the kids love to watch these again.</p>
+          <ul class="watchlist">
+            {onRepeat.map((m) => (
+              <li key={m.key} class="wl-item">
+                <Poster url={m.poster_url} hue={posterHue(m.title.tmdb_id)} />
+                <div class="wl-text">
+                  <strong>{m.name}</strong>
+                  <span class="muted">
+                    {[m.year, m.title.media_type === "tv" ? "Series" : "Movie"]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  class="link link-quiet"
+                  onClick={() => onMark(m, { rewatch: false })}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {toWatch.length > 0 && (
         <>
           <h2 class="section-title">To watch</h2>
