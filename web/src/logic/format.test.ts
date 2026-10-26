@@ -9,6 +9,7 @@ import {
   parseAges,
   parseRegions,
   posterHue,
+  seenLast,
   serviceBrand,
   sortOffers,
   verdictFor,
@@ -158,5 +159,16 @@ describe("posterHue", () => {
     expect(posterHue(550)).toBe(posterHue(550));
     expect(posterHue(123456)).toBeGreaterThanOrEqual(0);
     expect(posterHue(123456)).toBeLessThan(360);
+  });
+});
+
+describe("seenLast", () => {
+  it("moves seen titles to the end and keeps the ranking within each group", () => {
+    const seen = new Set([1, 3]);
+    expect(seenLast([1, 2, 3, 4, 5], (n) => seen.has(n))).toEqual([2, 4, 5, 1, 3]);
+  });
+
+  it("leaves a list without seen titles as it was", () => {
+    expect(seenLast([3, 1, 2], () => false)).toEqual([3, 1, 2]);
   });
 });
