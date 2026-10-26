@@ -14,9 +14,14 @@ const VOTES = [
   ["seen", "Seen", "eye"],
   ["liked_adults", "We liked it", "heart"],
   ["liked_child", "Our kid liked it", "smile"],
+  ["rewatch", "On repeat", "repeat"],
 ] as const;
 
-/** Seen, the two independent likes, and "don't suggest this" for one title. */
+const HINTS: Partial<Record<(typeof VOTES)[number][0], string>> = {
+  rewatch: "On repeat: the kids love to watch it again and again",
+};
+
+/** Seen, the two independent likes, "on repeat" and "don't suggest this" for one title. */
 export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Props) {
   const [choosing, setChoosing] = useState(false);
   // Profiles stop at 17, so a 17-year-old's ban can only be for every age.
@@ -63,9 +68,14 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
               class={on ? "key mark key-on" : "key mark"}
               aria-pressed={on}
               aria-label={label}
-              title={label}
+              title={HINTS[field] ?? label}
               disabled={busy}
-              onClick={() => change({ [field]: !on })}
+              // A favourite to rewatch has been seen, so turning it on marks it seen too.
+              onClick={() =>
+                change(
+                  field === "rewatch" && !on ? { rewatch: true, seen: true } : { [field]: !on },
+                )
+              }
             >
               <Icon name={icon} filled={on && icon === "heart"} />
               <span class="mark-label">{label}</span>

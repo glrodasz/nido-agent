@@ -53,7 +53,7 @@ export default function HiddenTitles({ marks, onMark }: Props) {
   );
 }
 
-function Poster({ url, hue }: { url: string | null; hue: number }) {
+export function Poster({ url, hue }: { url: string | null; hue: number }) {
   const [failed, setFailed] = useState(false);
   return url && !failed ? (
     <img src={url} alt="" width={46} height={69} loading="lazy" onError={() => setFailed(true)} />

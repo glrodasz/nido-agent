@@ -92,14 +92,28 @@ export default function App() {
     try {
       const updated = await api.mark(info, change);
       const empty =
-        !updated.seen && !updated.liked_adults && !updated.liked_child && !updated.ban;
-      setMarks((all) => [
-        ...(empty ? [] : [updated]),
-        ...all.filter((m) => m.key !== updated.key),
-      ]);
+        !updated.seen &&
+        !updated.liked_adults &&
+        !updated.liked_child &&
+        !updated.rewatch &&
+        !updated.ban;
+      setMarks((all) => [...(empty ? [] : [updated]), ...all.filter((m) => m.key !== updated.key)]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save that mark.");
     }
+  }
+
+  function markListed(m: TitleMark, change: MarkChange) {
+    return markTitle(
+      {
+        media_type: m.title.media_type,
+        tmdb_id: m.title.tmdb_id,
+        title: m.name,
+        year: m.year,
+        poster_url: m.poster_url,
+      },
+      change,
+    );
   }
 
   async function toggleSave(result: TitleResult) {
@@ -217,27 +231,19 @@ export default function App() {
           firstRun={profile === null}
           onSave={saveProfile}
         />
-        {profile && (
-          <HiddenTitles
-            marks={marks}
-            onMark={(m, change) =>
-              markTitle(
-                {
-                  media_type: m.title.media_type,
-                  tmdb_id: m.title.tmdb_id,
-                  title: m.name,
-                  year: m.year,
-                  poster_url: m.poster_url,
-                },
-                change,
-              )
-            }
-          />
-        )}
+        {profile && <HiddenTitles marks={marks} onMark={markListed} />}
       </>
     );
   } else if (tab === "watchlist") {
-    body = <Watchlist items={watchlist} onWatched={setWatched} onRemove={remove} />;
+    body = (
+      <Watchlist
+        items={watchlist}
+        onWatched={setWatched}
+        onRemove={remove}
+        marks={marks}
+        onMark={markListed}
+      />
+    );
   } else {
     body = (
       <Finder

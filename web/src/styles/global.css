@@ -1074,6 +1074,23 @@ a.imdb:hover {
   gap: 0.5rem;
 }
 
+.on-repeat {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.on-repeat .section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+}
+
+.on-repeat > p {
+  margin: 0 0 0.25rem;
+}
+
 .wl-item {
   display: flex;
   align-items: center;

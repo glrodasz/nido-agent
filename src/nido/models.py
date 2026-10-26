@@ -198,8 +198,8 @@ class Ban(BaseModel):
 
 
 class TitleMark(BaseModel):
-    """The family's own marks on one title. Seen and liked never hide a title; an active ban
-    keeps it out of every search and chat shortlist."""
+    """The family's own marks on one title. Seen, liked and rewatch never hide a title; an active
+    ban keeps it out of every search and chat shortlist."""
 
     title: TitleRef
     name: str
@@ -208,12 +208,14 @@ class TitleMark(BaseModel):
     seen: bool = False
     liked_adults: bool = False
     liked_child: bool = False
+    # The kids ask for it again and again: a good pick to put on even though it's been seen.
+    rewatch: bool = False
     ban: Ban | None = None
     updated_at: datetime
 
     @property
     def empty(self) -> bool:
-        return not (self.seen or self.liked_adults or self.liked_child or self.ban)
+        return not (self.seen or self.liked_adults or self.liked_child or self.rewatch or self.ban)
 
 
 class WatchlistItem(BaseModel):
