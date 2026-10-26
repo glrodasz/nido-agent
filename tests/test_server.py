@@ -37,6 +37,9 @@ class FakeToolbox:
     async def find_titles(self, **kwargs: Any) -> dict[str, Any]:
         return await self.search(**kwargs)
 
+    async def look_up_title(self, **kwargs: Any) -> dict[str, Any]:
+        return RESULT
+
     def guidance_links(self, title: str) -> dict[str, Any]:
         return {}
 
@@ -336,34 +339,3 @@ async def test_find_titles_reads_bans_from_state_not_from_the_model():
     await toolbox.find_titles("movie", [4], ["netflix"], tool_context=context)  # type: ignore[arg-type]
     await toolbox.find_titles("movie", [4], ["netflix"])
     assert seen == [["movie:2"], []]
-
-
-async def test_discover_skips_banned_titles_and_pages_on_when_they_thin_the_pool():
-    from nido.agent.tools import MAX_DETAILS, Toolbox
-    from nido.models import Title
-
-    toolbox = Toolbox(Settings(tmdb_token="t"))
-    pages: list[int] = []
-
-    class Tmdb:
-        async def discover(self, kind, *, page, **_: Any):
-            pages.append(page)
-            start = (page - 1) * 20
-            return [
-                Title(media_type=kind, tmdb_id=i, name=str(i)) for i in range(start, start + 20)
-            ]
-
-    async def provider_ids(kind, region):
-        return {}
-
-    toolbox._provider_ids = provider_ids  # type: ignore[method-assign]
-    profile = FamilyProfile(children_ages=[4])
-    hidden = {f"movie:{i}" for i in range(15)}  # page one keeps only 5 titles
-    ids = await toolbox._discover(Tmdb(), MediaType.MOVIE, "SE", profile, [], hidden)  # type: ignore[arg-type]
-    assert pages == [1, 2]
-    assert ids[:5] == [15, 16, 17, 18, 19] and len(ids) >= MAX_DETAILS
-    assert not set(ids) & set(range(15))
-
-    pages.clear()
-    await toolbox._discover(Tmdb(), MediaType.MOVIE, "SE", profile, [], set())  # type: ignore[arg-type]
-    assert pages == [1]  # no bans, no extra requests

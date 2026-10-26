@@ -12,7 +12,7 @@ def test_agent_app_imports_offline():
     from nido.agent.app import root_agent
 
     assert root_agent.name == "nido_agent"
-    assert len(root_agent.tools) == 2
+    assert len(root_agent.tools) == 3
 
 
 def test_budget_caps_calls_per_turn_and_resets_on_next_turn():

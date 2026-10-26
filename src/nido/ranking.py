@@ -85,11 +85,11 @@ def weighted_quality(rating: Rating | None) -> float | None:
 
 def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
     """None when the title is excluded; otherwise its score and the reasons behind it."""
-    ranked = _assess(candidate, profile)
+    ranked = assess(candidate, profile)
     return None if ranked is None or ranked.misses else ranked
 
 
-def _assess(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
+def assess(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
     """Score every title that can be watched in the family's regions, listing the profile rules
     it breaks in `misses`. None when there is nowhere to watch it at all."""
     reasons: list[str] = []
@@ -175,6 +175,6 @@ def near_misses(
     def gap(r: Ranked) -> int:
         return max(0, r.baseline.age - profile.youngest) if r.baseline else 0
 
-    missed = [r for c in candidates if (r := _assess(c, profile)) is not None and r.misses]
+    missed = [r for c in candidates if (r := assess(c, profile)) is not None and r.misses]
     missed.sort(key=lambda r: (len(r.misses), gap(r), -r.score))
     return missed[:size]

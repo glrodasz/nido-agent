@@ -199,10 +199,16 @@ class ChatLimiter:
         return True
 
 
+# Tools whose output the web app shows as title cards.
+TITLE_TOOLS = ("find_titles", "look_up_title")
+
+
 def _find_titles_outputs(event: Any) -> list[dict[str, Any]]:
     out = []
     for response in event.get_function_responses() or []:
-        if response.name == "find_titles" and isinstance(response.response, dict):
+        if response.name in ("find_titles", "look_up_title") and isinstance(
+            response.response, dict
+        ):
             out.append(response.response)
     return out
 
