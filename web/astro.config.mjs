@@ -7,6 +7,7 @@ import { defineConfig } from "astro/config";
 const api = process.env.NIDO_API_URL || "http://127.0.0.1:8080";
 
 export default defineConfig({
+  site: "https://nido-agent.web.app",
   output: "static",
   integrations: [preact()],
   devToolbar: { enabled: false },
