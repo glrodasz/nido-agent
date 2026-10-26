@@ -1,4 +1,6 @@
+import { posterHue } from "../logic/format";
 import type { WatchlistItem } from "../logic/types";
+import Icon from "./Icon";
 
 interface Props {
   items: WatchlistItem[];
@@ -9,9 +11,10 @@ interface Props {
 export default function Watchlist({ items, onWatched, onRemove }: Props) {
   if (items.length === 0) {
     return (
-      <p class="panel muted">
-        Nothing saved yet. Press Save on any pick to keep it here for movie night.
-      </p>
+      <div class="empty">
+        <h2 class="section-title">Your watchlist is empty</h2>
+        <p class="muted">Press Save on any pick to keep it here for movie night.</p>
+      </div>
     );
   }
   const toWatch = items.filter((i) => !i.watched);
@@ -19,11 +22,15 @@ export default function Watchlist({ items, onWatched, onRemove }: Props) {
   const list = (group: WatchlistItem[]) => (
     <ul class="watchlist">
       {group.map((item) => (
-        <li key={`${item.title.media_type}:${item.title.tmdb_id}`} class="panel wl-item">
+        <li key={`${item.title.media_type}:${item.title.tmdb_id}`} class="wl-item">
           {item.poster_url ? (
             <img src={item.poster_url} alt="" width={46} height={69} loading="lazy" />
           ) : (
-            <div class="poster-empty small" aria-hidden="true" />
+            <div
+              class="poster-empty small"
+              style={{ "--hue": posterHue(item.title.tmdb_id) }}
+              aria-hidden="true"
+            />
           )}
           <div class="wl-text">
             <strong>{item.name}</strong>
@@ -33,15 +40,16 @@ export default function Watchlist({ items, onWatched, onRemove }: Props) {
                 .join(" · ")}
             </span>
           </div>
-          <label class="chip">
-            <input
-              type="checkbox"
-              checked={item.watched}
-              onChange={(e) => onWatched(item, e.currentTarget.checked)}
-            />
+          <button
+            type="button"
+            class={item.watched ? "key key-small key-on" : "key key-small"}
+            aria-pressed={item.watched}
+            onClick={() => onWatched(item, !item.watched)}
+          >
+            <Icon name="eye" />
             Watched
-          </label>
-          <button type="button" class="btn btn-small" onClick={() => onRemove(item)}>
+          </button>
+          <button type="button" class="link link-quiet" onClick={() => onRemove(item)}>
             Remove
           </button>
         </li>
@@ -49,7 +57,7 @@ export default function Watchlist({ items, onWatched, onRemove }: Props) {
     </ul>
   );
   return (
-    <div>
+    <div class="lists">
       {toWatch.length > 0 && (
         <>
           <h2 class="section-title">To watch</h2>

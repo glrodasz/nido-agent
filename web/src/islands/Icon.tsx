@@ -24,18 +24,38 @@ const PATHS = {
       <path d="m2 2 20 20" />
     </>
   ),
+  bookmark: <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" />,
+  play: <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </>
+  ),
+  star: (
+    <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9Z" />
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </>
+  ),
+  moon: <path d="M20.5 14.1A8.5 8.5 0 1 1 9.9 3.5a6.6 6.6 0 0 0 10.6 10.6Z" />,
+  "chevron-down": <path d="m6 9 6 6 6-6" />,
 };
 
 export type IconName = keyof typeof PATHS;
 
-export default function Icon({ name }: { name: IconName }) {
+/** `filled` paints the shape too, for an "on" state (a liked heart, a saved bookmark). */
+export default function Icon({ name, filled = false }: { name: IconName; filled?: boolean }) {
   return (
     <svg
       class="icon"
       viewBox="0 0 24 24"
       width="16"
       height="16"
-      fill="none"
+      fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       stroke-width="2"
       stroke-linecap="round"

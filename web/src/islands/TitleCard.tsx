@@ -1,13 +1,16 @@
-import { useState } from "preact/hooks";
+import { useId, useState } from "preact/hooks";
 import {
   accessLabel,
   formatVotes,
   isIncluded,
+  posterHue,
   serviceBrand,
   sortOffers,
+  verdictFor,
   verifiedAgo,
 } from "../logic/format";
-import type { MarkChange, TitleMark, TitleResult } from "../logic/types";
+import type { MarkChange, Offer, TitleMark, TitleResult } from "../logic/types";
+import Icon from "./Icon";
 import TitleMarks from "./TitleMarks";
 
 interface Props {
@@ -48,10 +51,12 @@ export default function TitleCard({
   onMark,
 }: Props) {
   const [posterFailed, setPosterFailed] = useState(false);
+  const headingId = useId();
   const sorted = sortOffers(result.where_to_watch, services);
   const included = sorted.filter((o) => isIncluded(o, services));
   // Rent and buy rows can run to a dozen stores; the card leads with what the family already pays for.
-  const headline = included.length > 0 ? included : sorted.slice(0, 2);
+  const [primary, ...alsoIncluded] = included;
+  const others = included.length > 0 ? alsoIncluded : sorted.slice(0, 2);
   const meta = [
     result.year,
     result.media_type === "tv" ? "Series" : "Movie",
@@ -59,9 +64,12 @@ export default function TitleCard({
     result.genres.slice(0, 3).join(", ") || null,
   ].filter(Boolean);
   const nearMiss = result.misses.length > 0;
+  const verdict = verdictFor(result.misses, result.age_baseline_min, youngest);
+  const verdictWhy = [...result.misses, ...result.cautions].map((r) => r.replace(/\.$/, ""));
+  const region = (o: Offer) => (showRegion ? ` ${o.region}` : "");
 
   return (
-    <article class="card">
+    <article class="card" aria-labelledby={headingId}>
       <div class="card-poster">
         {result.poster_url && !posterFailed ? (
           <img
@@ -73,85 +81,67 @@ export default function TitleCard({
             onError={() => setPosterFailed(true)}
           />
         ) : (
-          <div class="poster-empty" aria-hidden="true" />
+          <div class="poster-empty" style={{ "--hue": posterHue(result.tmdb_id) }} aria-hidden="true">
+            <span>{result.title}</span>
+          </div>
         )}
       </div>
       <div class="card-body">
         <header class="card-head">
           <div>
-            <h3>{result.title}</h3>
+            <h3 id={headingId}>{result.title}</h3>
             <p class="muted">{meta.join(" · ")}</p>
           </div>
           <button
             type="button"
-            class={saved ? "btn btn-small btn-saved" : "btn btn-small"}
+            class={saved ? "key key-small key-on" : "key key-small"}
             aria-pressed={saved}
             onClick={() => onToggleSave(result)}
           >
+            <Icon name="bookmark" filled={saved} />
             {saved ? "Saved" : "Save"}
           </button>
         </header>
 
-        {nearMiss ? (
-          <div class="verdict verdict-warn">
-            <strong>Outside your family profile</strong>
-            {result.misses.length === 1 ? (
-              <span>{result.misses[0]}</span>
-            ) : (
-              <ul>
-                {result.misses.map((m) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ) : (
-          <div class="verdict verdict-ok">
-            <strong>Fits your family profile</strong>
-            {result.cautions.length > 0 && (
-              <ul>
-                {result.cautions.map((c) => (
-                  <li key={c}>{c}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
         <div class="watch">
-          {headline.map((o) => {
+          {primary && <ServiceButton offer={primary} title={result.title} region={region(primary)} />}
+          {others.map((o) => {
             const label = (
               <>
+                {included.length > 0 && "+ "}
                 {o.provider}
-                {!isIncluded(o, services) && <span class="pill-note"> {accessLabel(o.access)}</span>}
-                {showRegion && <span class="pill-note"> {o.region}</span>}
+                {!isIncluded(o, services) && ` · ${accessLabel(o.access)}`}
+                {region(o)}
               </>
             );
-            const included = isIncluded(o, services);
-            const brand = included ? serviceBrand(o.service) : null;
-            const cls = brand ? "pill pill-brand" : included ? "pill pill-ok" : "pill";
-            const style = brand ? { "--brand": brand.bg, "--brand-text": brand.fg } : undefined;
             const key = `${o.region}-${o.provider}-${o.access}`;
             return o.link ? (
-              <a key={key} class={cls} style={style} href={o.link} target="_blank" rel="noopener">
+              <a key={key} class="watch-alt" href={o.link} target="_blank" rel="noopener">
                 {label}
               </a>
             ) : (
-              <span key={key} class={cls} style={style}>
+              <span key={key} class="watch-alt">
                 {label}
               </span>
             );
           })}
-          {headline.length === 0 && <span class="pill pill-muted">No streaming offers found</span>}
+          {sorted.length === 0 && <span class="watch-alt">No streaming offers found</span>}
           {result.imdb ? (
-            <a class="pill pill-muted" href={result.imdb.url ?? undefined} target="_blank" rel="noopener">
+            <a class="imdb" href={result.imdb.url ?? undefined} target="_blank" rel="noopener">
+              <Icon name="star" filled />
               IMDb <strong>{result.imdb.score.toFixed(1)}</strong>
-              <span class="pill-note"> {formatVotes(result.imdb.votes)}</span>
+              {result.imdb.votes !== null && <span> · {formatVotes(result.imdb.votes)}</span>}
             </a>
           ) : (
-            <span class="pill pill-muted">No IMDb rating</span>
+            <span class="imdb">No IMDb rating</span>
           )}
         </div>
+
+        <p class={`verdict verdict-${verdict.level}`}>
+          <span class="verdict-dot" aria-hidden="true" />
+          <strong>{verdict.label}</strong>
+          {verdictWhy.length > 0 && <span class="verdict-why"> · {verdictWhy.join(" · ")}</span>}
+        </p>
 
         <TitleMarks
           mark={mark}
@@ -163,7 +153,10 @@ export default function TitleCard({
         {result.synopsis && <p class="synopsis">{result.synopsis}</p>}
 
         <details class="more">
-          <summary>Age ratings, all offers and guidance</summary>
+          <summary>
+            <Icon name="chevron-down" />
+            Age ratings, all offers and guidance
+          </summary>
           <div class="more-body">
           <section class="facts">
             <h4>Age</h4>
@@ -252,5 +245,28 @@ export default function TitleCard({
         </details>
       </div>
     </article>
+  );
+}
+
+/** The family's own service as the card's main action: brand colour, name and play. */
+function ServiceButton({ offer, title, region }: { offer: Offer; title: string; region: string }) {
+  const brand = serviceBrand(offer.service);
+  const style = brand ? { "--brand": brand.bg, "--brand-text": brand.fg } : undefined;
+  const body = (
+    <>
+      {offer.provider}
+      {region}
+      <Icon name="play" filled />
+      <span class="sr-only"> — watch {title}</span>
+    </>
+  );
+  return offer.link ? (
+    <a class="svc-btn" style={style} href={offer.link} target="_blank" rel="noopener">
+      {body}
+    </a>
+  ) : (
+    <span class="svc-btn" style={style}>
+      {body}
+    </span>
   );
 }

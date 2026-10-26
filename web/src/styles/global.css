@@ -1,44 +1,74 @@
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url("/fonts/fraunces-latin.woff2") format("woff2");
+}
+
+/* Light is the default; dark applies only when chosen in the header (src/logic/theme.ts).
+   Navy and coral come from the Nido logo; green is kept for "good for all of you". */
 :root {
   --bg: #f7f4ee;
   --surface: #ffffff;
   --surface-2: #f0ece4;
   --text: #1f2421;
   --muted: #5f6762;
+  --faint: #7b827d;
   --border: #e2ddd3;
-  --accent: #2f5d50;
+  --accent: #2b4257;
   --accent-text: #ffffff;
-  --accent-soft: #dfece7;
+  --accent-soft: #e3e9ef;
+  --ok: #2f7a5b;
+  --ok-soft: #dfece7;
+  --coral: #f0795a;
+  --coral-soft: #fbe9e1;
+  --coral-ink: #a3452b;
   --warn-soft: #fbeed6;
   --warn-text: #7a4f0b;
   --error: #a3352b;
-  --radius: 14px;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --radius: 16px;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 1px 2px rgb(60 45 20 / 0.06),
+    0 8px 24px -14px rgb(60 45 20 / 0.28);
+  --shadow-key: 0 1px 0 rgb(255 255 255 / 0.8) inset, 0 -1px 0 rgb(60 45 20 / 0.06) inset,
+    0 1px 2px rgb(60 45 20 / 0.14);
+  --shadow-pressed: inset 0 1px 3px rgb(60 45 20 / 0.18);
+  --key-bg: linear-gradient(180deg, #ffffff, #f4f1eb);
+  --header-bg: rgb(247 244 238 / 0.88);
   --logo-ink: #1f2a35;
   --logo-paper: #f5f1ea;
   --logo-accent: #f0795a;
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #101412;
-    --surface: #191e1c;
-    --surface-2: #232a27;
-    --text: #eef1ee;
-    --muted: #9aa49f;
-    --faint: #6f7974;
-    --border: #2a312e;
-    --accent: #7fc4ae;
-    --accent-text: #0f1a16;
-    --accent-soft: #23362f;
-    --warn-soft: #2e2617;
-    --warn-text: #f0c879;
-    --error: #ff8a7e;
-    --shadow: none;
-    --logo-ink: #f5f1ea;
-    --logo-paper: #1f2a35;
-    color-scheme: dark;
-  }
+:root[data-theme="dark"] {
+  --bg: #11161b;
+  --surface: #192028;
+  --surface-2: #222b34;
+  --text: #eef1f3;
+  --muted: #9ea8b1;
+  --faint: #737e88;
+  --border: #2a333c;
+  --accent: #a9c3db;
+  --accent-text: #11161b;
+  --accent-soft: #263544;
+  --ok: #7fc4ae;
+  --ok-soft: #1f342d;
+  --coral: #f4917a;
+  --coral-soft: #33231f;
+  --coral-ink: #f6a68f;
+  --warn-soft: #2e2617;
+  --warn-text: #f0c879;
+  --error: #ff8a7e;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -14px rgb(0 0 0 / 0.6);
+  --shadow-key: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-pressed: inset 0 1px 3px rgb(0 0 0 / 0.5);
+  --key-bg: linear-gradient(180deg, #27313b, #212a33);
+  --header-bg: rgb(17 22 27 / 0.86);
+  --logo-ink: #f5f1ea;
+  --logo-paper: #1f2a35;
+  color-scheme: dark;
 }
 
 * {
@@ -64,6 +94,18 @@ h4 {
   margin: 0;
 }
 
+.ask-title,
+.results-head h2,
+.card-head h3,
+.section-title,
+.hero h1,
+.profile h2,
+.brand span {
+  font-family: var(--font-display);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
 .muted {
   color: var(--muted);
 }
@@ -83,14 +125,45 @@ h4 {
 }
 
 /* Layout */
+/* Full-width sticky bar; the side padding keeps its content on the 880px column. */
 .top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1rem;
-  max-width: 880px;
-  margin: 0 auto;
+  padding: 0.6rem max(1rem, calc((100% - 880px) / 2 + 1rem));
+  margin-bottom: 1.25rem;
   flex-wrap: wrap;
+  background: var(--header-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.top-end {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .brand {
@@ -125,7 +198,6 @@ h4 {
 .tabs {
   display: flex;
   gap: 0.25rem;
-  margin-right: auto;
   overflow-x: auto;
 }
 
@@ -143,8 +215,13 @@ h4 {
 .tabs button.active,
 .segmented button.active {
   background: var(--accent-soft);
-  color: var(--text);
+  color: var(--accent);
   font-weight: 600;
+}
+
+:root[data-theme="dark"] .tabs button.active,
+:root[data-theme="dark"] .segmented button.active {
+  color: var(--text);
 }
 
 .main {
@@ -155,29 +232,62 @@ h4 {
   gap: 1rem;
 }
 
+.panel,
+.card,
+.wl-item,
+.empty {
+  background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface) 94%, var(--surface-2)));
+}
+
 .panel {
-  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem 1.25rem;
   box-shadow: var(--shadow);
 }
 
+/* Signed out: the pitch on the left, a sample pick on the right. */
 .hero {
-  text-align: center;
-  padding: 3rem 1.5rem;
-  margin-top: 2rem;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 2rem;
+  align-items: center;
+  padding: 2.5rem 0 1rem;
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 2.6rem);
+  line-height: 1.1;
 }
 
 .hero p {
-  max-width: 34rem;
-  margin: 1rem auto 1.5rem;
+  max-width: 30rem;
+  margin: 1rem 0 1.5rem;
   color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.hero .btn-primary {
+  padding: 0.75rem 1.4rem;
+  border-radius: 12px;
+}
+
+.hero-sample {
+  transform: rotate(-1.5deg);
+}
+
+.card.hero-sample {
+  grid-template-columns: 84px 1fr;
+}
+
+.hero-sample .poster-empty {
+  width: 84px;
+  height: 126px;
 }
 
 .section-title {
-  font-size: 1rem;
-  margin: 0.5rem 0;
+  font-size: 1.25rem;
+  margin: 0.25rem 0 0.75rem;
 }
 
 /* Controls */
@@ -204,14 +314,59 @@ h4 {
   color: var(--accent-text);
 }
 
+.btn-primary:not(:disabled):hover {
+  filter: brightness(1.12);
+}
+
+/* Secondary toggles with a soft raised look; pressed sinks in. */
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--key-bg);
+  box-shadow: var(--shadow-key);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 120ms, transform 120ms;
+}
+
+.key:active:not(:disabled) {
+  box-shadow: var(--shadow-pressed);
+  transform: translateY(1px);
+}
+
+.key:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.key-small {
+  min-height: 2.25rem;
+  font-weight: 600;
+}
+
+.key-on {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  box-shadow: var(--shadow-pressed);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .key-on {
+  color: var(--text);
+}
+
 .btn-small {
   padding: 0.3rem 0.7rem;
   font-size: 0.875rem;
-}
-
-.btn-saved {
-  background: var(--accent-soft);
-  border-color: var(--accent);
 }
 
 .link {
@@ -222,6 +377,11 @@ h4 {
   color: var(--accent);
   cursor: pointer;
   text-decoration: underline;
+}
+
+.link-quiet {
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 
 :focus-visible {
@@ -288,9 +448,17 @@ input:not([type="checkbox"]) {
   cursor: pointer;
 }
 
-.chip:has(input:checked) {
+.chip:has(input:checked),
+.chip-on {
   background: var(--accent-soft);
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .chip:has(input:checked),
+:root[data-theme="dark"] .chip-on {
+  color: var(--text);
 }
 
 .chip input {
@@ -326,7 +494,11 @@ input:not([type="checkbox"]) {
 /* Profile */
 .profile {
   display: grid;
-  gap: 1.1rem;
+  gap: 1.5rem;
+}
+
+.profile h2 {
+  font-size: 1.5rem;
 }
 
 .profile p {
@@ -337,50 +509,82 @@ input:not([type="checkbox"]) {
   font-size: 0.8rem;
 }
 
-/* Finder: the question and the picks lead, filters sit quietly between them. */
+/* Finder: the question and the picks lead, filters fold away under them. */
 .finder {
   display: grid;
-  gap: 1.75rem;
-  padding-top: 0.5rem;
+  gap: 1.5rem;
 }
 
 .ask-panel {
   display: grid;
-  gap: 0.9rem;
+  gap: 1rem;
 }
 
 .ask-title {
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: clamp(1.75rem, 4.5vw, 2.4rem);
+  line-height: 1.1;
 }
 
+.ask-for {
+  margin: 0.35rem 0 0;
+}
+
+/* One bar: icon, question, button. */
 .ask {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
+  padding: 0.4rem 0.4rem 0.4rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  color: var(--muted);
+}
+
+.ask:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.ask .icon {
+  width: 20px;
+  height: 20px;
 }
 
 .ask input:not([type="checkbox"]) {
+  flex: 1;
   font-size: 1.05rem;
-  padding: 0.8rem 1rem;
-  border-radius: 12px;
-  background: var(--surface);
+  padding: 0.55rem 0.25rem;
+  border: 0;
+  background: transparent;
+}
+
+.ask input:focus-visible {
+  outline: none;
 }
 
 .ask .btn {
-  padding: 0.8rem 1.4rem;
+  padding: 0.6rem 1.1rem;
   border-radius: 12px;
 }
 
-.examples {
+.quick {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
-.examples .chip-btn {
+.quick .chip-btn {
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
   color: var(--muted);
   background: transparent;
+}
+
+.quick .chip-on {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .turns {
@@ -400,18 +604,26 @@ input:not([type="checkbox"]) {
 
 .turn-you p {
   margin: 0;
-  padding: 0.5rem 0.9rem;
+  padding: 0.45rem 0.9rem;
   border-radius: 14px 14px 4px 14px;
   background: var(--surface-2);
   color: var(--muted);
   white-space: pre-wrap;
 }
 
+/* Nido's voice: a warm strip, apart from the result cards. */
 .turn-nido {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--coral-soft);
   border-radius: var(--radius);
   padding: 0.9rem 1.1rem;
+}
+
+.turn-who {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 650;
+  color: var(--coral-ink);
+  margin-bottom: 0.25rem;
 }
 
 .turn-nido > p {
@@ -469,11 +681,45 @@ input:not([type="checkbox"]) {
   color: var(--faint);
 }
 
+.more-filters summary,
+.more summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  cursor: pointer;
+  width: fit-content;
+  list-style: none;
+}
+
+.more-filters summary::-webkit-details-marker,
+.more summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-filters summary .icon,
+.more summary .icon {
+  transition: transform 150ms;
+}
+
+.more-filters[open] > summary .icon,
+.more[open] > summary .icon {
+  transform: rotate(180deg);
+}
+
+.more-filters summary {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .filters {
   display: grid;
-  gap: 0.6rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 1rem;
+  background: var(--surface-2);
+  border-radius: 12px;
 }
 
 .filters-row {
@@ -492,7 +738,7 @@ input:not([type="checkbox"]) {
 }
 
 .inline-field input:not([type="checkbox"]) {
-  width: 5.5rem;
+  width: 4.5rem;
   padding: 0.3rem 0.55rem;
   font-size: 0.875rem;
   border-radius: 8px;
@@ -543,7 +789,7 @@ input:not([type="checkbox"]) {
 }
 
 .results-head h2 {
-  font-size: 1.25rem;
+  font-size: 1.4rem;
 }
 
 .results-head span {
@@ -565,7 +811,6 @@ input:not([type="checkbox"]) {
   display: grid;
   grid-template-columns: 112px 1fr;
   gap: 1.1rem;
-  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem;
@@ -576,10 +821,29 @@ input:not([type="checkbox"]) {
 .poster-empty {
   width: 112px;
   height: 168px;
-  border-radius: 8px;
+  border-radius: 10px;
   object-fit: cover;
   background: var(--surface-2);
   display: block;
+  box-shadow: 0 4px 10px -4px rgb(0 0 0 / 0.3);
+}
+
+/* No poster: a gradient in the title's own hue, with its name. */
+.poster-empty {
+  display: flex;
+  align-items: end;
+  padding: 0.5rem;
+  background: linear-gradient(160deg, hsl(var(--hue, 30) 35% 68%), hsl(var(--hue, 30) 30% 36%));
+}
+
+.poster-empty span {
+  font-family: var(--font-display);
+  font-weight: 650;
+  font-size: 0.85rem;
+  line-height: 1.15;
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  overflow-wrap: anywhere;
 }
 
 .poster-empty.small,
@@ -588,6 +852,7 @@ input:not([type="checkbox"]) {
   height: 69px;
   border-radius: 6px;
   object-fit: cover;
+  flex: none;
 }
 
 .card-body {
@@ -605,8 +870,7 @@ input:not([type="checkbox"]) {
 }
 
 .card-head h3 {
-  font-size: 1.2rem;
-  font-weight: 700;
+  font-size: 1.3rem;
 }
 
 .card-head p {
@@ -614,97 +878,102 @@ input:not([type="checkbox"]) {
   font-size: 0.825rem;
 }
 
+/* The verdict is one calm line: a coloured dot, the call, then why in grey. */
 .verdict {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem 0.5rem;
-  align-items: baseline;
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
-  border-left: 3px solid;
-  font-size: 0.9rem;
-}
-
-.verdict ul {
-  flex-basis: 100%;
   margin: 0;
-  padding-left: 1.1rem;
-}
-
-.verdict-warn {
-  background: var(--warn-soft);
-  border-color: var(--warn-text);
-  color: var(--warn-text);
-}
-
-.verdict-ok {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
-.verdict-ok ul {
+  font-size: 0.9rem;
+  line-height: 1.45;
   color: var(--muted);
-  font-size: 0.85rem;
+}
+
+.verdict strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.verdict-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  margin-right: 0.45rem;
+  vertical-align: 0.05em;
+  background: var(--faint);
+}
+
+.verdict-fit .verdict-dot {
+  background: var(--ok);
+}
+
+.verdict-grown-up .verdict-dot {
+  background: var(--coral);
 }
 
 .watch {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  font-size: 0.875rem;
 }
 
-.pill {
+/* The family's own service is the card's main action. */
+.svc-btn {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.2rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 0.3rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text);
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0 0.95rem;
+  border-radius: 12px;
+  font-weight: 650;
   text-decoration: none;
+  --brand-base: var(--brand, var(--accent));
+  color: var(--brand-text, var(--accent-text));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--brand-base), white 16%),
+    var(--brand-base) 55%,
+    color-mix(in srgb, var(--brand-base), black 12%)
+  );
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.3) inset, 0 -1px 0 rgb(0 0 0 / 0.18) inset,
+    0 3px 8px -3px color-mix(in srgb, var(--brand-base) 60%, transparent);
 }
 
-a.pill:hover {
-  border-color: var(--accent);
+.svc-btn .icon {
+  width: 13px;
+  height: 13px;
 }
 
-.pill-ok {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-a.pill-ok:hover {
+a.svc-btn:hover {
   filter: brightness(1.08);
 }
 
-.pill-brand {
-  background: var(--brand);
-  border-color: color-mix(in srgb, var(--brand), white 18%);
-  color: var(--brand-text);
-}
-
-a.pill-brand:hover {
-  filter: brightness(1.12);
-}
-
-.pill-muted {
-  background: transparent;
-  font-weight: 500;
+.watch-alt,
+.imdb {
   color: var(--muted);
+  text-decoration: none;
 }
 
-.pill-muted strong {
+a.watch-alt:hover,
+a.imdb:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.imdb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.imdb strong {
   color: var(--text);
 }
 
-.pill-note {
-  font-weight: 400;
-  font-size: 0.8rem;
-  opacity: 0.8;
+.imdb .icon {
+  width: 14px;
+  height: 14px;
+  color: #e3a33b;
 }
 
 .synopsis {
@@ -723,13 +992,12 @@ a.pill-brand:hover {
 }
 
 .more summary {
-  cursor: pointer;
-  width: fit-content;
-  color: var(--faint);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .more summary:hover {
-  color: var(--muted);
+  text-decoration: underline;
 }
 
 .more-body {
@@ -779,11 +1047,11 @@ a.pill-brand:hover {
 }
 
 .dot-ok {
-  background: var(--accent);
+  background: var(--ok);
 }
 
 .reasons .caution {
-  color: var(--warn-text);
+  color: var(--coral-ink);
 }
 
 .attribution {
@@ -801,11 +1069,43 @@ a.pill-brand:hover {
   gap: 0.5rem;
 }
 
+.lists {
+  display: grid;
+  gap: 0.5rem;
+}
+
 .wl-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0.8rem;
+  gap: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.wl-text strong {
+  font-family: var(--font-display);
+  font-weight: 650;
+  font-size: 1.05rem;
+}
+
+.empty {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 2rem 1.25rem;
+  text-align: center;
+}
+
+.empty p {
+  margin: 0;
+}
+
+.hidden-titles .wl-item {
+  border: 0;
+  box-shadow: none;
+  padding: 0.5rem 0;
+  background: none;
 }
 
 .wl-text {
@@ -821,14 +1121,37 @@ a.pill-brand:hover {
     padding: 0.85rem;
   }
 
-  .ask-title {
-    font-size: 1.35rem;
-  }
-
   .card-poster img,
   .poster-empty {
     width: 72px;
     height: 108px;
+  }
+
+  .poster-empty span {
+    font-size: 0.7rem;
+  }
+
+  .card-head h3 {
+    font-size: 1.15rem;
+  }
+
+  /* Marks go icon-only; the buttons keep their names for screen readers and tooltips. */
+  .mark-label {
+    display: none;
+  }
+
+  .mark {
+    padding: 0 0.7rem;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding-top: 1rem;
+  }
+
+  .ask .btn {
+    padding: 0.6rem 0.8rem;
   }
 
   .wl-item {
@@ -846,11 +1169,6 @@ a.pill-brand:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-}
-
-.chip-on {
-  background: var(--accent-soft);
-  border-color: var(--accent);
 }
 
 .ban-choice {
