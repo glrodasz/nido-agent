@@ -14,6 +14,7 @@ import { currentTheme, setTheme, type Theme } from "../logic/theme";
 import Finder from "./Finder";
 import HiddenTitles from "./HiddenTitles";
 import Icon from "./Icon";
+import Logo from "./Logo";
 import ProfileForm from "./ProfileForm";
 import Watchlist from "./Watchlist";
 
@@ -144,8 +145,7 @@ export default function App() {
   const header = (
     <header class="top">
       <div class="brand">
-        <img src="/favicon.svg" alt="" width={32} height={32} />
-        <span>Nido</span>
+        <Logo />
       </div>
       {session.state === "in" && profile && (
         <nav class="tabs" aria-label="Sections">

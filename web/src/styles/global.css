@@ -36,6 +36,9 @@
   --shadow-pressed: inset 0 1px 3px rgb(60 45 20 / 0.18);
   --key-bg: linear-gradient(180deg, #ffffff, #f4f1eb);
   --header-bg: rgb(247 244 238 / 0.88);
+  --logo-ink: #1f2a35;
+  --logo-paper: #f5f1ea;
+  --logo-accent: #f0795a;
   color-scheme: light;
 }
 
@@ -63,6 +66,8 @@
   --shadow-pressed: inset 0 1px 3px rgb(0 0 0 / 0.5);
   --key-bg: linear-gradient(180deg, #27313b, #212a33);
   --header-bg: rgb(17 22 27 / 0.86);
+  --logo-ink: #f5f1ea;
+  --logo-paper: #1f2a35;
   color-scheme: dark;
 }
 
@@ -164,9 +169,30 @@ h4 {
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  font-size: 1.25rem;
+}
+
+.logo {
+  display: block;
+}
+
+.logo-ink {
+  fill: var(--logo-ink);
+}
+
+.logo-ink-stroke {
+  stroke: var(--logo-ink);
+}
+
+.logo-paper {
+  fill: var(--logo-paper);
+}
+
+.logo-paper-stroke {
+  stroke: var(--logo-paper);
+}
+
+.logo-accent {
+  fill: var(--logo-accent);
 }
 
 .tabs {
