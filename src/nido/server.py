@@ -529,11 +529,14 @@ def create_app(
         gone = HTTPException(410, "this invite link has expired or was already used")
         now = datetime.now(UTC)
         invite = await store.get_invite(token)
-        if invite is None or invite.expires_at <= now or invite.used_by not in (None, user.uid):
+        if invite is None:
             raise gone
         current = await store.get_member(user.uid)
         if current and current.family_id == invite.family_id:
             return {"family_id": invite.family_id, "joined": False}
+        # A used link never works again, not even for whoever used it and was removed since.
+        if invite.expires_at <= now or invite.used_by is not None:
+            raise gone
         if current and len(await store.list_members(current.family_id)) > 1:
             # Leaving would strand the others' shared data behind someone who no longer sees it.
             raise HTTPException(409, "leave your current family first (Family tab)")

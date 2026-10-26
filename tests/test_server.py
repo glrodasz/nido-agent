@@ -400,7 +400,7 @@ def test_an_invite_shares_profile_watchlist_and_marks_and_works_once():
     c.put("/api/profile", json=PROFILE, headers=ME)
     token = invite(c)
     assert c.post(f"/api/invites/{token}", headers=PARTNER).json()["joined"] is True
-    # Opening the same link again is harmless for the one who used it, useless for anyone else.
+    # Opening the same link again is harmless for a member, useless for anyone else.
     assert c.post(f"/api/invites/{token}", headers=PARTNER).json()["joined"] is False
     assert c.post(f"/api/invites/{token}", headers=STRANGER).status_code == 410
 
@@ -439,6 +439,15 @@ def test_only_the_owner_removes_members_and_the_owner_cannot_leave():
     # A member may leave on their own.
     assert c.delete("/api/family/members/partner", headers=PARTNER).json() == {"ok": True}
     assert c.get("/api/family", headers=PARTNER).status_code == 403
+
+
+def test_a_removed_member_cannot_come_back_with_their_old_link():
+    c = family_client()
+    token = invite(c)
+    c.post(f"/api/invites/{token}", headers=PARTNER)
+    c.delete("/api/family/members/partner", headers=ME)
+    assert c.post(f"/api/invites/{token}", headers=PARTNER).status_code == 410
+    assert c.get("/api/profile", headers=PARTNER).status_code == 403
 
 
 def test_a_member_of_a_shared_family_must_leave_before_joining_another():

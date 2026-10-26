@@ -51,7 +51,7 @@ class Store(Protocol):
     async def get_invite(self, token: str) -> Invite | None: ...
     async def claim_invite(self, token: str, uid: str, now: datetime) -> Invite | None:
         """Marks an unused, unexpired invite as used by `uid` and returns it, atomically; None if
-        it does not exist, expired or was already used by someone else."""
+        it does not exist, expired or was already used."""
         ...
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None: ...
@@ -123,7 +123,7 @@ class MemoryStore:
 
     async def claim_invite(self, token: str, uid: str, now: datetime) -> Invite | None:
         invite = self._invites.get(token)
-        if invite is None or invite.expires_at <= now or invite.used_by not in (None, uid):
+        if invite is None or invite.expires_at <= now or invite.used_by is not None:
             return None
         self._invites[token] = invite = invite.model_copy(update={"used_by": uid})
         return invite
@@ -237,7 +237,7 @@ class FirestoreStore:
             if not snap.exists:
                 return None
             invite = Invite.model_validate(snap.to_dict())
-            if invite.expires_at <= now or invite.used_by not in (None, uid):
+            if invite.expires_at <= now or invite.used_by is not None:
                 return None
             transaction.update(doc, {"used_by": uid, "used_at": now})
             return invite.model_copy(update={"used_by": uid})
