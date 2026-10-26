@@ -134,3 +134,53 @@ export function banLabel(ban: Ban, active: boolean): string {
   if (ban.scope === "always") return "Hidden at every age";
   return active ? `Hidden until your youngest is ${ban.until_age}` : `Was hidden until ${ban.until_age}: back in results`;
 }
+
+export type VerdictLevel = "fit" | "grown-up" | "later" | "settings";
+
+export interface Verdict {
+  level: VerdictLevel;
+  label: string;
+}
+
+// An age miss this many years or fewer above the youngest reads as "watch it together".
+const GROWN_UP_GAP = 3;
+
+/** One plain verdict per title, from the profile rules it breaks: everyone, together with a
+ * grown-up, after bedtime, or outside the family's other settings (runtime, IMDb). */
+export function verdictFor(
+  misses: string[],
+  baselineAge: number | null,
+  youngest: number,
+): Verdict {
+  if (misses.length === 0) return { level: "fit", label: "Good for all of you" };
+  if (baselineAge !== null && baselineAge > youngest) {
+    return baselineAge - youngest <= GROWN_UP_GAP
+      ? { level: "grown-up", label: "Best with a grown-up" }
+      : { level: "later", label: "For after bedtime" };
+  }
+  return { level: "settings", label: "Outside your settings" };
+}
+
+function joinAnd(items: string[]): string {
+  return items.length <= 1
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/** "For your 4-year-old · on Netflix and Disney+": who and where the picks are for. */
+export function familyLine(profile: Profile, serviceNames: Record<string, string>): string {
+  const ages = [...profile.children_ages].sort((a, b) => a - b);
+  const who =
+    ages.length === 0
+      ? "For your family"
+      : ages.length === 1
+        ? `For your ${ages[0]}-year-old`
+        : `For your kids aged ${joinAnd(ages.map(String))}`;
+  const services = profile.services.map((s) => serviceNames[s] ?? s);
+  return services.length ? `${who} · on ${joinAnd(services)}` : who;
+}
+
+/** A stable hue per title, so a missing poster still gets its own colour. */
+export function posterHue(tmdbId: number): number {
+  return (tmdbId * 47) % 360;
+}

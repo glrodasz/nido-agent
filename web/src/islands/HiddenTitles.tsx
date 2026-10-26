@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { banLabel } from "../logic/format";
+import { banLabel, posterHue } from "../logic/format";
 import type { MarkChange, TitleMark } from "../logic/types";
 
 interface Props {
@@ -23,7 +23,7 @@ export default function HiddenTitles({ marks, onMark }: Props) {
         <ul class="watchlist">
           {banned.map((m) => (
             <li key={m.key} class="wl-item">
-              <Poster url={m.poster_url} />
+              <Poster url={m.poster_url} hue={posterHue(m.title.tmdb_id)} />
               <div class="wl-text">
                 <strong>{m.name}</strong>
                 <span class={m.ban_active ? "muted" : "muted lifted"}>
@@ -53,11 +53,11 @@ export default function HiddenTitles({ marks, onMark }: Props) {
   );
 }
 
-function Poster({ url }: { url: string | null }) {
+function Poster({ url, hue }: { url: string | null; hue: number }) {
   const [failed, setFailed] = useState(false);
   return url && !failed ? (
     <img src={url} alt="" width={46} height={69} loading="lazy" onError={() => setFailed(true)} />
   ) : (
-    <div class="poster-empty small" aria-hidden="true" />
+    <div class="poster-empty small" style={{ "--hue": hue }} aria-hidden="true" />
   );
 }

@@ -60,25 +60,29 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
             <button
               key={field}
               type="button"
-              class={on ? "chip-btn chip-on" : "chip-btn"}
+              class={on ? "key mark key-on" : "key mark"}
               aria-pressed={on}
+              aria-label={label}
+              title={label}
               disabled={busy}
               onClick={() => change({ [field]: !on })}
             >
-              <Icon name={icon} />
-              {label}
+              <Icon name={icon} filled={on && icon === "heart"} />
+              <span class="mark-label">{label}</span>
             </button>
           );
         })}
         <button
           type="button"
-          class="chip-btn"
+          class={choosing ? "key mark key-on" : "key mark"}
           aria-expanded={choosing}
+          aria-label="Don't suggest…"
+          title="Don't suggest…"
           disabled={busy}
           onClick={() => setChoosing(!choosing)}
         >
           <Icon name="eye-off" />
-          Don't suggest…
+          <span class="mark-label">Don't suggest…</span>
         </button>
       </div>
       {choosing && (
@@ -121,7 +125,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
           <div class="actions">
             <button
               type="button"
-              class="btn btn-small"
+              class="btn btn-small btn-primary"
               disabled={busy}
               onClick={() =>
                 change({ ban: scope === "always" ? { scope } : { scope, until_age: untilAge } })

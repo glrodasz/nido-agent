@@ -10,8 +10,10 @@ import type {
   TitleResult,
   WatchlistItem,
 } from "../logic/types";
+import { currentTheme, setTheme, type Theme } from "../logic/theme";
 import Finder from "./Finder";
 import HiddenTitles from "./HiddenTitles";
+import Icon from "./Icon";
 import ProfileForm from "./ProfileForm";
 import Watchlist from "./Watchlist";
 
@@ -33,6 +35,7 @@ export default function App() {
   const [marks, setMarks] = useState<TitleMark[]>([]);
   const [tab, setTab] = useState<Tab>("find");
   const [error, setError] = useState<string | null>(null);
+  const [theme, setThemeState] = useState<Theme>(currentTheme);
 
   useEffect(() => {
     api.config().then(setConfig, () => setError("Nido's server is not reachable."));
@@ -132,6 +135,12 @@ export default function App() {
     setWatchlist((w) => w.filter((i) => itemKey(i) !== itemKey(item)));
   }
 
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    setThemeState(next);
+  }
+
   const header = (
     <header class="top">
       <div class="brand">
@@ -159,11 +168,22 @@ export default function App() {
           ))}
         </nav>
       )}
-      {authEnabled && session.state === "in" && (
-        <button type="button" class="link" onClick={() => signOut()}>
-          Sign out
+      <div class="top-end">
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"}
+          title={theme === "dark" ? "Light theme" : "Dark theme"}
+          onClick={toggleTheme}
+        >
+          <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
-      )}
+        {authEnabled && session.state === "in" && (
+          <button type="button" class="link" onClick={() => signOut()}>
+            Sign out
+          </button>
+        )}
+      </div>
     </header>
   );
 
@@ -172,15 +192,18 @@ export default function App() {
     body = <p class="muted center">Loading…</p>;
   } else if (session.state === "signed-out") {
     body = (
-      <section class="panel hero">
-        <h1>Find something the whole family will enjoy</h1>
-        <p>
-          Nido searches the streaming services you already pay for, checks official age ratings
-          from nine countries, and shows where every fact comes from.
-        </p>
-        <button type="button" class="btn btn-primary" onClick={() => signIn().catch(() => {})}>
-          Sign in with Google
-        </button>
+      <section class="hero">
+        <div class="hero-text">
+          <h1>Find something the whole family will enjoy</h1>
+          <p>
+            Nido searches the streaming services you already pay for, checks official age ratings
+            from nine countries, and shows where every fact comes from.
+          </p>
+          <button type="button" class="btn btn-primary" onClick={() => signIn().catch(() => {})}>
+            Sign in with Google
+          </button>
+        </div>
+        <HeroSample />
       </section>
     );
   } else if (!config || profile === undefined) {
@@ -240,5 +263,39 @@ export default function App() {
         {body}
       </main>
     </>
+  );
+}
+
+/** A made-up pick that shows what a result looks like before signing in. */
+function HeroSample() {
+  return (
+    <div class="card hero-sample" aria-hidden="true">
+      <div class="poster-empty" style={{ "--hue": 150 }}>
+        <span>My Neighbor Totoro</span>
+      </div>
+      <div class="card-body">
+        <div class="card-head">
+          <div>
+            <h3>My Neighbor Totoro</h3>
+            <p class="muted">1988 · Movie · 86 min</p>
+          </div>
+        </div>
+        <div class="watch">
+          <span class="svc-btn" style={{ "--brand": "#5b2bd6", "--brand-text": "#ffffff" }}>
+            HBO Max
+            <Icon name="play" filled />
+          </span>
+          <span class="imdb">
+            <Icon name="star" filled />
+            IMDb <strong>8.1</strong>
+          </span>
+        </div>
+        <p class="verdict verdict-fit">
+          <span class="verdict-dot" />
+          <strong>Good for all of you</strong>
+          <span class="verdict-why"> · Fits your ages and services</span>
+        </p>
+      </div>
+    </div>
   );
 }
