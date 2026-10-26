@@ -452,7 +452,11 @@ def create_app(
 
         reply: list[str] = []
         results: dict[str, Any] | None = None
+        hidden = hidden_keys(marks, profile) if profile else []
         known = session_titles.setdefault((user.uid, session.id), {})
+        # A title banned after an earlier search in this chat must not come back as a card.
+        for key in hidden:
+            known.pop(key, None)
         session_titles.move_to_end((user.uid, session.id))
         while len(session_titles) > MAX_REMEMBERED_SESSIONS:
             session_titles.popitem(last=False)
@@ -465,7 +469,7 @@ def create_app(
                 state_delta={
                     "family": describe_family(profile),
                     "today": date.today().isoformat(),
-                    HIDDEN_STATE_KEY: hidden_keys(marks, profile) if profile else [],
+                    HIDDEN_STATE_KEY: hidden,
                 },
             ):
                 for output in _find_titles_outputs(event):

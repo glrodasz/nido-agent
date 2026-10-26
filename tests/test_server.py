@@ -213,6 +213,19 @@ def test_chat_answer_from_an_earlier_search_still_gets_its_cards():
     assert other["results"] is None
 
 
+def test_chat_never_brings_back_a_title_banned_since_the_earlier_search():
+    runner = FakeRunner([event(tool_output=ANIMATED), event(text="Try WALL·E.")])
+    c, _ = client(runner=runner)
+    c.put("/api/profile", json=PROFILE)
+    first = c.post("/api/chat", json={"message": "animated movies"}).json()
+    put_mark(c, 11, ban={"scope": "always"})
+    runner.events = [event(text="**WALL·E** is still a great pick.")]
+    again = c.post(
+        "/api/chat", json={"message": "and now?", "session_id": first["session_id"]}
+    ).json()
+    assert again["results"] is None
+
+
 def test_chat_named_near_miss_stays_a_near_miss():
     out = {"regions": ["SE"], "results": [], "near_misses": [movie(20, "Shrek", misses=["age"])]}
     cards = chat_cards("Shrek misses your age rule.", out, {"movie:20": out["near_misses"][0]})
