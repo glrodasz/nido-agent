@@ -1269,3 +1269,69 @@ a.imdb:hover {
   padding-top: 0.9rem;
   border-top: 1px solid var(--border);
 }
+
+/* Family tab: who shares the family, and the invite link. */
+.family-members {
+  margin-top: 1rem;
+}
+
+.family-members > p {
+  margin: 0 0 0.75rem;
+}
+
+.members {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.member {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.member-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-weight: 700;
+}
+
+.member-text {
+  display: grid;
+  margin-right: auto;
+  min-width: 0;
+}
+
+.member-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.invite-label {
+  color: var(--muted);
+}
+
+.invite-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.invite-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}

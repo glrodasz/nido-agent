@@ -1,4 +1,5 @@
-from datetime import timedelta
+import asyncio
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -6,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from nido.agent.budget import LlmBudgetExceededError
-from nido.auth import Authenticator
+from nido.auth import Authenticator, User
 from nido.config import Settings
 from nido.models import FamilyProfile, GuidanceCategory, MediaType
 from nido.server import ChatLimiter, create_app, describe_family
@@ -349,3 +350,105 @@ async def test_find_titles_reads_bans_from_state_not_from_the_model():
     await toolbox.find_titles("movie", [4], ["netflix"], tool_context=context)  # type: ignore[arg-type]
     await toolbox.find_titles("movie", [4], ["netflix"])
     assert seen == [["movie:2"], []]
+
+
+class HeaderAuthenticator:
+    """Signs in whoever the Authorization header names; "guillermo" and "grandma" are allowed."""
+
+    mode = "firebase"
+
+    async def __call__(self, authorization: str | None) -> User:
+        uid = authorization or "guillermo"
+        return User(uid=uid, email=f"{uid}@example.com", allowed=uid in {"guillermo", "grandma"})
+
+
+def family_client(store: MemoryStore | None = None) -> TestClient:
+    app = create_app(
+        Settings(store="memory", auth="firebase"),
+        store=store or MemoryStore(),
+        toolbox=FakeToolbox(),
+        authenticator=HeaderAuthenticator(),  # type: ignore[arg-type]
+    )
+    return TestClient(app)
+
+
+ME, PARTNER, STRANGER = (
+    {"Authorization": "guillermo"},
+    {"Authorization": "partner"},
+    {"Authorization": "stranger"},
+)
+
+
+def invite(c: TestClient, headers: dict[str, str] = ME) -> str:
+    return c.post("/api/family/invites", headers=headers).json()["token"]
+
+
+def test_an_allowed_account_keeps_its_existing_family_and_others_need_an_invite():
+    store = MemoryStore()
+    asyncio.run(store.put_profile("guillermo", FamilyProfile(children_ages=[4])))
+    c = family_client(store)
+    assert c.get("/api/profile", headers=ME).json()["profile"]["children_ages"] == [4]
+    family = c.get("/api/family", headers=ME).json()
+    assert family["role"] == "owner"
+    assert [(m["email"], m["you"]) for m in family["members"]] == [("guillermo@example.com", True)]
+    response = c.get("/api/profile", headers=PARTNER)
+    assert response.status_code == 403 and "invite" in response.json()["detail"]
+
+
+def test_an_invite_shares_profile_watchlist_and_marks_and_works_once():
+    c = family_client()
+    c.put("/api/profile", json=PROFILE, headers=ME)
+    token = invite(c)
+    assert c.post(f"/api/invites/{token}", headers=PARTNER).json()["joined"] is True
+    # Opening the same link again is harmless for the one who used it, useless for anyone else.
+    assert c.post(f"/api/invites/{token}", headers=PARTNER).json()["joined"] is False
+    assert c.post(f"/api/invites/{token}", headers=STRANGER).status_code == 410
+
+    assert c.get("/api/profile", headers=PARTNER).json()["profile"]["children_ages"] == [9, 6]
+    put_mark(c, 7, seen=True)  # as guillermo
+    c.put("/api/watchlist/movie/8", json={"name": "Up"}, headers=PARTNER)
+    assert [
+        i["title"]["tmdb_id"] for i in c.get("/api/titles", headers=PARTNER).json()["items"]
+    ] == [7]
+    assert [i["title"]["tmdb_id"] for i in c.get("/api/watchlist", headers=ME).json()["items"]] == [
+        8
+    ]
+    roles = {m["email"]: m["role"] for m in c.get("/api/family", headers=PARTNER).json()["members"]}
+    assert roles == {"guillermo@example.com": "owner", "partner@example.com": "member"}
+
+
+def test_unknown_and_expired_invites_are_gone():
+    store = MemoryStore()
+    c = family_client(store)
+    assert c.post("/api/invites/nope", headers=PARTNER).status_code == 410
+    token = invite(c)
+    store._invites[token] = store._invites[token].model_copy(
+        update={"expires_at": datetime.now(UTC) - timedelta(seconds=1)}
+    )
+    assert c.post(f"/api/invites/{token}", headers=PARTNER).status_code == 410
+
+
+def test_only_the_owner_removes_members_and_the_owner_cannot_leave():
+    c = family_client()
+    c.post(f"/api/invites/{invite(c)}", headers=PARTNER)
+    c.post(f"/api/invites/{invite(c)}", headers=STRANGER)
+    assert c.delete("/api/family/members/stranger", headers=PARTNER).status_code == 403
+    assert c.delete("/api/family/members/guillermo", headers=ME).status_code == 409
+    assert c.delete("/api/family/members/stranger", headers=ME).json() == {"ok": True}
+    assert c.get("/api/profile", headers=STRANGER).status_code == 403
+    # A member may leave on their own.
+    assert c.delete("/api/family/members/partner", headers=PARTNER).json() == {"ok": True}
+    assert c.get("/api/family", headers=PARTNER).status_code == 403
+
+
+def test_a_member_of_a_shared_family_must_leave_before_joining_another():
+    c = family_client()
+    grandma = {"Authorization": "grandma"}  # also on the allowlist, with a family of her own
+    c.post(f"/api/invites/{invite(c, grandma)}", headers=PARTNER)
+    response = c.post(f"/api/invites/{invite(c)}", headers=PARTNER)
+    assert response.status_code == 409 and "leave" in response.json()["detail"]
+    # The refused link was not spent: after leaving, it still works.
+    token = invite(c)
+    assert c.post(f"/api/invites/{token}", headers=PARTNER).status_code == 409
+    c.delete("/api/family/members/partner", headers=PARTNER)
+    assert c.post(f"/api/invites/{token}", headers=PARTNER).json()["joined"] is True

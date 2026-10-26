@@ -71,8 +71,11 @@ No service account keys are created: GitHub Actions uses short-lived OIDC tokens
 
 **Why the Cloud Run service is public.** Firebase Hosting forwards `/api/**` without credentials,
 so the service must accept unauthenticated calls. The app itself rejects every request without a
-valid Firebase ID token for this project from a verified email in `NIDO_ALLOWED_EMAILS`, except
-`/api/health` and `/api/config`. An empty allowlist rejects everyone.
+valid Firebase ID token for this project from a verified email, except `/api/health` and
+`/api/config`, and every family endpoint also needs a family membership: an email in
+`NIDO_ALLOWED_EMAILS` starts its own family on first sign-in, any other account only gets in by
+opening an invite link that a family member made in the Family tab (single use, valid 7 days).
+With an empty allowlist nobody can start a family.
 
 Add a missing key later with:
 
@@ -93,7 +96,7 @@ bootstrap prints the `gh variable set` commands with the values filled in.
 | `GCP_GITHUB_SA` | `nido-github@my-project.iam.gserviceaccount.com` |
 | `GCP_API_SA` | `nido-api@my-project.iam.gserviceaccount.com` |
 | `AR_REPOSITORY` | `nido` |
-| `NIDO_ALLOWED_EMAILS` | `you@gmail.com,partner@gmail.com` |
+| `NIDO_ALLOWED_EMAILS` | `you@gmail.com` (who may start a family; others join by invite link) |
 | `FIREBASE_API_KEY` | from step 1.4 |
 | `FIREBASE_AUTH_DOMAIN` | `my-project.firebaseapp.com` |
 | `FIREBASE_APP_ID` | `1:123:web:abc` |
@@ -104,7 +107,9 @@ Until they are all set, `deploy.yml` only leaves a notice.
 ## 4. Deploy
 
 Merge to `main` or run **Actions > deploy > Run workflow** on `main`. The summary links the app.
-Sign in with an allowed Google account and fill in the family profile.
+Sign in with an allowed Google account and fill in the family profile. To share it, open the
+Family tab, press **Invite someone** and send the link: whoever opens it and signs in with Google
+joins your family and sees the same profile, watchlist and marks.
 
 ## Running it locally
 

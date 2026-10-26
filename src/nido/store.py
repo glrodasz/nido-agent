@@ -6,6 +6,10 @@ Two implementations behind one interface: `MemoryStore` for tests and local runs
     families/{uid}                    the family profile (FamilyProfile fields + updated_at)
     families/{uid}/watchlist/{key}    one WatchlistItem per saved title (key: "movie:123")
     families/{uid}/titles/{key}       one TitleMark per marked title: seen, liked, rewatch, banned
+    members/{uid}                     one Member per account: which family it belongs to
+    invites/{token}                   one Invite per invite link (single use, expires)
+
+A family's id is its owner's uid; the parameters below named `uid` are family ids.
     cache/{key}                       {payload (JSON), retrieved_at, expire_at}; a TTL policy
                                       on expire_at deletes stale entries (infra/bootstrap.sh)
 
@@ -20,7 +24,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
-from nido.models import FamilyProfile, TitleMark, WatchlistItem
+from nido.models import FamilyProfile, Invite, Member, TitleMark, WatchlistItem
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,17 @@ class Store(Protocol):
     async def get_mark(self, uid: str, key: str) -> TitleMark | None: ...
     async def put_mark(self, uid: str, mark: TitleMark) -> None: ...
     async def delete_mark(self, uid: str, key: str) -> None: ...
+    async def get_member(self, uid: str) -> Member | None: ...
+    async def put_member(self, member: Member) -> None: ...
+    async def delete_member(self, uid: str) -> None: ...
+    async def list_members(self, family_id: str) -> list[Member]: ...
+    async def put_invite(self, invite: Invite) -> None: ...
+    async def get_invite(self, token: str) -> Invite | None: ...
+    async def claim_invite(self, token: str, uid: str, now: datetime) -> Invite | None:
+        """Marks an unused, unexpired invite as used by `uid` and returns it, atomically; None if
+        it does not exist, expired or was already used by someone else."""
+        ...
+
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None: ...
     async def cache_put(self, key: str, data: dict[str, Any], ttl: timedelta) -> datetime:
         """Stores `data` and returns its retrieval time."""
@@ -55,6 +70,8 @@ class MemoryStore:
         self._watchlists: dict[str, dict[str, WatchlistItem]] = {}
         self._marks: dict[str, dict[str, TitleMark]] = {}
         self._cache: dict[str, Cached] = {}
+        self._members: dict[str, Member] = {}
+        self._invites: dict[str, Invite] = {}
 
     async def get_profile(self, uid: str) -> FamilyProfile | None:
         return self._profiles.get(uid)
@@ -84,6 +101,32 @@ class MemoryStore:
 
     async def delete_mark(self, uid: str, key: str) -> None:
         self._marks.get(uid, {}).pop(key, None)
+
+    async def get_member(self, uid: str) -> Member | None:
+        return self._members.get(uid)
+
+    async def put_member(self, member: Member) -> None:
+        self._members[member.uid] = member
+
+    async def delete_member(self, uid: str) -> None:
+        self._members.pop(uid, None)
+
+    async def list_members(self, family_id: str) -> list[Member]:
+        members = [m for m in self._members.values() if m.family_id == family_id]
+        return sorted(members, key=lambda m: m.joined_at)
+
+    async def put_invite(self, invite: Invite) -> None:
+        self._invites[invite.token] = invite
+
+    async def get_invite(self, token: str) -> Invite | None:
+        return self._invites.get(token)
+
+    async def claim_invite(self, token: str, uid: str, now: datetime) -> Invite | None:
+        invite = self._invites.get(token)
+        if invite is None or invite.expires_at <= now or invite.used_by not in (None, uid):
+            return None
+        self._invites[token] = invite = invite.model_copy(update={"used_by": uid})
+        return invite
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         hit = self._cache.get(key)
@@ -156,6 +199,50 @@ class FirestoreStore:
 
     async def delete_mark(self, uid: str, key: str) -> None:
         await self._family(uid).collection("titles").document(_doc_id(key)).delete()
+
+    async def get_member(self, uid: str) -> Member | None:
+        snap = await self._db.collection("members").document(uid).get()
+        return Member.model_validate(snap.to_dict()) if snap.exists else None
+
+    async def put_member(self, member: Member) -> None:
+        data = member.model_dump(mode="json")
+        data["joined_at"] = member.joined_at
+        await self._db.collection("members").document(member.uid).set(data)
+
+    async def delete_member(self, uid: str) -> None:
+        await self._db.collection("members").document(uid).delete()
+
+    async def list_members(self, family_id: str) -> list[Member]:
+        query = self._db.collection("members").where("family_id", "==", family_id)
+        members = [Member.model_validate(snap.to_dict()) async for snap in query.stream()]
+        return sorted(members, key=lambda m: m.joined_at)
+
+    async def put_invite(self, invite: Invite) -> None:
+        data = invite.model_dump(mode="json")
+        data.update(created_at=invite.created_at, expires_at=invite.expires_at)
+        await self._db.collection("invites").document(invite.token).set(data)
+
+    async def get_invite(self, token: str) -> Invite | None:
+        snap = await self._db.collection("invites").document(token).get()
+        return Invite.model_validate(snap.to_dict()) if snap.exists else None
+
+    async def claim_invite(self, token: str, uid: str, now: datetime) -> Invite | None:
+        from google.cloud import firestore
+
+        doc = self._db.collection("invites").document(token)
+
+        @firestore.async_transactional
+        async def claim(transaction: Any) -> Invite | None:
+            snap = await doc.get(transaction=transaction)
+            if not snap.exists:
+                return None
+            invite = Invite.model_validate(snap.to_dict())
+            if invite.expires_at <= now or invite.used_by not in (None, uid):
+                return None
+            transaction.update(doc, {"used_by": uid, "used_at": now})
+            return invite.model_copy(update={"used_by": uid})
+
+        return await claim(self._db.transaction())
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         snap = await self._db.collection("cache").document(_doc_id(key)).get()

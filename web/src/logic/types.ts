@@ -132,3 +132,16 @@ export interface AppConfig {
   auth: "firebase" | "none";
   attribution: string;
 }
+
+export interface FamilyMember {
+  uid: string;
+  email: string | null;
+  role: "owner" | "member";
+  joined_at: string;
+  you: boolean;
+}
+
+export interface Family {
+  role: "owner" | "member";
+  members: FamilyMember[];
+}

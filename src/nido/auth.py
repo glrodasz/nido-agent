@@ -3,7 +3,9 @@
 Firebase Hosting forwards /api/** to a public Cloud Run service, so the service itself must decide
 who may use it. The web app signs in with Google through Firebase Auth and sends the ID token as
 `Authorization: Bearer <token>`; the token is verified here against Google's public certificates
-(no service account needed), and only verified emails in NIDO_ALLOWED_EMAILS get through.
+(no service account needed). Any verified Google account gets through; what it may do is decided
+by its family membership (server.py): emails in NIDO_ALLOWED_EMAILS may start a family, everyone
+else needs an invite link from a family member.
 """
 
 from __future__ import annotations
@@ -34,6 +36,8 @@ class AuthError(Exception):
 class User:
     uid: str
     email: str | None = None
+    # On NIDO_ALLOWED_EMAILS: may start a family without an invite.
+    allowed: bool = False
 
 
 class FirebaseVerifier:
@@ -70,11 +74,9 @@ class FirebaseVerifier:
         if not uid:
             raise AuthError(401, "token has no user")
         email = str(claims.get("email") or "").lower()
-        if not self._allowed:
-            raise AuthError(403, "no account is allowed yet (NIDO_ALLOWED_EMAILS is empty)")
-        if not email or not claims.get("email_verified") or email not in self._allowed:
-            raise AuthError(403, "this account is not allowed to use Nido")
-        return User(uid=str(uid), email=email)
+        if not email or not claims.get("email_verified"):
+            raise AuthError(403, "sign in with an account that has a verified email")
+        return User(uid=str(uid), email=email, allowed=email in self._allowed)
 
 
 class Authenticator:
@@ -92,7 +94,7 @@ class Authenticator:
 
     async def __call__(self, authorization: str | None) -> User:
         if self.mode == "none":
-            return User(uid=LOCAL_UID)
+            return User(uid=LOCAL_UID, allowed=True)
         scheme, _, token = (authorization or "").partition(" ")
         if scheme.lower() != "bearer" or not token:
             raise AuthError(401, "sign in first")

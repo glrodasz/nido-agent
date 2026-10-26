@@ -11,6 +11,7 @@ import type {
   WatchlistItem,
 } from "../logic/types";
 import { currentTheme, setTheme, type Theme } from "../logic/theme";
+import FamilyMembers from "./FamilyMembers";
 import Finder from "./Finder";
 import HiddenTitles from "./HiddenTitles";
 import Icon from "./Icon";
@@ -26,6 +27,17 @@ type Session =
 
 const itemKey = (i: WatchlistItem) => `${i.title.media_type}:${i.title.tmdb_id}`;
 
+/** The token of an invite link (/?invite=…) this page was opened with. */
+function inviteFromUrl(): string | null {
+  return new URLSearchParams(location.search).get("invite");
+}
+
+function forgetInviteInUrl() {
+  const url = new URL(location.href);
+  url.searchParams.delete("invite");
+  history.replaceState(null, "", url);
+}
+
 export default function App() {
   const [session, setSession] = useState<Session>(
     authEnabled ? { state: "loading" } : { state: "in", uid: "local", email: null },
@@ -37,6 +49,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("find");
   const [error, setError] = useState<string | null>(null);
   const [theme, setThemeState] = useState<Theme>(currentTheme);
+  const [invite, setInvite] = useState<string | null>(inviteFromUrl);
+  // Bumped to load the family again, e.g. after leaving it.
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     api.config().then(setConfig, () => setError("Nido's server is not reachable."));
@@ -59,24 +74,48 @@ export default function App() {
     setTab("find");
     if (uid === null) return;
     setError(null);
-    Promise.all([api.profile(), api.watchlist(), api.marks()]).then(
-      ([p, w, m]) => {
+    let stale = false;
+    (async () => {
+      let inviteProblem: string | null = null;
+      if (invite) {
+        // A link that cannot be used still lets an account that has a family in.
+        inviteProblem = await api.acceptInvite(invite).then(
+          () => null,
+          (err) =>
+            err instanceof ApiError && err.status === 410
+              ? "This invite link has expired or was already used. Ask for a new one."
+              : err instanceof Error
+                ? err.message
+                : "Could not use the invite link.",
+        );
+        forgetInviteInUrl();
+        setInvite(null);
+      }
+      try {
+        const [p, w, m] = await Promise.all([api.profile(), api.watchlist(), api.marks()]);
+        if (stale) return;
         setProfile(p);
         setWatchlist(w);
         setMarks(m);
-      },
-      (err) => {
+        setError(inviteProblem);
+      } catch (err) {
+        if (stale) return;
         setProfile(undefined);
         setError(
-          err instanceof ApiError && err.status === 403
-            ? "This Google account is not on Nido's guest list. Ask the admin to add it."
-            : err instanceof Error
-              ? err.message
-              : "Could not load your family.",
+          inviteProblem ??
+            (err instanceof ApiError && err.status === 403
+              ? "This Google account isn't part of a family on Nido yet. Ask someone in your family for an invite link."
+              : err instanceof Error
+                ? err.message
+                : "Could not load your family."),
         );
-      },
-    );
-  }, [uid]);
+      }
+    })();
+    return () => {
+      stale = true;
+    };
+    // The invite is read when the user changes, not as a dependency: accepting it clears it.
+  }, [uid, reload]);
 
   async function saveProfile(next: Profile) {
     setProfile(await api.saveProfile(next));
@@ -208,13 +247,18 @@ export default function App() {
     body = (
       <section class="hero">
         <div class="hero-text">
-          <h1>Find something the whole family will enjoy</h1>
+          <h1>
+            {invite
+              ? "You're invited to a family on Nido"
+              : "Find something the whole family will enjoy"}
+          </h1>
           <p>
-            Nido searches the streaming services you already pay for, checks official age ratings
-            from nine countries, and shows where every fact comes from.
+            {invite
+              ? "Sign in with Google to join. You'll share the family's profile, watchlist and marks."
+              : "Nido searches the streaming services you already pay for, checks official age ratings from nine countries, and shows where every fact comes from."}
           </p>
           <button type="button" class="btn btn-primary" onClick={() => signIn().catch(() => {})}>
-            Sign in with Google
+            {invite ? "Sign in with Google to join" : "Sign in with Google"}
           </button>
         </div>
         <HeroSample />
@@ -232,6 +276,7 @@ export default function App() {
           onSave={saveProfile}
         />
         {profile && <HiddenTitles marks={marks} onMark={markListed} />}
+        {profile && <FamilyMembers onLeft={() => setReload((n) => n + 1)} />}
       </>
     );
   } else if (tab === "watchlist") {

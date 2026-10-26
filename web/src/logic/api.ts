@@ -2,6 +2,7 @@ import { idToken } from "./auth";
 import type {
   AppConfig,
   ChatReply,
+  Family,
   MarkChange,
   MediaType,
   Profile,
@@ -75,4 +76,10 @@ export const api = {
       poster_url: t.poster_url,
       ...change,
     }).then((r) => r.item),
+  family: () => call<Family>("GET", "/family"),
+  createInvite: () => call<{ token: string; expires_at: string }>("POST", "/family/invites"),
+  acceptInvite: (token: string) =>
+    call<{ family_id: string; joined: boolean }>("POST", `/invites/${encodeURIComponent(token)}`),
+  removeMember: (uid: string) =>
+    call<{ ok: boolean }>("DELETE", `/family/members/${encodeURIComponent(uid)}`),
 };
