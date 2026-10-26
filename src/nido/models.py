@@ -227,3 +227,31 @@ class WatchlistItem(BaseModel):
     poster_url: HttpUrl | None = None
     watched: bool = False
     added_at: datetime
+
+
+class FamilyRole(StrEnum):
+    OWNER = "owner"
+    MEMBER = "member"
+
+
+class Member(BaseModel):
+    """One account's place in a family. Every member sees and edits the same profile, watchlist
+    and marks. A family's id is its owner's uid, so a family started before sharing existed keeps
+    its data."""
+
+    uid: str
+    family_id: str
+    email: str | None = None
+    role: FamilyRole = FamilyRole.MEMBER
+    joined_at: datetime
+
+
+class Invite(BaseModel):
+    """A single-use link that lets any Google account join a family."""
+
+    token: str
+    family_id: str
+    created_by: str
+    created_at: datetime
+    expires_at: datetime
+    used_by: str | None = None

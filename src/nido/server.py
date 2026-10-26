@@ -9,6 +9,15 @@
     DELETE /api/watchlist/{media_type}/{tmdb_id}
     GET    /api/titles                            the family's marks: seen, liked, rewatch, banned
     PUT    /api/titles/{media_type}/{tmdb_id}     change some marks on one title
+    GET    /api/family                            members of the caller's family
+    POST   /api/family/invites                    a new single-use invite link token
+    DELETE /api/family/members/{uid}              the owner removes someone, or a member leaves
+    POST   /api/invites/{token}                   join the family that made the invite
+
+Every account works on its family's data, never its own: the profile, watchlist and marks belong
+to the family. A verified email on NIDO_ALLOWED_EMAILS starts its own family on first sign-in
+(family id = its uid, so data saved before families existed stays put); any other Google account
+gets in only through an invite link.
 
 Banned titles are left out of search and chat by code: the server hands their keys to the
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
@@ -19,7 +28,8 @@ start forgets the conversation, not the profile or the watchlist.
 """
 
 import logging
-from datetime import UTC, date, datetime
+import secrets
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -39,8 +49,11 @@ from nido.models import (
     Ban,
     BanScope,
     FamilyProfile,
+    FamilyRole,
     GuidanceCategory,
+    Invite,
     MediaType,
+    Member,
     TitleMark,
     TitleRef,
     WatchlistItem,
@@ -54,6 +67,10 @@ ATTRIBUTION = (
     "Metadata: TMDB (this product uses the TMDB API but is not endorsed or certified by TMDB). "
     "Streaming availability: JustWatch via TMDB. IMDb ratings via OMDb."
 )
+
+
+INVITE_TTL = timedelta(days=7)
+MAX_FAMILY_MEMBERS = 8
 
 
 class SearchRequest(BaseModel):
@@ -258,6 +275,30 @@ def create_app(
 
     CurrentUser = Annotated[User, Depends(current_user)]
 
+    async def current_member(user: CurrentUser) -> Member:
+        member = await store.get_member(user.uid)
+        if member is None and user.allowed:
+            member = Member(
+                uid=user.uid,
+                family_id=user.uid,
+                email=user.email,
+                role=FamilyRole.OWNER,
+                joined_at=datetime.now(UTC),
+            )
+            await store.put_member(member)
+        if member is None:
+            raise HTTPException(
+                403, "this account is not in a family yet: open an invite link from a member"
+            )
+        return member
+
+    CurrentMember = Annotated[Member, Depends(current_member)]
+
+    async def current_family(member: CurrentMember) -> str:
+        return member.family_id
+
+    Family = Annotated[str, Depends(current_family)]
+
     async def find(
         profile: FamilyProfile, request: SearchRequest, marks: list[TitleMark]
     ) -> dict[str, Any]:
@@ -305,38 +346,38 @@ def create_app(
         }
 
     @app.get("/api/profile")
-    async def get_profile(user: CurrentUser) -> dict[str, Any]:
-        profile = await store.get_profile(user.uid)
+    async def get_profile(family: Family) -> dict[str, Any]:
+        profile = await store.get_profile(family)
         return {"profile": profile.model_dump(mode="json") if profile else None}
 
     @app.put("/api/profile")
-    async def put_profile(profile: FamilyProfile, user: CurrentUser) -> dict[str, Any]:
+    async def put_profile(profile: FamilyProfile, family: Family) -> dict[str, Any]:
         profile = normalize_profile(profile)
-        await store.put_profile(user.uid, profile)
+        await store.put_profile(family, profile)
         return {"profile": profile.model_dump(mode="json")}
 
-    async def require_profile(user: User) -> FamilyProfile:
-        profile = await store.get_profile(user.uid)
+    async def require_profile(family: str) -> FamilyProfile:
+        profile = await store.get_profile(family)
         if profile is None:
             raise HTTPException(409, "set up the family profile first")
         return profile
 
     @app.post("/api/search")
-    async def search(request: SearchRequest, user: CurrentUser) -> dict[str, Any]:
-        profile = await require_profile(user)
-        marks = await store.list_marks(user.uid)
+    async def search(request: SearchRequest, family: Family) -> dict[str, Any]:
+        profile = await require_profile(family)
+        marks = await store.list_marks(family)
         return with_marks(await find(profile, request, marks), marks, profile) or {}
 
     @app.post("/api/chat")
-    async def chat(request: ChatRequest, user: CurrentUser) -> dict[str, Any]:
+    async def chat(request: ChatRequest, user: CurrentUser, family: Family) -> dict[str, Any]:
         if runner is None:
             raise HTTPException(503, "chat is off: no model credentials on the server")
         if not limiter.take(user.uid):
             raise HTTPException(429, "daily chat limit reached; the filters still work")
         from google.genai import types
 
-        profile = await store.get_profile(user.uid)
-        marks = await store.list_marks(user.uid)
+        profile = await store.get_profile(family)
+        marks = await store.list_marks(family)
         sessions = runner.session_service
         session = None
         if request.session_id:
@@ -378,16 +419,16 @@ def create_app(
         }
 
     @app.get("/api/watchlist")
-    async def list_watchlist(user: CurrentUser) -> dict[str, Any]:
-        items = await store.list_watchlist(user.uid)
+    async def list_watchlist(family: Family) -> dict[str, Any]:
+        items = await store.list_watchlist(family)
         return {"items": [i.model_dump(mode="json") for i in items]}
 
     @app.put("/api/watchlist/{media_type}/{tmdb_id}")
     async def put_watchlist(
-        media_type: MediaType, tmdb_id: int, update: WatchlistUpdate, user: CurrentUser
+        media_type: MediaType, tmdb_id: int, update: WatchlistUpdate, family: Family
     ) -> dict[str, Any]:
         ref = TitleRef(media_type=media_type, tmdb_id=tmdb_id)
-        existing = {i.title.key: i for i in await store.list_watchlist(user.uid)}.get(ref.key)
+        existing = {i.title.key: i for i in await store.list_watchlist(family)}.get(ref.key)
         item = WatchlistItem(
             title=ref,
             name=update.name,
@@ -396,30 +437,30 @@ def create_app(
             watched=update.watched,
             added_at=existing.added_at if existing else datetime.now(UTC),
         )
-        await store.put_watchlist_item(user.uid, item)
+        await store.put_watchlist_item(family, item)
         return {"item": item.model_dump(mode="json")}
 
     @app.delete("/api/watchlist/{media_type}/{tmdb_id}")
-    async def delete_watchlist(media_type: MediaType, tmdb_id: int, user: CurrentUser) -> dict:
+    async def delete_watchlist(media_type: MediaType, tmdb_id: int, family: Family) -> dict:
         await store.delete_watchlist_item(
-            user.uid, TitleRef(media_type=media_type, tmdb_id=tmdb_id).key
+            family, TitleRef(media_type=media_type, tmdb_id=tmdb_id).key
         )
         return {"ok": True}
 
     @app.get("/api/titles")
-    async def list_marks(user: CurrentUser) -> dict[str, Any]:
-        profile = await store.get_profile(user.uid)
-        marks = await store.list_marks(user.uid)
+    async def list_marks(family: Family) -> dict[str, Any]:
+        profile = await store.get_profile(family)
+        marks = await store.list_marks(family)
         return {"items": [present_mark(m, profile) for m in marks]}
 
     @app.put("/api/titles/{media_type}/{tmdb_id}")
     async def put_mark(
-        media_type: MediaType, tmdb_id: int, update: MarkUpdate, user: CurrentUser
+        media_type: MediaType, tmdb_id: int, update: MarkUpdate, family: Family
     ) -> dict[str, Any]:
-        profile = await store.get_profile(user.uid)
+        profile = await store.get_profile(family)
         ref = TitleRef(media_type=media_type, tmdb_id=tmdb_id)
         now = datetime.now(UTC)
-        mark = await store.get_mark(user.uid, ref.key) or TitleMark(
+        mark = await store.get_mark(family, ref.key) or TitleMark(
             title=ref, name=update.name, updated_at=now
         )
         changes: dict[str, Any] = {
@@ -452,10 +493,74 @@ def create_app(
                 changes["ban"] = Ban(scope=BanScope.AGE, until_age=until, at=now)
         mark = mark.model_copy(update=changes)
         if mark.empty:
-            await store.delete_mark(user.uid, ref.key)
+            await store.delete_mark(family, ref.key)
         else:
-            await store.put_mark(user.uid, mark)
+            await store.put_mark(family, mark)
         return {"item": present_mark(mark, profile)}
+
+    def present_member(m: Member, me: Member) -> dict[str, Any]:
+        return {**m.model_dump(mode="json"), "you": m.uid == me.uid}
+
+    @app.get("/api/family")
+    async def get_family(member: CurrentMember) -> dict[str, Any]:
+        members = await store.list_members(member.family_id)
+        return {
+            "role": member.role.value,
+            "members": [present_member(m, member) for m in members],
+        }
+
+    @app.post("/api/family/invites")
+    async def create_invite(member: CurrentMember) -> dict[str, Any]:
+        if len(await store.list_members(member.family_id)) >= MAX_FAMILY_MEMBERS:
+            raise HTTPException(409, f"a family has at most {MAX_FAMILY_MEMBERS} members")
+        now = datetime.now(UTC)
+        invite = Invite(
+            token=secrets.token_urlsafe(18),
+            family_id=member.family_id,
+            created_by=member.uid,
+            created_at=now,
+            expires_at=now + INVITE_TTL,
+        )
+        await store.put_invite(invite)
+        return {"token": invite.token, "expires_at": invite.expires_at.isoformat()}
+
+    @app.post("/api/invites/{token}")
+    async def accept_invite(token: str, user: CurrentUser) -> dict[str, Any]:
+        gone = HTTPException(410, "this invite link has expired or was already used")
+        now = datetime.now(UTC)
+        invite = await store.get_invite(token)
+        if invite is None:
+            raise gone
+        current = await store.get_member(user.uid)
+        if current and current.family_id == invite.family_id:
+            return {"family_id": invite.family_id, "joined": False}
+        # A used link never works again, not even for whoever used it and was removed since.
+        if invite.expires_at <= now or invite.used_by is not None:
+            raise gone
+        if current and len(await store.list_members(current.family_id)) > 1:
+            # Leaving would strand the others' shared data behind someone who no longer sees it.
+            raise HTTPException(409, "leave your current family first (Family tab)")
+        if len(await store.list_members(invite.family_id)) >= MAX_FAMILY_MEMBERS:
+            raise HTTPException(409, f"that family already has {MAX_FAMILY_MEMBERS} members")
+        if await store.claim_invite(token, user.uid, now) is None:
+            raise gone
+        await store.put_member(
+            Member(uid=user.uid, family_id=invite.family_id, email=user.email, joined_at=now)
+        )
+        return {"family_id": invite.family_id, "joined": True}
+
+    @app.delete("/api/family/members/{uid}")
+    async def remove_member(uid: str, member: CurrentMember) -> dict[str, Any]:
+        target = await store.get_member(uid)
+        if target is None or target.family_id != member.family_id:
+            raise HTTPException(404, "no such member in your family")
+        if uid == member.uid:
+            if member.role is FamilyRole.OWNER:
+                raise HTTPException(409, "the owner cannot leave their own family")
+        elif member.role is not FamilyRole.OWNER:
+            raise HTTPException(403, "only the family's owner can remove members")
+        await store.delete_member(uid)
+        return {"ok": True}
 
     if settings.web_dir and Path(settings.web_dir).is_dir():
         app.mount("/", StaticFiles(directory=settings.web_dir, html=True), name="web")

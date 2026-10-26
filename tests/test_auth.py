@@ -65,15 +65,21 @@ async def verify(keypair, tok: str, allowed=("parent@example.com",)):
 
 async def test_valid_token_for_allowed_email(keypair):
     user = await verify(keypair, token(keypair[0]))
-    assert user.uid == "uid-1" and user.email == "parent@example.com"
+    assert user.uid == "uid-1" and user.email == "parent@example.com" and user.allowed
+
+
+@pytest.mark.parametrize("allowed", [("parent@example.com",), ()])
+async def test_other_verified_emails_get_through_but_may_not_start_a_family(keypair, allowed):
+    # Their access then depends on an invite (server.py), not on the token.
+    user = await verify(keypair, token(keypair[0], email="other@example.com"), allowed)
+    assert user.email == "other@example.com" and not user.allowed
 
 
 @pytest.mark.parametrize(
     ("overrides", "allowed", "status"),
     [
-        ({"email": "other@example.com"}, ("parent@example.com",), 403),
         ({"email_verified": False}, ("parent@example.com",), 403),
-        ({}, (), 403),
+        ({"email": ""}, ("parent@example.com",), 403),
         ({"aud": "someone-else"}, ("parent@example.com",), 401),
         ({"iss": "https://evil.example"}, ("parent@example.com",), 401),
         ({"exp": int(time.time()) - 10}, ("parent@example.com",), 401),
