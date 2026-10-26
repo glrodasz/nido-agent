@@ -14,7 +14,7 @@ from google.adk.tools import ToolContext
 from nido.catalog import SERVICES_BY_KEY, SYSTEMS
 from nido.config import Settings
 from nido.models import FamilyProfile, GuidanceCategory, MediaType, Rating, TitleRef
-from nido.ranking import Candidate, Ranked, near_misses, shortlist
+from nido.ranking import Candidate, Ranked, assess, evaluate, near_misses, shortlist
 from nido.sources import tmdb as tmdb_source
 from nido.sources.omdb import OmdbClient
 from nido.sources.tmdb import TmdbClient
@@ -23,11 +23,13 @@ from nido.store import Store
 # Session state key holding the family's banned title keys; the server sets it on every chat turn.
 HIDDEN_STATE_KEY = "hidden_titles"
 
-# Details requests per search: discover returns 20 per page, the shortlist needs 5.
-MAX_DETAILS = 12
+# Discover sorts by worldwide popularity, so for young children its first page is mostly titles
+# rated older (a 4-year-old's series pool opens with Raw, Friends and Seinfeld). Details are read
+# page by page until ENOUGH_ELIGIBLE titles pass the age and availability rules, so the shortlist
+# ranks among titles the family can actually watch, not among whatever happens to be popular.
 DISCOVER_PAGE_SIZE = 20
-# Extra discover pages are fetched only when banned titles leave fewer than MAX_DETAILS.
-MAX_DISCOVER_PAGES = 3
+MAX_DISCOVER_PAGES = 5
+ENOUGH_ELIGIBLE = 15
 
 
 # Cache lifetimes. Offers change monthly, so details (which carry them) are re-fetched daily; the
@@ -131,15 +133,10 @@ class Toolbox:
     async def _candidate(
         self, media_type: MediaType, tmdb_id: int, regions: list[str]
     ) -> Candidate:
+        """Title, ratings and offers from TMDB; the IMDb score is added later (see _rate)."""
         data, retrieved_at = await self._details(media_type, tmdb_id)
-        title = tmdb_source.parse_title(media_type, data)
-        rating = None
-        if title.imdb_id:
-            rating = await self._imdb_rating(
-                TitleRef(media_type=media_type, tmdb_id=tmdb_id), title.imdb_id
-            )
         return Candidate(
-            title=title,
+            title=tmdb_source.parse_title(media_type, data),
             classifications=tmdb_source.parse_classifications(media_type, data, now=retrieved_at),
             availability=[
                 offer
@@ -148,8 +145,14 @@ class Toolbox:
                     media_type, data, region, now=retrieved_at
                 )
             ],
-            rating=rating,
         )
+
+    async def _rate(self, candidate: Candidate) -> None:
+        title = candidate.title
+        if title.imdb_id:
+            candidate.rating = await self._imdb_rating(
+                TitleRef(media_type=title.media_type, tmdb_id=title.tmdb_id), title.imdb_id
+            )
 
     async def find_titles(
         self,
@@ -226,22 +229,14 @@ class Toolbox:
             max_runtime_min=max_runtime_min,
             min_imdb_rating=min_imdb_rating,
         )
-        tmdb, _ = self._clients()
-        per_region = await asyncio.gather(
-            *(
-                self._discover(
-                    tmdb, kind, region, profile, list(required.values()), set(hidden or [])
-                )
-                for region in regions
-            )
-        )
-        tmdb_ids = _interleave(per_region)[:MAX_DETAILS]
-        candidates = await asyncio.gather(
-            *(self._candidate(kind, tmdb_id, regions) for tmdb_id in tmdb_ids)
-        )
-        ranked = shortlist(list(candidates), profile)
+        candidates = await self._pool(kind, regions, profile, required, set(hidden or []))
+        # OMDb's free key allows about 1,000 calls a day: only titles that pass the age and
+        # availability rules are worth an IMDb lookup.
+        unrated = profile.model_copy(update={"min_imdb_rating": None})
+        await asyncio.gather(*(self._rate(c) for c in candidates if evaluate(c, unrated)))
+        ranked = shortlist(candidates, profile)
         # Nothing to suggest is a dead end: show the closest titles, labelled with what they miss.
-        missed = [] if ranked else near_misses(list(candidates), profile)
+        missed = [] if ranked else near_misses(candidates, profile)
         ignored = [g for g in genres or [] if not tmdb_source.resolve_genres([g], available)]
         return {
             "regions": regions,
@@ -251,6 +246,43 @@ class Toolbox:
             "attribution": "Metadata: TMDB. Streaming availability: JustWatch via TMDB.",
         }
 
+    async def _pool(
+        self,
+        kind: MediaType,
+        regions: list[str],
+        profile: FamilyProfile,
+        genres: dict[str, int],
+        hidden: set[str],
+    ) -> list[Candidate]:
+        """Candidates read one discover page at a time (every region's page interleaved), until
+        ENOUGH_ELIGIBLE pass the age and availability rules or discover runs out. Banned titles
+        are skipped before their details are read."""
+        tmdb, _ = self._clients()
+        unrated = profile.model_copy(update={"min_imdb_rating": None})
+        seen: set[int] = set()
+        candidates: list[Candidate] = []
+        for page in range(1, MAX_DISCOVER_PAGES + 1):
+            pages = await asyncio.gather(
+                *(
+                    self._discover(tmdb, kind, region, profile, list(genres.values()), page)
+                    for region in regions
+                )
+            )
+            ids = [
+                tmdb_id
+                for tmdb_id in _interleave(pages)
+                if tmdb_id not in seen
+                and TitleRef(media_type=kind, tmdb_id=tmdb_id).key not in hidden
+            ]
+            seen.update(ids)
+            candidates += await asyncio.gather(
+                *(self._candidate(kind, tmdb_id, regions) for tmdb_id in ids)
+            )
+            eligible = sum(1 for c in candidates if evaluate(c, unrated))
+            if eligible >= ENOUGH_ELIGIBLE or all(len(p) < DISCOVER_PAGE_SIZE for p in pages):
+                break
+        return candidates
+
     async def _discover(
         self,
         tmdb: TmdbClient,
@@ -258,31 +290,105 @@ class Toolbox:
         region: str,
         profile: FamilyProfile,
         genre_ids: list[int],
-        hidden: set[str],
+        page: int,
     ) -> list[int]:
-        """Top discover ids, skipping banned titles; more pages only when bans thin the pool."""
         providers = await self._provider_ids(kind, region)
         provider_ids = [pid for key in profile.services for pid in providers.get(key, [])]
-        ids: list[int] = []
-        for page in range(1, MAX_DISCOVER_PAGES + 1):
-            found = await tmdb.discover(
-                kind,
-                region=region,
-                provider_ids=provider_ids,
-                genre_ids=genre_ids,
-                max_certification=prefilter_certification(profile.youngest, kind),
-                certification_country="US",
-                max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
-                page=page,
-            )
-            ids += [
-                t.tmdb_id
-                for t in found
-                if TitleRef(media_type=kind, tmdb_id=t.tmdb_id).key not in hidden
-            ]
-            if len(ids) >= MAX_DETAILS or len(found) < DISCOVER_PAGE_SIZE:
-                break
-        return ids
+        found = await tmdb.discover(
+            kind,
+            region=region,
+            provider_ids=provider_ids,
+            genre_ids=genre_ids,
+            max_certification=prefilter_certification(profile.youngest, kind),
+            certification_country="US",
+            max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
+            page=page,
+        )
+        return [t.tmdb_id for t in found]
+
+    async def look_up_title(
+        self,
+        name: str,
+        media_type: str,
+        children_ages: list[int],
+        services: list[str],
+        max_runtime_min: int | None = None,
+        min_imdb_rating: float | None = None,
+        avoid: list[str] | None = None,
+        regions: list[str] | None = None,
+        tool_context: ToolContext | None = None,
+    ) -> dict[str, Any]:
+        """Check one title the parent names, e.g. "is Bluey OK for us?". Use it instead of
+        find_titles when the parent asks about a specific movie or series.
+
+        Args:
+            name: the title's name, e.g. "Gabby's Dollhouse".
+            media_type: "movie" or "tv".
+            children_ages: ages of the children who will watch, e.g. [6, 9].
+            services: subscribed services, any of: netflix, disney_plus, hbo_max, prime_video,
+                apple_tv_plus.
+            max_runtime_min: longest acceptable runtime in minutes (episode length for series).
+            min_imdb_rating: lowest acceptable IMDb score, 0-10.
+            avoid: content categories to avoid (same values as find_titles).
+            regions: catalog regions, ISO codes like ["SE"]; omit for the family's default.
+        """
+        hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
+        return await self.look_up(
+            name,
+            media_type,
+            children_ages,
+            services,
+            max_runtime_min=max_runtime_min,
+            min_imdb_rating=min_imdb_rating,
+            avoid=avoid,
+            regions=regions,
+            hidden=hidden,
+        )
+
+    async def look_up(
+        self,
+        name: str,
+        media_type: str,
+        children_ages: list[int],
+        services: list[str],
+        max_runtime_min: int | None = None,
+        min_imdb_rating: float | None = None,
+        avoid: list[str] | None = None,
+        regions: list[str] | None = None,
+        hidden: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """look_up_title without the model. The title lands in "results" when it fits the family
+        and in "near_misses", with what it misses, when it does not."""
+        kind = MediaType(media_type)
+        regions = [r.upper() for r in regions or self._settings.regions]
+        profile = FamilyProfile(
+            children_ages=children_ages,
+            regions=regions,
+            services=[s for s in services if s in SERVICES_BY_KEY],
+            avoid_categories=[GuidanceCategory(a) for a in avoid or [] if a in GuidanceCategory],
+            max_runtime_min=max_runtime_min,
+            min_imdb_rating=min_imdb_rating,
+        )
+        out: dict[str, Any] = {
+            "regions": regions,
+            "results": [],
+            "near_misses": [],
+            "attribution": "Metadata: TMDB. Streaming availability: JustWatch via TMDB.",
+        }
+        tmdb, _ = self._clients()
+        found = await tmdb.search(kind, name)
+        if not found:
+            return {**out, "not_found": name}
+        ref = TitleRef(media_type=kind, tmdb_id=found[0].tmdb_id)
+        if ref.key in set(hidden or []):
+            return {**out, "hidden": found[0].name}
+        candidate = await self._candidate(kind, ref.tmdb_id, regions)
+        await self._rate(candidate)
+        ranked = assess(candidate, profile)
+        if ranked is None:
+            return {**out, "not_available": candidate.title.name}
+        bucket = "near_misses" if ranked.misses else "results"
+        return {**out, bucket: [_present(ranked, regions)]}
 
     def guidance_links(self, title: str, imdb_id: str | None = None) -> dict[str, Any]:
         """Links to parental guidance sources for one title. Use them to point parents to the

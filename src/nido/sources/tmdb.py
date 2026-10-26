@@ -112,6 +112,11 @@ class TmdbClient:
         data = await self._get(f"/discover/{media_type}", **params)
         return [parse_title(media_type, item) for item in data.get("results", [])]
 
+    async def search(self, media_type: MediaType, query: str) -> list[Title]:
+        """Titles matching a name, best match first."""
+        data = await self._get(f"/search/{media_type}", query=query, include_adult="false")
+        return [parse_title(media_type, item) for item in data.get("results", [])]
+
     async def genres(self, media_type: MediaType) -> dict[str, int]:
         """TMDB genre name -> id. Movies and series have different lists."""
         data = await self._get(f"/genre/{media_type}/list")
