@@ -1224,3 +1224,31 @@ a.imdb:hover {
   vertical-align: -3px;
   margin-right: 0.35rem;
 }
+
+.results-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  white-space: nowrap;
+}
+
+.results-head:has(.results-tools .chip-btn) {
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
+}
+
+.results-tools .chip-btn {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.results-tools .chip-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.seen-divider {
+  margin-top: 0.6rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
