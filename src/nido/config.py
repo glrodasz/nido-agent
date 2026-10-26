@@ -33,6 +33,11 @@ class Settings:
 
     # LLM. GOOGLE_API_KEY (AI Studio, free tier) or GOOGLE_GENAI_USE_VERTEXAI=1 is read by ADK.
     model: str = field(default_factory=lambda: os.getenv("NIDO_MODEL", "gemini-3.1-flash-lite"))
+    # Used when the main model stays overloaded (503) or over quota (429) after retries.
+    # Empty disables the fallback.
+    fallback_model: str = field(
+        default_factory=lambda: os.getenv("NIDO_FALLBACK_MODEL", "gemini-3.5-flash-lite")
+    )
     # Model requests allowed per conversation turn, enforced in before_model_callback so the cap
     # also holds under `adk web`. <= 0 disables the model.
     max_llm_calls: int = field(default_factory=lambda: _env_int("NIDO_MAX_LLM_CALLS", 8))

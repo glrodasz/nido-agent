@@ -409,7 +409,8 @@ def create_app(
         except Exception as exc:  # model quota, network: report, keep the session
             log.warning("chat turn failed: %s", exc)
             if results is None and not reply:
-                raise HTTPException(503, "the assistant is unavailable right now") from exc
+                busy = "The assistant is busy right now. Try again in a minute, or use the filters."
+                raise HTTPException(503, busy) from exc
             note = "The assistant stopped before finishing."
         return {
             "session_id": session.id,
