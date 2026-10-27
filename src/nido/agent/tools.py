@@ -165,6 +165,7 @@ class Toolbox:
         avoid: list[str] | None = None,
         regions: list[str] | None = None,
         prefer_genres: list[str] | None = None,
+        released_since: int | None = None,
         tool_context: ToolContext | None = None,
     ) -> dict[str, Any]:
         """Find a short, ranked list of movies or series for the family.
@@ -184,6 +185,8 @@ class Toolbox:
                 default. Only affects where titles can be watched, not age ratings.
             prefer_genres: genres to rank higher without excluding others, e.g. the family's
                 favourites.
+            released_since: only titles released (series: first aired) in this year or later,
+                e.g. 2022 when the parent asks for new or recent titles.
         """
         # Banned titles come from session state the server writes each turn, never from the model.
         hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
@@ -197,6 +200,7 @@ class Toolbox:
             avoid=avoid,
             regions=regions,
             prefer_genres=prefer_genres,
+            released_since=released_since,
             hidden=hidden,
         )
 
@@ -211,6 +215,7 @@ class Toolbox:
         avoid: list[str] | None = None,
         regions: list[str] | None = None,
         prefer_genres: list[str] | None = None,
+        released_since: int | None = None,
         hidden: list[str] | None = None,
     ) -> dict[str, Any]:
         """find_titles without the model: `hidden` lists title keys ("movie:123") the family
@@ -229,7 +234,9 @@ class Toolbox:
             max_runtime_min=max_runtime_min,
             min_imdb_rating=min_imdb_rating,
         )
-        candidates = await self._pool(kind, regions, profile, required, set(hidden or []))
+        candidates = await self._pool(
+            kind, regions, profile, required, set(hidden or []), released_since
+        )
         # OMDb's free key allows about 1,000 calls a day: only titles that pass the age and
         # availability rules are worth an IMDb lookup.
         unrated = profile.model_copy(update={"min_imdb_rating": None})
@@ -253,6 +260,7 @@ class Toolbox:
         profile: FamilyProfile,
         genres: dict[str, int],
         hidden: set[str],
+        released_since: int | None = None,
     ) -> list[Candidate]:
         """Candidates read one discover page at a time (every region's page interleaved), until
         ENOUGH_ELIGIBLE pass the age and availability rules or discover runs out. Banned titles
@@ -264,7 +272,9 @@ class Toolbox:
         for page in range(1, MAX_DISCOVER_PAGES + 1):
             pages = await asyncio.gather(
                 *(
-                    self._discover(tmdb, kind, region, profile, list(genres.values()), page)
+                    self._discover(
+                        tmdb, kind, region, profile, list(genres.values()), page, released_since
+                    )
                     for region in regions
                 )
             )
@@ -291,6 +301,7 @@ class Toolbox:
         profile: FamilyProfile,
         genre_ids: list[int],
         page: int,
+        released_since: int | None = None,
     ) -> list[int]:
         providers = await self._provider_ids(kind, region)
         provider_ids = [pid for key in profile.services for pid in providers.get(key, [])]
@@ -302,6 +313,7 @@ class Toolbox:
             max_certification=prefilter_certification(profile.youngest, kind),
             certification_country="US",
             max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
+            min_year=released_since,
             page=page,
         )
         return [t.tmdb_id for t in found]

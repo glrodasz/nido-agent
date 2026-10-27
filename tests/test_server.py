@@ -10,7 +10,7 @@ from nido.agent.budget import LlmBudgetExceededError
 from nido.auth import Authenticator, User
 from nido.config import Settings
 from nido.models import FamilyProfile, GuidanceCategory, MediaType
-from nido.server import ChatLimiter, create_app, describe_family
+from nido.server import ChatLimiter, chat_cards, create_app, describe_family, titles_named
 from nido.store import MemoryStore
 
 PROFILE = {
@@ -162,6 +162,74 @@ def test_chat_returns_tool_results_and_reply_and_keeps_the_session():
     assert "Children's ages: 6, 9" in runner.state_deltas[0]["family"]
     again = c.post("/api/chat", json={"message": "more", "session_id": body["session_id"]})
     assert again.json()["session_id"] == body["session_id"]
+
+
+def movie(tmdb_id: int, title: str, **extra: Any) -> dict[str, Any]:
+    return {"title": title, "media_type": "movie", "tmdb_id": tmdb_id, **extra}
+
+
+ANIMATED = {
+    "regions": ["SE"],
+    "results": [
+        movie(10, "Beauty and the Beast"),
+        movie(11, "WALL·E"),
+        movie(12, "Ratatouille"),
+        movie(13, "Toy Story"),
+        movie(14, "Toy Story 4"),
+    ],
+    "attribution": "TMDB",
+}
+
+
+def test_titles_named_follow_the_reply_and_prefer_the_longest_name():
+    reply = "**Toy Story 4 (2019)** is newest. Also **Wall-E** and Ratatouille; WALL·E again."
+    named = titles_named(reply, ANIMATED["results"])
+    assert [n["tmdb_id"] for n in named] == [14, 11, 12]
+
+
+def test_chat_cards_put_the_named_titles_first_then_the_rest():
+    known = {f"movie:{r['tmdb_id']}": r for r in ANIMATED["results"]}
+    cards = chat_cards("Try Ratatouille or WALL·E.", ANIMATED, known)
+    assert [r["tmdb_id"] for r in cards["results"]] == [12, 11, 10, 13, 14]
+    assert chat_cards("Nothing named here.", ANIMATED, known) is ANIMATED
+    assert chat_cards("Hello", None, {}) is None
+
+
+def test_chat_answer_from_an_earlier_search_still_gets_its_cards():
+    runner = FakeRunner([event(tool_output=ANIMATED), event(text="Try WALL·E.")])
+    c, _ = client(runner=runner)
+    c.put("/api/profile", json=PROFILE)
+    first = c.post("/api/chat", json={"message": "animated movies"}).json()
+    assert first["results"]["results"][0]["title"] == "WALL·E"
+    # The follow-up is answered from memory, without a tool call: the cards still follow it.
+    runner.events = [event(text="The most recent is **Toy Story 4 (2019)**.")]
+    again = c.post(
+        "/api/chat", json={"message": "recent ones", "session_id": first["session_id"]}
+    ).json()
+    assert [r["title"] for r in again["results"]["results"]] == ["Toy Story 4"]
+    assert again["results"]["results"][0]["mark"] is None
+    # Another session does not see these titles.
+    other = c.post("/api/chat", json={"message": "recent ones"}).json()
+    assert other["results"] is None
+
+
+def test_chat_never_brings_back_a_title_banned_since_the_earlier_search():
+    runner = FakeRunner([event(tool_output=ANIMATED), event(text="Try WALL·E.")])
+    c, _ = client(runner=runner)
+    c.put("/api/profile", json=PROFILE)
+    first = c.post("/api/chat", json={"message": "animated movies"}).json()
+    put_mark(c, 11, ban={"scope": "always"})
+    runner.events = [event(text="**WALL·E** is still a great pick.")]
+    again = c.post(
+        "/api/chat", json={"message": "and now?", "session_id": first["session_id"]}
+    ).json()
+    assert again["results"] is None
+
+
+def test_chat_named_near_miss_stays_a_near_miss():
+    out = {"regions": ["SE"], "results": [], "near_misses": [movie(20, "Shrek", misses=["age"])]}
+    cards = chat_cards("Shrek misses your age rule.", out, {"movie:20": out["near_misses"][0]})
+    assert cards["results"] == [] and cards["near_misses"][0]["title"] == "Shrek"
 
 
 def test_chat_budget_stop_keeps_partial_results():
