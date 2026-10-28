@@ -62,6 +62,7 @@ from nido.models import (
     TitleRef,
     WatchlistItem,
 )
+from nido.ranking import SHORTLIST_SIZE
 from nido.store import Store, build_store
 
 log = logging.getLogger(__name__)
@@ -235,7 +236,8 @@ def _find_titles_outputs(event: Any) -> list[dict[str, Any]]:
     return out
 
 
-MAX_CARDS = 12
+# As many cards as the filters show, so Ask Nido never hides picks the search returned.
+MAX_CARDS = SHORTLIST_SIZE
 # Chat sessions whose titles are remembered for the cards; the sessions themselves live in memory
 # too, so this only has to outlast a conversation.
 MAX_REMEMBERED_SESSIONS = 500
