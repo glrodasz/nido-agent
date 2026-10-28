@@ -7,7 +7,7 @@ TMDB's free API is for non-commercial use with attribution (https://www.themovie
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -103,11 +103,9 @@ class TmdbClient:
             params["certification_country"] = certification_country or region
             params["certification.lte"] = max_certification
         if min_year:
-            key = (
-                "primary_release_date.gte"
-                if media_type is MediaType.MOVIE
-                else "first_air_date.gte"
-            )
+            # A series counts as recent while it still airs: Bluey started in 2018 but is new
+            # every season, so series are filtered by any episode's air date, not the first.
+            key = "primary_release_date.gte" if media_type is MediaType.MOVIE else "air_date.gte"
             params[key] = f"{min_year}-01-01"
         data = await self._get(f"/discover/{media_type}", **params)
         return [parse_title(media_type, item) for item in data.get("results", [])]
@@ -164,6 +162,13 @@ def _year(date: str | None) -> int | None:
     return int(date[:4]) if date and len(date) >= 4 and date[:4].isdigit() else None
 
 
+def _date(value: str | None) -> date | None:
+    try:
+        return date.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
 def parse_title(media_type: MediaType, data: dict[str, Any]) -> Title:
     """A discover result or a details payload -> Title."""
     is_movie = media_type is MediaType.MOVIE
@@ -173,13 +178,16 @@ def parse_title(media_type: MediaType, data: dict[str, Any]) -> Title:
         runtime = episode_runtimes[0] if episode_runtimes else None
     genres = [g["name"] for g in data.get("genres", []) if "name" in g]
     poster = data.get("poster_path")
+    released = data.get("release_date") if is_movie else data.get("first_air_date")
     imdb_id = data.get("imdb_id") or (data.get("external_ids") or {}).get("imdb_id")
     return Title(
         media_type=media_type,
         tmdb_id=int(data["id"]),
         imdb_id=imdb_id or None,
         name=data.get("title") or data.get("name") or "",
-        year=_year(data.get("release_date") if is_movie else data.get("first_air_date")),
+        year=_year(released),
+        release_date=_date(released),
+        last_air_date=None if is_movie else _date(data.get("last_air_date")),
         runtime_min=runtime or None,
         season_count=None if is_movie else data.get("number_of_seasons"),
         genres=genres,

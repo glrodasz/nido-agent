@@ -48,6 +48,7 @@ export interface SearchFilters {
   max_runtime_min?: number | null;
   min_imdb_rating?: number | null;
   avoid?: string[];
+  released_since?: number | null;
 }
 
 export const api = {

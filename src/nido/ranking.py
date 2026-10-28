@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import statistics
 from dataclasses import dataclass, field
+from datetime import date
 
 from nido.models import (
     AccessType,
@@ -22,12 +23,16 @@ from nido.models import (
 )
 
 INCLUDED = {AccessType.SUBSCRIPTION, AccessType.ADS}
-# Bayesian average: a 9.0 from 300 votes should not outrank an 8.1 from 400,000.
-PRIOR_VOTES = 5_000
+# Bayesian average: a 9.0 from 300 votes should not outrank an 8.1 from 400,000. Kept small,
+# because shows for young children get few IMDb votes: at 5,000 Gabby's Dollhouse (7.1 from about
+# 1,200 votes) scored like a 6.6 and lost to older titles with louder audiences.
+PRIOR_VOTES = 1_000
 PRIOR_SCORE = 6.5
-# Enough for a real choice on one evening without a long scroll; the chat shows them all as cards
-# while the model comments on 5 at most. Stays below tools.ENOUGH_ELIGIBLE, so the pool can fill it.
-SHORTLIST_SIZE = 12
+# Families want what is new first: a title loses recency credit linearly until it is this old.
+RECENCY_SPAN_YEARS = 20
+# A real choice on one evening; the chat shows them all as cards while the model comments on 5 at
+# most. Stays below tools.ENOUGH_ELIGIBLE, so the pool can fill it.
+SHORTLIST_SIZE = 20
 NEAR_MISS_SIZE = 3
 
 
@@ -83,6 +88,16 @@ def weighted_quality(rating: Rating | None) -> float | None:
     votes = rating.votes or 0
     score = rating.score * 10 / rating.scale
     return (votes * score + PRIOR_VOTES * PRIOR_SCORE) / (votes + PRIOR_VOTES)
+
+
+def recency(title: Title, today: date | None = None) -> float:
+    """1 for a title out this year (a series: aired this year), down to 0 at RECENCY_SPAN_YEARS;
+    0 when the date is unknown."""
+    latest = title.latest_date
+    if latest is None:
+        return 0.0
+    years = ((today or date.today()) - latest).days / 365.25
+    return min(1.0, max(0.0, 1 - years / RECENCY_SPAN_YEARS))
 
 
 def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
@@ -155,6 +170,7 @@ def assess(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
         0.6 * ((quality if quality is not None else PRIOR_SCORE) / 10)
         + 0.25 * included
         + 0.15 * genre_match
+        + 0.2 * recency(candidate.title)
         - 0.2 * len(flagged)
     )
     return Ranked(candidate, round(score, 4), included, baseline, reasons, cautions, misses)

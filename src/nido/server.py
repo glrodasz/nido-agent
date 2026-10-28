@@ -84,6 +84,8 @@ class SearchRequest(BaseModel):
     min_imdb_rating: float | None = Field(default=None, ge=0, le=10)
     avoid: list[GuidanceCategory] | None = None
     regions: list[str] | None = None
+    # Earliest release year (series: latest episode); the Find page sends five years back.
+    released_since: int | None = Field(default=None, ge=1900, le=2100)
 
 
 class ChatRequest(BaseModel):
@@ -385,6 +387,7 @@ def create_app(
                     )
                 ],
                 regions=request.regions or profile.regions,
+                released_since=request.released_since,
                 hidden=hidden_keys(marks, profile),
             )
         except RuntimeError as exc:  # missing TMDB token
