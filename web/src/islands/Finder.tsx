@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "preact/hooks";
 import { api } from "../logic/api";
-import { familyLine, GENRES, seenLast } from "../logic/format";
+import { familyLine, GENRES, newestFirst, releasedSince, seenLast } from "../logic/format";
 import type {
   AppConfig,
   MarkChange,
@@ -34,7 +34,20 @@ interface Filters {
   genres: string[];
   runtime: string;
   minImdb: string;
+  // "Last N years" as a string for the select; "" is any time.
+  since: string;
 }
+
+// Families want what is new: the filters start at five years back. A series counts while it
+// still airs, so Bluey stays in even though it started in 2018.
+const DEFAULT_SINCE = "5";
+const SINCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "2", label: "Last 2 years" },
+  { value: "5", label: "Last 5 years" },
+  { value: "10", label: "Last 10 years" },
+  { value: "20", label: "Last 20 years" },
+  { value: "", label: "Any time" },
+];
 
 // One-tap shortcuts into the filters below; each runs the filter search straight away.
 const QUICK: { label: string; on: (f: Filters) => boolean; toggle: (f: Filters) => Filters }[] = [
@@ -67,6 +80,17 @@ const QUICK: { label: string; on: (f: Filters) => boolean; toggle: (f: Filters) 
 
 // Seen titles sink to the end unless the family turned that off; remembered in this browser only.
 const SEEN_LAST_KEY = "nido-seen-last";
+// "newest" (default) or "rated": Nido's best-match ranking. Remembered in this browser only.
+const ORDER_KEY = "nido-order";
+type Order = "newest" | "rated";
+
+function loadOrder(): Order {
+  try {
+    return localStorage.getItem(ORDER_KEY) === "rated" ? "rated" : "newest";
+  } catch {
+    return "newest";
+  }
+}
 
 function loadSeenLast(): boolean {
   try {
@@ -89,8 +113,9 @@ export default function Finder({
     genres: [],
     runtime: "",
     minImdb: "",
+    since: DEFAULT_SINCE,
   });
-  const { mediaType, genres, runtime, minImdb } = filters;
+  const { mediaType, genres, runtime, minImdb, since } = filters;
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -101,6 +126,16 @@ export default function Finder({
   const [error, setError] = useState<string | null>(null);
   const session = useRef<string | null>(null);
   const [sinkSeen, setSinkSeen] = useState(loadSeenLast);
+  const [order, setOrder] = useState<Order>(loadOrder);
+
+  function chooseOrder(next: Order) {
+    setOrder(next);
+    try {
+      localStorage.setItem(ORDER_KEY, next);
+    } catch {
+      // Private windows can refuse storage; the order still changes for this visit.
+    }
+  }
 
   function toggleSinkSeen() {
     const next = !sinkSeen;
@@ -132,6 +167,7 @@ export default function Finder({
         genres: f.genres.length ? f.genres : undefined,
         max_runtime_min: f.runtime ? Number(f.runtime) : undefined,
         min_imdb_rating: f.minImdb ? Number(f.minImdb) : undefined,
+        released_since: releasedSince(f.since ? Number(f.since) : null),
       }),
     );
     if (found) {
@@ -174,9 +210,10 @@ export default function Finder({
   // Ordered when results arrive or the toggle flips, not on every mark: a card the family just
   // marked as seen stays put instead of jumping away under their finger.
   const { picks, sunk } = useMemo(() => {
-    const ordered = sinkSeen ? seenLast(ranked, isSeen) : ranked;
+    const sorted = order === "newest" ? newestFirst(ranked) : ranked;
+    const ordered = sinkSeen ? seenLast(sorted, isSeen) : sorted;
     return { picks: ordered, sunk: sinkSeen ? ranked.filter(isSeen).length : 0 };
-  }, [results, sinkSeen]);
+  }, [results, sinkSeen, order]);
   const anySeen = picks.some(isSeen);
   const firstSunk = picks.length - sunk;
 
@@ -265,6 +302,16 @@ export default function Finder({
               ))}
             </div>
             <label class="inline-field">
+              <span>Released</span>
+              <select value={since} onChange={(e) => set({ since: e.currentTarget.value })}>
+                {SINCE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="inline-field">
               <span>Max length (min)</span>
               <input
                 type="number"
@@ -316,6 +363,21 @@ export default function Finder({
               {results.results.length > 0 ? "Picks for your family" : "Closest picks"}
             </h2>
             <div class="results-tools">
+              {picks.length > 1 && (
+                <div class="segmented segmented-small" role="group" aria-label="Order">
+                  {(["newest", "rated"] as const).map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      aria-pressed={order === o}
+                      class={order === o ? "active" : ""}
+                      onClick={() => chooseOrder(o)}
+                    >
+                      {o === "newest" ? "Newest" : "Best match"}
+                    </button>
+                  ))}
+                </div>
+              )}
               {(anySeen || sunk > 0) && (
                 <button
                   type="button"

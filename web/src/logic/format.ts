@@ -186,6 +186,33 @@ export function posterHue(tmdbId: number): number {
 }
 
 /** Unseen titles first, seen ones after; the ranking order holds within each group. */
+/** "2018–2026" for a series that aired after its first year, so "Newest" order reads right. */
+export function yearSpan(r: {
+  year: number | null;
+  media_type: string;
+  released_on?: string | null;
+}): string | null {
+  const latest = r.released_on ? Number(r.released_on.slice(0, 4)) : null;
+  if (r.year == null) return latest ? String(latest) : null;
+  return r.media_type === "tv" && latest && latest > r.year ? `${r.year}–${latest}` : String(r.year);
+}
+
+/** Newest first by release (series: latest episode); undated titles last, ranking kept on ties. */
+export function newestFirst<T extends { released_on: string | null }>(items: T[]): T[] {
+  return items
+    .map((item, i) => ({ item, i }))
+    .sort(
+      (a, b) =>
+        (b.item.released_on ?? "").localeCompare(a.item.released_on ?? "") || a.i - b.i,
+    )
+    .map(({ item }) => item);
+}
+
+/** First release year a "last N years" filter allows; null for any time. */
+export function releasedSince(years: number | null, today: Date = new Date()): number | null {
+  return years ? today.getFullYear() - years : null;
+}
+
 export function seenLast<T>(items: T[], isSeen: (item: T) => boolean): T[] {
   return [...items.filter((i) => !isSeen(i)), ...items.filter(isSeen)];
 }

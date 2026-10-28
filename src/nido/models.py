@@ -4,7 +4,7 @@ evidence under them changes."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -66,11 +66,19 @@ class Title(BaseModel):
     imdb_id: str | None = None
     name: str
     year: int | None = None
+    # Movie release or series first air date; series also carry their latest episode's date.
+    release_date: date | None = None
+    last_air_date: date | None = None
     runtime_min: int | None = None
     season_count: int | None = None
     genres: list[str] = Field(default_factory=list)
     synopsis: str = ""
     poster_url: HttpUrl | None = None
+
+    @property
+    def latest_date(self) -> date | None:
+        """How recent the title is: a series still airing is as new as its last episode."""
+        return self.last_air_date or self.release_date
 
 
 class Availability(BaseModel):

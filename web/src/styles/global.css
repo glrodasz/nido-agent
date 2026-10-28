@@ -744,6 +744,16 @@ input:not([type="checkbox"]) {
   border-radius: 8px;
 }
 
+.inline-field select {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.3rem 0.45rem;
+}
+
 .segmented-small button {
   font-size: 0.875rem;
   padding: 0.25rem 0.75rem;
@@ -1263,7 +1273,7 @@ a.imdb:hover {
   white-space: nowrap;
 }
 
-.results-head:has(.results-tools .chip-btn) {
+.results-head:has(.results-tools .chip-btn, .results-tools .segmented) {
   flex-wrap: wrap;
   row-gap: 0.4rem;
 }

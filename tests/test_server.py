@@ -97,6 +97,15 @@ def test_search_can_clear_profile_avoidances():
     assert toolbox.calls[-1]["avoid"] == []
 
 
+def test_search_passes_the_release_filter():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    c.post("/api/search", json={"released_since": 2021})
+    assert toolbox.calls[-1]["released_since"] == 2021
+    c.post("/api/search", json={})
+    assert toolbox.calls[-1]["released_since"] is None
+
+
 def test_watchlist_upsert_keeps_added_at_and_deletes():
     c, _ = client()
     first = c.put("/api/watchlist/movie/1", json={"name": "Paddington 2", "year": 2017}).json()

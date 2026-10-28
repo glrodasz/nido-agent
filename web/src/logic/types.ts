@@ -36,6 +36,8 @@ export interface TitleResult {
   tmdb_id: number;
   imdb_id: string | null;
   year: number | null;
+  // ISO date of the movie's release or the series' latest episode; what "Newest" sorts by.
+  released_on: string | null;
   runtime_min: number | null;
   genres: string[];
   synopsis: string;

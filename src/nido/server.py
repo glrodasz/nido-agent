@@ -62,6 +62,7 @@ from nido.models import (
     TitleRef,
     WatchlistItem,
 )
+from nido.ranking import SHORTLIST_SIZE
 from nido.store import Store, build_store
 
 log = logging.getLogger(__name__)
@@ -84,6 +85,8 @@ class SearchRequest(BaseModel):
     min_imdb_rating: float | None = Field(default=None, ge=0, le=10)
     avoid: list[GuidanceCategory] | None = None
     regions: list[str] | None = None
+    # Earliest release year (series: latest episode); the Find page sends five years back.
+    released_since: int | None = Field(default=None, ge=1900, le=2100)
 
 
 class ChatRequest(BaseModel):
@@ -233,7 +236,8 @@ def _find_titles_outputs(event: Any) -> list[dict[str, Any]]:
     return out
 
 
-MAX_CARDS = 12
+# As many cards as the filters show, so Ask Nido never hides picks the search returned.
+MAX_CARDS = SHORTLIST_SIZE
 # Chat sessions whose titles are remembered for the cards; the sessions themselves live in memory
 # too, so this only has to outlast a conversation.
 MAX_REMEMBERED_SESSIONS = 500
@@ -385,6 +389,7 @@ def create_app(
                     )
                 ],
                 regions=request.regions or profile.regions,
+                released_since=request.released_since,
                 hidden=hidden_keys(marks, profile),
             )
         except RuntimeError as exc:  # missing TMDB token

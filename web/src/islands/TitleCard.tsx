@@ -8,6 +8,7 @@ import {
   sortOffers,
   verdictFor,
   verifiedAgo,
+  yearSpan,
 } from "../logic/format";
 import type { MarkChange, Offer, TitleMark, TitleResult } from "../logic/types";
 import Icon from "./Icon";
@@ -58,7 +59,7 @@ export default function TitleCard({
   const [primary, ...alsoIncluded] = included;
   const others = included.length > 0 ? alsoIncluded : sorted.slice(0, 2);
   const meta = [
-    result.year,
+    yearSpan(result),
     result.media_type === "tv" ? "Series" : "Movie",
     result.runtime_min ? `${result.runtime_min} min${result.media_type === "tv" ? " / ep" : ""}` : null,
     result.genres.slice(0, 3).join(", ") || null,

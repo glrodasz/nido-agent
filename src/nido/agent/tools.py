@@ -28,8 +28,8 @@ HIDDEN_STATE_KEY = "hidden_titles"
 # page by page until ENOUGH_ELIGIBLE titles pass the age and availability rules, so the shortlist
 # ranks among titles the family can actually watch, not among whatever happens to be popular.
 DISCOVER_PAGE_SIZE = 20
-MAX_DISCOVER_PAGES = 5
-ENOUGH_ELIGIBLE = 15
+MAX_DISCOVER_PAGES = 8
+ENOUGH_ELIGIBLE = 30
 
 
 # Cache lifetimes. Offers change monthly, so details (which carry them) are re-fetched daily; the
@@ -185,8 +185,8 @@ class Toolbox:
                 default. Only affects where titles can be watched, not age ratings.
             prefer_genres: genres to rank higher without excluding others, e.g. the family's
                 favourites.
-            released_since: only titles released (series: first aired) in this year or later,
-                e.g. 2022 when the parent asks for new or recent titles.
+            released_since: only titles released in this year or later (series: that aired an
+                episode since then, so a series still running counts as recent).
         """
         # Banned titles come from session state the server writes each turn, never from the model.
         hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
@@ -440,6 +440,8 @@ def _present(ranked: Ranked, regions: list[str]) -> dict[str, Any]:
         "tmdb_id": t.tmdb_id,
         "imdb_id": t.imdb_id,
         "year": t.year,
+        # Movie release, or a series' latest episode: what the Find page sorts newest first by.
+        "released_on": t.latest_date.isoformat() if t.latest_date else None,
         "runtime_min": t.runtime_min,
         "genres": t.genres,
         "synopsis": t.synopsis,

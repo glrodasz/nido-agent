@@ -9,7 +9,10 @@ import {
   parseAges,
   parseRegions,
   posterHue,
+  newestFirst,
+  releasedSince,
   seenLast,
+  yearSpan,
   serviceBrand,
   sortOffers,
   verdictFor,
@@ -162,6 +165,33 @@ describe("posterHue", () => {
   });
 });
 
+describe("newestFirst", () => {
+  it("puts the latest release first and undated titles last", () => {
+    const items = [
+      { id: 1, released_on: "2019-05-01" },
+      { id: 2, released_on: null },
+      { id: 3, released_on: "2025-11-20" },
+      { id: 4, released_on: "2022-03-04" },
+    ];
+    expect(newestFirst(items).map((i) => i.id)).toEqual([3, 4, 1, 2]);
+  });
+
+  it("keeps the ranking between titles out on the same day", () => {
+    const items = [
+      { id: 1, released_on: "2024-01-01" },
+      { id: 2, released_on: "2024-01-01" },
+    ];
+    expect(newestFirst(items).map((i) => i.id)).toEqual([1, 2]);
+  });
+});
+
+describe("releasedSince", () => {
+  it("counts whole years back from today", () => {
+    expect(releasedSince(5, new Date("2026-10-28"))).toBe(2021);
+    expect(releasedSince(null)).toBeNull();
+  });
+});
+
 describe("seenLast", () => {
   it("moves seen titles to the end and keeps the ranking within each group", () => {
     const seen = new Set([1, 3]);
@@ -170,5 +200,13 @@ describe("seenLast", () => {
 
   it("leaves a list without seen titles as it was", () => {
     expect(seenLast([3, 1, 2], () => false)).toEqual([3, 1, 2]);
+  });
+});
+
+describe("yearSpan", () => {
+  it("spans a series up to its latest episode and leaves movies as one year", () => {
+    expect(yearSpan({ year: 2018, media_type: "tv", released_on: "2026-09-14" })).toBe("2018–2026");
+    expect(yearSpan({ year: 2024, media_type: "tv", released_on: "2024-05-01" })).toBe("2024");
+    expect(yearSpan({ year: 2023, media_type: "movie", released_on: "2023-09-24" })).toBe("2023");
   });
 });

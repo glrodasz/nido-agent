@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from nido.models import (
     AccessType,
@@ -19,6 +19,7 @@ from nido.ranking import (
     age_baseline,
     evaluate,
     near_misses,
+    recency,
     shortlist,
     weighted_quality,
 )
@@ -122,6 +123,35 @@ def test_few_votes_do_not_outrank_many():
     assert weighted_quality(make(1, rating=9.0, votes=300).rating) < weighted_quality(
         make(2, rating=8.1, votes=400_000).rating
     )
+
+
+def test_low_vote_kids_show_is_not_flattened_to_the_prior():
+    # Gabby's Dollhouse: 7.1 from about 1,200 votes should read closer to 7 than to 6.5.
+    assert weighted_quality(make(1, rating=7.1, votes=1_171).rating) > 6.8
+
+
+def test_recency_favours_new_titles_and_running_series():
+    today = date(2026, 10, 28)
+    new = Title(media_type=MediaType.MOVIE, tmdb_id=1, name="n", release_date=date(2026, 6, 1))
+    old = Title(media_type=MediaType.MOVIE, tmdb_id=2, name="o", release_date=date(1991, 1, 1))
+    running = Title(
+        media_type=MediaType.TV,
+        tmdb_id=3,
+        name="r",
+        release_date=date(2018, 10, 1),
+        last_air_date=date(2026, 9, 1),
+    )
+    assert recency(new, today) > 0.95
+    assert recency(old, today) == 0
+    assert recency(running, today) > 0.9
+    assert recency(Title(media_type=MediaType.MOVIE, tmdb_id=4, name="u"), today) == 0
+
+
+def test_newer_title_ranks_above_an_equally_rated_older_one():
+    newer, older = make(1), make(2)
+    newer.title.release_date = date.today()
+    older.title.release_date = date(1995, 1, 1)
+    assert evaluate(newer, PROFILE).score > evaluate(older, PROFILE).score
 
 
 def test_shortlist_is_capped_and_sorted():

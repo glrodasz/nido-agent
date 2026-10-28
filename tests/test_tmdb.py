@@ -54,6 +54,7 @@ SERIES = {
     "id": 2,
     "name": "Bluey",
     "first_air_date": "2018-10-01",
+    "last_air_date": "2024-04-21",
     "episode_run_time": [7],
     "number_of_seasons": 3,
     "external_ids": {"imdb_id": "tt7678620"},
@@ -71,6 +72,30 @@ def test_parse_movie_title():
 def test_parse_series_title_uses_episode_runtime_and_external_imdb_id():
     title = parse_title(MediaType.TV, SERIES)
     assert (title.runtime_min, title.season_count, title.imdb_id) == (7, 3, "tt7678620")
+    # A series still airing is as recent as its latest episode, not its first.
+    assert str(title.latest_date) == "2024-04-21"
+
+
+def test_movie_recency_is_its_release_date():
+    title = parse_title(MediaType.MOVIE, MOVIE)
+    assert title.latest_date == title.release_date and title.release_date.year == 2017
+
+
+@respx.mock
+async def test_release_filter_uses_release_for_movies_and_any_episode_for_series():
+    movies = respx.get(f"{BASE_URL}/discover/movie").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    series = respx.get(f"{BASE_URL}/discover/tv").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    client = TmdbClient("token")
+    await client.discover(MediaType.MOVIE, region="SE", min_year=2021)
+    await client.discover(MediaType.TV, region="SE", min_year=2021)
+    await client.aclose()
+    assert movies.calls.last.request.url.params["primary_release_date.gte"] == "2021-01-01"
+    params = series.calls.last.request.url.params
+    assert params["air_date.gte"] == "2021-01-01" and "first_air_date.gte" not in params
 
 
 def test_classifications_for_one_region_collapse_duplicates():
