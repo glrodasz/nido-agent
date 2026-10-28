@@ -2,6 +2,7 @@ import { useId, useState } from "preact/hooks";
 import { MAX_CHILD_AGE, banLabel, defaultBanUntil } from "../logic/format";
 import type { MarkChange, TitleMark } from "../logic/types";
 import Icon from "./Icon";
+import Spinner, { usePending } from "./Spinner";
 
 interface Props {
   mark: TitleMark | null;
@@ -28,17 +29,15 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
   const canAgeBan = youngest < MAX_CHILD_AGE;
   const [scope, setScope] = useState<"age" | "always">(canAgeBan ? "age" : "always");
   const [untilAge, setUntilAge] = useState(() => defaultBanUntil(youngest, baselineAge));
-  const [busy, setBusy] = useState(false);
+  const [pending, track] = usePending();
+  const busy = pending !== null;
   const group = useId();
 
-  async function change(next: MarkChange) {
-    setBusy(true);
-    try {
+  function change(key: string, next: MarkChange) {
+    return track(key, async () => {
       await onMark(next);
       setChoosing(false);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   if (mark?.ban && mark.ban_active) {
@@ -47,7 +46,14 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
         <p class="notice notice-warn hidden-note">
           <Icon name="eye-off" />
           {banLabel(mark.ban, true)}. Nido won't suggest it.{" "}
-          <button type="button" class="link" disabled={busy} onClick={() => change({ ban: null })}>
+          <button
+            type="button"
+            class="link"
+            disabled={busy}
+            aria-busy={pending === "undo"}
+            onClick={() => change("undo", { ban: null })}
+          >
+            {pending === "undo" && <Spinner />}
             Undo
           </button>
         </p>
@@ -70,14 +76,16 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
               aria-label={label}
               title={HINTS[field] ?? label}
               disabled={busy}
+              aria-busy={pending === field}
               // A favourite to rewatch has been seen, so turning it on marks it seen too.
               onClick={() =>
                 change(
+                  field,
                   field === "rewatch" && !on ? { rewatch: true, seen: true } : { [field]: !on },
                 )
               }
             >
-              <Icon name={icon} filled={on && icon === "heart"} />
+              {pending === field ? <Spinner /> : <Icon name={icon} filled={on && icon === "heart"} />}
               <span class="mark-label">{label}</span>
             </button>
           );
@@ -137,13 +145,17 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
               type="button"
               class="btn btn-small btn-primary"
               disabled={busy}
+              aria-busy={pending === "ban"}
               onClick={() =>
-                change({ ban: scope === "always" ? { scope } : { scope, until_age: untilAge } })
+                change("ban", {
+                  ban: scope === "always" ? { scope } : { scope, until_age: untilAge },
+                })
               }
             >
+              {pending === "ban" && <Spinner />}
               Hide it
             </button>
-            <button type="button" class="link" onClick={() => setChoosing(false)}>
+            <button type="button" class="link" disabled={busy} onClick={() => setChoosing(false)}>
               Cancel
             </button>
           </div>

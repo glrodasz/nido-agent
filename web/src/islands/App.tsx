@@ -17,6 +17,7 @@ import HiddenTitles from "./HiddenTitles";
 import Icon from "./Icon";
 import Logo from "./Logo";
 import ProfileForm from "./ProfileForm";
+import Spinner from "./Spinner";
 import Watchlist from "./Watchlist";
 
 type Tab = "find" | "watchlist" | "family";
@@ -171,22 +172,30 @@ export default function App() {
   }
 
   async function setWatched(item: WatchlistItem, watched: boolean) {
-    const updated = await api.save(
-      {
-        media_type: item.title.media_type,
-        tmdb_id: item.title.tmdb_id,
-        title: item.name,
-        year: item.year,
-        poster_url: item.poster_url,
-      },
-      watched,
-    );
-    setWatchlist((w) => w.map((i) => (itemKey(i) === itemKey(item) ? updated : i)));
+    try {
+      const updated = await api.save(
+        {
+          media_type: item.title.media_type,
+          tmdb_id: item.title.tmdb_id,
+          title: item.name,
+          year: item.year,
+          poster_url: item.poster_url,
+        },
+        watched,
+      );
+      setWatchlist((w) => w.map((i) => (itemKey(i) === itemKey(item) ? updated : i)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update the watchlist.");
+    }
   }
 
   async function remove(item: WatchlistItem) {
-    await api.unsave(item.title.media_type, item.title.tmdb_id);
-    setWatchlist((w) => w.filter((i) => itemKey(i) !== itemKey(item)));
+    try {
+      await api.unsave(item.title.media_type, item.title.tmdb_id);
+      setWatchlist((w) => w.filter((i) => itemKey(i) !== itemKey(item)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update the watchlist.");
+    }
   }
 
   function toggleTheme() {
@@ -242,7 +251,12 @@ export default function App() {
 
   let body;
   if (session.state === "loading" || (session.state === "in" && profile === undefined && !error)) {
-    body = <p class="muted center">Loading…</p>;
+    body = (
+      <p class="loading" role="status">
+        <Spinner />
+        Loading…
+      </p>
+    );
   } else if (session.state === "signed-out") {
     body = (
       <section class="hero">

@@ -2,16 +2,19 @@ import { posterHue } from "../logic/format";
 import type { MarkChange, TitleMark, WatchlistItem } from "../logic/types";
 import { Poster } from "./HiddenTitles";
 import Icon from "./Icon";
+import Spinner, { usePending } from "./Spinner";
 
 interface Props {
   items: WatchlistItem[];
-  onWatched: (item: WatchlistItem, watched: boolean) => void;
-  onRemove: (item: WatchlistItem) => void;
+  onWatched: (item: WatchlistItem, watched: boolean) => Promise<void>;
+  onRemove: (item: WatchlistItem) => Promise<void>;
   marks: TitleMark[];
-  onMark: (mark: TitleMark, change: MarkChange) => void;
+  onMark: (mark: TitleMark, change: MarkChange) => Promise<void>;
 }
 
 export default function Watchlist({ items, onWatched, onRemove, marks, onMark }: Props) {
+  const [pending, track] = usePending();
+  const busy = pending !== null;
   // A hidden title stays out of every list that suggests what to put on.
   const onRepeat = marks
     .filter((m) => m.rewatch && !m.ban_active)
@@ -28,39 +31,51 @@ export default function Watchlist({ items, onWatched, onRemove, marks, onMark }:
   const watched = items.filter((i) => i.watched);
   const list = (group: WatchlistItem[]) => (
     <ul class="watchlist">
-      {group.map((item) => (
-        <li key={`${item.title.media_type}:${item.title.tmdb_id}`} class="wl-item">
-          {item.poster_url ? (
-            <img src={item.poster_url} alt="" width={46} height={69} loading="lazy" />
-          ) : (
-            <div
-              class="poster-empty small"
-              style={{ "--hue": posterHue(item.title.tmdb_id) }}
-              aria-hidden="true"
-            />
-          )}
-          <div class="wl-text">
-            <strong>{item.name}</strong>
-            <span class="muted">
-              {[item.year, item.title.media_type === "tv" ? "Series" : "Movie"]
-                .filter(Boolean)
-                .join(" · ")}
-            </span>
-          </div>
-          <button
-            type="button"
-            class={item.watched ? "key key-small key-on" : "key key-small"}
-            aria-pressed={item.watched}
-            onClick={() => onWatched(item, !item.watched)}
-          >
-            <Icon name="eye" />
-            Watched
-          </button>
-          <button type="button" class="link link-quiet" onClick={() => onRemove(item)}>
-            Remove
-          </button>
-        </li>
-      ))}
+      {group.map((item) => {
+        const key = `${item.title.media_type}:${item.title.tmdb_id}`;
+        return (
+          <li key={key} class="wl-item">
+            {item.poster_url ? (
+              <img src={item.poster_url} alt="" width={46} height={69} loading="lazy" />
+            ) : (
+              <div
+                class="poster-empty small"
+                style={{ "--hue": posterHue(item.title.tmdb_id) }}
+                aria-hidden="true"
+              />
+            )}
+            <div class="wl-text">
+              <strong>{item.name}</strong>
+              <span class="muted">
+                {[item.year, item.title.media_type === "tv" ? "Series" : "Movie"]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </div>
+            <button
+              type="button"
+              class={item.watched ? "key key-small key-on" : "key key-small"}
+              aria-pressed={item.watched}
+              aria-busy={pending === `watched:${key}`}
+              disabled={busy}
+              onClick={() => track(`watched:${key}`, () => onWatched(item, !item.watched))}
+            >
+              {pending === `watched:${key}` ? <Spinner /> : <Icon name="eye" />}
+              Watched
+            </button>
+            <button
+              type="button"
+              class="link link-quiet"
+              aria-busy={pending === `remove:${key}`}
+              disabled={busy}
+              onClick={() => track(`remove:${key}`, () => onRemove(item))}
+            >
+              {pending === `remove:${key}` && <Spinner />}
+              Remove
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
   return (
@@ -86,8 +101,11 @@ export default function Watchlist({ items, onWatched, onRemove, marks, onMark }:
                 <button
                   type="button"
                   class="link link-quiet"
-                  onClick={() => onMark(m, { rewatch: false })}
+                  aria-busy={pending === `repeat:${m.key}`}
+                  disabled={busy}
+                  onClick={() => track(`repeat:${m.key}`, () => onMark(m, { rewatch: false }))}
                 >
+                  {pending === `repeat:${m.key}` && <Spinner />}
                   Remove
                 </button>
               </li>
