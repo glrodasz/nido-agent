@@ -13,13 +13,14 @@ import type {
 import { Fragment } from "preact";
 import Icon from "./Icon";
 import Markdown from "./Markdown";
+import Spinner from "./Spinner";
 import TitleCard from "./TitleCard";
 
 interface Props {
   config: AppConfig;
   profile: Profile;
   savedKeys: Set<string>;
-  onToggleSave: (result: TitleResult) => void;
+  onToggleSave: (result: TitleResult) => Promise<void>;
   marks: Map<string, TitleMark>;
   onMark: (result: TitleResult, change: MarkChange) => Promise<void>;
 }
@@ -123,6 +124,8 @@ export default function Finder({
   // The question the cards answer when they came from Ask Nido; null for the filters.
   const [answering, setAnswering] = useState<string | null>(null);
   const [busy, setBusy] = useState<"search" | "chat" | null>(null);
+  // The quick filter whose search is running, so that chip is the one that spins.
+  const [quickBusy, setQuickBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const session = useRef<string | null>(null);
   const [sinkSeen, setSinkSeen] = useState(loadSeenLast);
@@ -176,10 +179,15 @@ export default function Finder({
     }
   }
 
-  function quick(toggle: (f: Filters) => Filters) {
+  async function quick(label: string, toggle: (f: Filters) => Filters) {
     const next = toggle(filters);
     setFilters(next);
-    search(undefined, next);
+    setQuickBusy(label);
+    try {
+      await search(undefined, next);
+    } finally {
+      setQuickBusy(null);
+    }
   }
 
   async function chat(e: Event, text = message) {
@@ -236,8 +244,20 @@ export default function Finder({
               maxLength={2000}
               aria-label="Message"
             />
-            <button class="btn btn-primary" type="submit" disabled={busy !== null || !message.trim()}>
-              Ask Nido
+            <button
+              class="btn btn-primary"
+              type="submit"
+              disabled={busy !== null || !message.trim()}
+              aria-busy={busy === "chat"}
+            >
+              {busy === "chat" ? (
+                <>
+                  <Spinner />
+                  Asking…
+                </>
+              ) : (
+                "Ask Nido"
+              )}
             </button>
           </form>
         )}
@@ -249,8 +269,10 @@ export default function Finder({
               class={q.on(filters) ? "chip-btn chip-on" : "chip-btn"}
               aria-pressed={q.on(filters)}
               disabled={busy !== null}
-              onClick={() => quick(q.toggle)}
+              aria-busy={quickBusy === q.label}
+              onClick={() => quick(q.label, q.toggle)}
             >
+              {quickBusy === q.label && <Spinner />}
               {q.label}
             </button>
           ))}
@@ -274,7 +296,10 @@ export default function Finder({
             ))}
             {busy === "chat" && (
               <li class="turn turn-nido">
-                <p class="muted">Looking through your services…</p>
+                <p class="loading loading-inline">
+                  <Spinner />
+                  Looking through your services…
+                </p>
               </li>
             )}
           </ol>
@@ -343,8 +368,20 @@ export default function Finder({
             ))}
           </div>
           <div>
-            <button class="btn btn-small" type="submit" disabled={busy !== null}>
-              {busy === "search" ? "Searching…" : "Show picks"}
+            <button
+              class="btn btn-small"
+              type="submit"
+              disabled={busy !== null}
+              aria-busy={busy === "search" && quickBusy === null}
+            >
+              {busy === "search" && quickBusy === null ? (
+                <>
+                  <Spinner />
+                  Searching…
+                </>
+              ) : (
+                "Show picks"
+              )}
             </button>
           </div>
         </form>
@@ -356,8 +393,15 @@ export default function Finder({
         </p>
       )}
 
+      {!results && busy === "search" && (
+        <p class="loading" role="status">
+          <Spinner />
+          Finding picks for your family…
+        </p>
+      )}
+
       {results && (
-        <section class="results" aria-labelledby="picks-title">
+        <section class="results" aria-labelledby="picks-title" aria-busy={busy !== null}>
           <header class="results-head">
             <h2 id="picks-title">
               {results.results.length > 0 ? "Picks for your family" : "Closest picks"}
@@ -396,6 +440,12 @@ export default function Finder({
               )}
             </div>
           </header>
+          {busy !== null && (
+            <p class="loading loading-inline" role="status">
+              <Spinner />
+              {busy === "chat" ? "Nido is looking for new picks…" : "Updating picks…"}
+            </p>
+          )}
           {answering && (
             <p class="results-for muted">
               <Icon name="search" />

@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { categoryLabel, GENRES, parseAges, parseRegions } from "../logic/format";
 import type { AppConfig, Profile } from "../logic/types";
+import Spinner from "./Spinner";
 
 interface Props {
   config: AppConfig;
@@ -164,8 +165,17 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
         </p>
       )}
       <div class="actions">
-        <button class="btn btn-primary" type="submit" disabled={saving}>
-          {saving ? "Saving…" : firstRun ? "Start finding" : "Save profile"}
+        <button class="btn btn-primary" type="submit" disabled={saving} aria-busy={saving}>
+          {saving ? (
+            <>
+              <Spinner />
+              Saving…
+            </>
+          ) : firstRun ? (
+            "Start finding"
+          ) : (
+            "Save profile"
+          )}
         </button>
         {saved && !firstRun && <span class="muted">Saved.</span>}
       </div>

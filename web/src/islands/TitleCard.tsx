@@ -12,6 +12,7 @@ import {
 } from "../logic/format";
 import type { MarkChange, Offer, TitleMark, TitleResult } from "../logic/types";
 import Icon from "./Icon";
+import Spinner from "./Spinner";
 import TitleMarks from "./TitleMarks";
 
 interface Props {
@@ -19,7 +20,7 @@ interface Props {
   services: string[];
   showRegion: boolean;
   saved: boolean;
-  onToggleSave: (result: TitleResult) => void;
+  onToggleSave: (result: TitleResult) => Promise<void>;
   mark: TitleMark | null;
   youngest: number;
   onMark: (change: MarkChange) => Promise<void>;
@@ -52,6 +53,7 @@ export default function TitleCard({
   onMark,
 }: Props) {
   const [posterFailed, setPosterFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
   const headingId = useId();
   const sorted = sortOffers(result.where_to_watch, services);
   const included = sorted.filter((o) => isIncluded(o, services));
@@ -97,9 +99,18 @@ export default function TitleCard({
             type="button"
             class={saved ? "key key-small key-on" : "key key-small"}
             aria-pressed={saved}
-            onClick={() => onToggleSave(result)}
+            aria-busy={saving}
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onToggleSave(result);
+              } finally {
+                setSaving(false);
+              }
+            }}
           >
-            <Icon name="bookmark" filled={saved} />
+            {saving ? <Spinner /> : <Icon name="bookmark" filled={saved} />}
             {saved ? "Saved" : "Save"}
           </button>
         </header>

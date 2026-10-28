@@ -1,14 +1,16 @@
 import { useState } from "preact/hooks";
 import { banLabel, posterHue } from "../logic/format";
 import type { MarkChange, TitleMark } from "../logic/types";
+import Spinner, { usePending } from "./Spinner";
 
 interface Props {
   marks: TitleMark[];
-  onMark: (mark: TitleMark, change: MarkChange) => void;
+  onMark: (mark: TitleMark, change: MarkChange) => Promise<void>;
 }
 
 /** Every title the family told Nido not to suggest, including age bans that have lifted. */
 export default function HiddenTitles({ marks, onMark }: Props) {
+  const [pending, track] = usePending();
   const banned = marks
     .filter((m) => m.ban)
     .sort((a, b) => Number(b.ban_active) - Number(a.ban_active));
@@ -37,12 +39,24 @@ export default function HiddenTitles({ marks, onMark }: Props) {
                 <button
                   type="button"
                   class="btn btn-small"
-                  onClick={() => onMark(m, { ban: { scope: "always" } })}
+                  aria-busy={pending === `always:${m.key}`}
+                  disabled={pending !== null}
+                  onClick={() =>
+                    track(`always:${m.key}`, () => onMark(m, { ban: { scope: "always" } }))
+                  }
                 >
+                  {pending === `always:${m.key}` && <Spinner />}
                   Hide at every age
                 </button>
               )}
-              <button type="button" class="btn btn-small" onClick={() => onMark(m, { ban: null })}>
+              <button
+                type="button"
+                class="btn btn-small"
+                aria-busy={pending === `clear:${m.key}`}
+                disabled={pending !== null}
+                onClick={() => track(`clear:${m.key}`, () => onMark(m, { ban: null }))}
+              >
+                {pending === `clear:${m.key}` && <Spinner />}
                 {m.ban_active ? "Suggest again" : "Clear"}
               </button>
             </li>

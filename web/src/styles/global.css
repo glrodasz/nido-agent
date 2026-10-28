@@ -1359,3 +1359,70 @@ a.imdb:hover {
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* Loading: every control that waits on the server spins and stops taking presses. */
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.12em;
+  animation: spin 700ms linear infinite;
+}
+
+.btn .spinner,
+.link .spinner {
+  margin-right: 0.4rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2s;
+  }
+}
+
+.chip-btn:disabled,
+.link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The control that started the request stays fully visible; only its siblings fade. */
+.chip-btn[aria-busy="true"],
+.key[aria-busy="true"],
+.btn[aria-busy="true"],
+.link[aria-busy="true"] {
+  opacity: 1;
+  cursor: progress;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 1.5rem 0;
+  color: var(--muted);
+}
+
+.loading-inline {
+  justify-content: flex-start;
+  padding: 0;
+}
+
+/* Old picks stay readable but dimmed while new ones load. */
+.results[aria-busy="true"] > :not(.results-head, .loading) {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 150ms;
+}

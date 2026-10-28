@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../logic/api";
 import type { Family, FamilyMember } from "../logic/types";
+import Spinner from "./Spinner";
 
 interface Props {
   /** Called after the signed-in account leaves the family. */
@@ -13,6 +14,7 @@ export default function FamilyMembers({ onLeft }: Props) {
   const [link, setLink] = useState<{ url: string; expires: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,12 +53,16 @@ export default function FamilyMembers({ onLeft }: Props) {
 
   async function remove(m: FamilyMember) {
     const leaving = m.you;
+    setRemoving(m.uid);
+    setError(null);
     try {
       await api.removeMember(m.uid);
       if (leaving) onLeft();
       else setFamily((f) => f && { ...f, members: f.members.filter((x) => x.uid !== m.uid) });
     } catch (err) {
       setError(message(err));
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -65,6 +71,12 @@ export default function FamilyMembers({ onLeft }: Props) {
     <section class="panel family-members">
       <h2 class="section-title">Who shares this family</h2>
       <p class="muted">Everyone here sees and edits the same profile, watchlist and marks.</p>
+      {!family && !error && (
+        <p class="loading loading-inline" role="status">
+          <Spinner />
+          Loading who's here…
+        </p>
+      )}
       {family && (
         <ul class="members">
           {family.members.map((m) => (
@@ -81,7 +93,14 @@ export default function FamilyMembers({ onLeft }: Props) {
                 </span>
               </span>
               {m.role !== "owner" && (owner || m.you) && (
-                <button type="button" class="btn btn-small" onClick={() => remove(m)}>
+                <button
+                  type="button"
+                  class="btn btn-small"
+                  aria-busy={removing === m.uid}
+                  disabled={removing !== null}
+                  onClick={() => remove(m)}
+                >
+                  {removing === m.uid && <Spinner />}
                   {m.you ? "Leave" : "Remove"}
                 </button>
               )}
@@ -108,8 +127,15 @@ export default function FamilyMembers({ onLeft }: Props) {
           </div>
         </div>
       ) : (
-        <button type="button" class="btn" disabled={busy} onClick={createLink}>
-          Invite someone
+        <button type="button" class="btn" disabled={busy} aria-busy={busy} onClick={createLink}>
+          {busy ? (
+            <>
+              <Spinner />
+              Creating link…
+            </>
+          ) : (
+            "Invite someone"
+          )}
         </button>
       )}
       {error && (
