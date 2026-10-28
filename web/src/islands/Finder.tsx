@@ -248,16 +248,8 @@ export default function Finder({
               class="btn btn-primary"
               type="submit"
               disabled={busy !== null || !message.trim()}
-              aria-busy={busy === "chat"}
             >
-              {busy === "chat" ? (
-                <>
-                  <Spinner />
-                  Asking…
-                </>
-              ) : (
-                "Ask Nido"
-              )}
+              Ask Nido
             </button>
           </form>
         )}
@@ -393,13 +385,6 @@ export default function Finder({
         </p>
       )}
 
-      {!results && busy === "search" && (
-        <p class="loading" role="status">
-          <Spinner />
-          Finding picks for your family…
-        </p>
-      )}
-
       {results && (
         <section class="results" aria-labelledby="picks-title" aria-busy={busy !== null}>
           <header class="results-head">
@@ -440,12 +425,6 @@ export default function Finder({
               )}
             </div>
           </header>
-          {busy !== null && (
-            <p class="loading loading-inline" role="status">
-              <Spinner />
-              {busy === "chat" ? "Nido is looking for new picks…" : "Updating picks…"}
-            </p>
-          )}
           {answering && (
             <p class="results-for muted">
               <Icon name="search" />
