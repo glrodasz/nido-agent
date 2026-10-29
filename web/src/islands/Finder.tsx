@@ -304,22 +304,27 @@ export default function Finder({
           More filters
         </summary>
         <form class="filters" onSubmit={search} aria-label="Filters">
-          <div class="filters-row">
-            <div class="segmented segmented-small" role="group" aria-label="Type">
-              {(["movie", "tv"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={mediaType === t}
-                  class={mediaType === t ? "active" : ""}
-                  onClick={() => set({ mediaType: t })}
-                >
-                  {t === "movie" ? "Movies" : "Series"}
-                </button>
-              ))}
+          <div class="filters-grid">
+            <div class="filter-field">
+              <span class="filter-label" id="filter-type">
+                Type
+              </span>
+              <div class="segmented segmented-small" role="group" aria-labelledby="filter-type">
+                {(["movie", "tv"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={mediaType === t}
+                    class={mediaType === t ? "active" : ""}
+                    onClick={() => set({ mediaType: t })}
+                  >
+                    {t === "movie" ? "Movies" : "Series"}
+                  </button>
+                ))}
+              </div>
             </div>
-            <label class="inline-field">
-              <span>Released</span>
+            <label class="filter-field">
+              <span class="filter-label">Released</span>
               <select value={since} onChange={(e) => set({ since: e.currentTarget.value })}>
                 {SINCE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -328,40 +333,48 @@ export default function Finder({
                 ))}
               </select>
             </label>
-            <label class="inline-field">
-              <span>Max length (min)</span>
-              <input
-                type="number"
-                min={1}
-                value={runtime}
-                placeholder={profile.max_runtime_min?.toString() ?? "Any"}
-                onInput={(e) => set({ runtime: e.currentTarget.value })}
-              />
+            <label class="filter-field">
+              <span class="filter-label">Max length</span>
+              <span class="filter-unit">
+                <input
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={runtime}
+                  placeholder={profile.max_runtime_min?.toString() ?? "Any"}
+                  onInput={(e) => set({ runtime: e.currentTarget.value })}
+                />
+                <span aria-hidden="true">min</span>
+              </span>
             </label>
-            <label class="inline-field">
-              <span>Min IMDb score</span>
+            <label class="filter-field">
+              <span class="filter-label">Min IMDb score</span>
               <input
                 type="number"
                 min={0}
                 max={10}
                 step={0.1}
+                inputMode="decimal"
                 value={minImdb}
                 placeholder={profile.min_imdb_rating?.toString() ?? "Any"}
                 onInput={(e) => set({ minImdb: e.currentTarget.value })}
               />
             </label>
           </div>
-          <div class="chips chips-small">
-            {GENRES.map((g) => (
-              <label key={g} class="chip">
-                <input type="checkbox" checked={genres.includes(g)} onChange={() => toggleGenre(g)} />
-                {g}
-              </label>
-            ))}
-          </div>
-          <div>
+          <fieldset class="filter-field filter-genres">
+            <legend class="filter-label">Genres</legend>
+            <div class="chips chips-small">
+              {GENRES.map((g) => (
+                <label key={g} class="chip">
+                  <input type="checkbox" checked={genres.includes(g)} onChange={() => toggleGenre(g)} />
+                  {g}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div class="filters-actions">
             <button
-              class="btn btn-small"
+              class="btn btn-primary"
               type="submit"
               disabled={busy !== null}
               aria-busy={busy === "search" && quickBusy === null}

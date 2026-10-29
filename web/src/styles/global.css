@@ -715,43 +715,97 @@ input:not([type="checkbox"]) {
 
 .filters {
   display: grid;
-  gap: 0.75rem;
+  gap: 1.1rem;
   margin-top: 0.5rem;
-  padding: 1rem;
+  padding: 1.1rem;
   background: var(--surface-2);
   border-radius: 12px;
 }
 
-.filters-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-  align-items: center;
+/* Type, Released, Length, Score: one labelled column each, two per row on phones. */
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
 }
 
-.inline-field {
-  display: inline-flex;
+.filter-field {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  min-width: 0;
+}
+
+fieldset.filter-field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.filter-label {
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.filter-field .segmented {
+  display: flex;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.15rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.filter-field .segmented button {
+  flex: 1;
+  border-radius: 6px;
+}
+
+.filter-field select,
+.filter-field input:not([type="checkbox"]) {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+  border-radius: 8px;
+}
+
+.filter-field select {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.filter-unit {
+  display: flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.85rem;
   color: var(--muted);
 }
 
-.inline-field input:not([type="checkbox"]) {
-  width: 4.5rem;
-  padding: 0.3rem 0.55rem;
-  font-size: 0.875rem;
-  border-radius: 8px;
+.filters-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
 }
 
-.inline-field select {
-  font: inherit;
-  font-size: 0.875rem;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.3rem 0.45rem;
+@media (max-width: 560px) {
+  .filters-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters-actions .btn {
+    flex: 1;
+  }
 }
 
 .segmented-small button {
