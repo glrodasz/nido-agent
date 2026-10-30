@@ -19,6 +19,10 @@ to the family. A verified email on NIDO_ALLOWED_EMAILS starts its own family on 
 (family id = its uid, so data saved before families existed stays put); any other Google account
 gets in only through an invite link.
 
+Search and chat count against daily quotas per family (NIDO_MAX_SEARCHES_PER_DAY,
+NIDO_MAX_CHAT_TURNS_PER_DAY), kept in the store so restarts do not reset them; past the quota they
+answer 429, and below it they report `quota_left`.
+
 Banned titles are left out of search and chat by code: the server hands their keys to the
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
 
@@ -205,25 +209,6 @@ def describe_family(profile: FamilyProfile | None) -> str:
     return "\n".join(lines)
 
 
-class ChatLimiter:
-    """Chat turns per user per UTC day. In memory: Cloud Run runs one instance (max-instances 1)."""
-
-    def __init__(self, per_day: int) -> None:
-        self._per_day = per_day
-        self._day: date | None = None
-        self._counts: dict[str, int] = {}
-
-    def take(self, uid: str) -> bool:
-        today = datetime.now(UTC).date()
-        if today != self._day:
-            self._day, self._counts = today, {}
-        used = self._counts.get(uid, 0)
-        if used >= self._per_day:
-            return False
-        self._counts[uid] = used + 1
-        return True
-
-
 # Tools whose output the web app shows as title cards.
 TITLE_TOOLS = ("find_titles", "look_up_title")
 
@@ -327,7 +312,12 @@ def create_app(
         from google.adk.sessions import InMemorySessionService
 
         runner = Runner(app=build_app(settings, toolbox), session_service=InMemorySessionService())
-    limiter = ChatLimiter(settings.max_chat_turns_per_day)
+    limits = {"chat": settings.max_chat_turns_per_day, "search": settings.max_searches_per_day}
+    over_limit = {
+        "chat": "Your family has used today's {limit} Ask Nido questions. They come back "
+        "tomorrow; the filters still work.",
+        "search": "Your family has used today's {limit} searches. They come back tomorrow.",
+    }
     # Per chat session: every title the tools returned, by key, so later answers get cards.
     session_titles: OrderedDict[tuple[str, str], dict[str, dict[str, Any]]] = OrderedDict()
 
@@ -424,6 +414,14 @@ def create_app(
         await store.put_profile(family, profile)
         return {"profile": profile.model_dump(mode="json")}
 
+    async def take_quota(family: str, kind: str) -> int:
+        """Counts one request against the family's daily quota; returns how many are left."""
+        limit = limits[kind]
+        left = await store.take_quota(family, kind, datetime.now(UTC).date(), limit)
+        if left is None:
+            raise HTTPException(429, over_limit[kind].format(limit=limit))
+        return left
+
     async def require_profile(family: str) -> FamilyProfile:
         profile = await store.get_profile(family)
         if profile is None:
@@ -433,15 +431,16 @@ def create_app(
     @app.post("/api/search")
     async def search(request: SearchRequest, family: Family) -> dict[str, Any]:
         profile = await require_profile(family)
+        left = await take_quota(family, "search")
         marks = await store.list_marks(family)
-        return with_marks(await find(profile, request, marks), marks, profile) or {}
+        found = with_marks(await find(profile, request, marks), marks, profile) or {}
+        return {**found, "quota_left": left}
 
     @app.post("/api/chat")
     async def chat(request: ChatRequest, user: CurrentUser, family: Family) -> dict[str, Any]:
         if runner is None:
             raise HTTPException(503, "chat is off: no model credentials on the server")
-        if not limiter.take(user.uid):
-            raise HTTPException(429, "daily chat limit reached; the filters still work")
+        left = await take_quota(family, "chat")
         from google.genai import types
 
         profile = await store.get_profile(family)
@@ -497,6 +496,7 @@ def create_app(
             "reply": text,
             "results": with_marks(chat_cards(text, results, known), marks, profile),
             "note": note,
+            "quota_left": left,
         }
 
     @app.get("/api/watchlist")

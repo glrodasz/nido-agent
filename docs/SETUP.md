@@ -100,7 +100,7 @@ bootstrap prints the `gh variable set` commands with the values filled in.
 | `FIREBASE_API_KEY` | from step 1.4 |
 | `FIREBASE_AUTH_DOMAIN` | `my-project.firebaseapp.com` |
 | `FIREBASE_APP_ID` | `1:123:web:abc` |
-| `NIDO_MODEL`, `NIDO_FALLBACK_MODEL`, `NIDO_REGIONS` | optional overrides of the defaults in `src/nido/config.py` (`NIDO_FALLBACK_MODEL=none` turns the fallback off) |
+| `NIDO_MODEL`, `NIDO_FALLBACK_MODEL`, `NIDO_REGIONS`, `NIDO_MAX_CHAT_TURNS_PER_DAY`, `NIDO_MAX_SEARCHES_PER_DAY` | optional overrides of the defaults in `src/nido/config.py` (`NIDO_FALLBACK_MODEL=none` turns the fallback off) |
 
 Until they are all set, `deploy.yml` only leaves a notice.
 
@@ -126,8 +126,10 @@ Without `GOOGLE_API_KEY` the chat box is hidden and the filter search still work
 ## Cost guard
 
 - Cloud Run scales to zero, runs at most one instance, and bills only while a request runs.
-- Each chat turn is capped at `NIDO_MAX_LLM_CALLS` model calls and each user at
-  `NIDO_MAX_CHAT_TURNS_PER_DAY` turns; the filter search never calls the model.
+- Each chat turn is capped at `NIDO_MAX_LLM_CALLS` model calls. Each family (all its members
+  together) gets `NIDO_MAX_CHAT_TURNS_PER_DAY` Ask Nido turns (default 40) and
+  `NIDO_MAX_SEARCHES_PER_DAY` searches (default 150) per UTC day, counted in Firestore so a
+  restart does not reset them. The filter search never calls the model.
 - TMDB details are cached for a day and IMDb scores for a week in Firestore, so repeated searches
   do not spend the OMDb free quota.
 - The budget sends emails at 50, 90 and 100 % and the kill switch unlinks billing at 100 %.

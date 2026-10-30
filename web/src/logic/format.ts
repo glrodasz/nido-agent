@@ -216,3 +216,9 @@ export function releasedSince(years: number | null, today: Date = new Date()): n
 export function seenLast<T>(items: T[], isSeen: (item: T) => boolean): T[] {
   return [...items.filter((i) => !isSeen(i)), ...items.filter(isSeen)];
 }
+
+/** "1 search", "3 searches", "0 Ask Nido questions". */
+export function plural(count: number, noun: string): string {
+  if (count === 1) return `1 ${noun}`;
+  return `${count} ${noun.endsWith("h") ? `${noun}es` : `${noun}s`}`;
+}

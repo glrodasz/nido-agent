@@ -69,6 +69,8 @@ export interface SearchResult {
   // The closest titles that break the profile, sent only when results is empty.
   near_misses?: TitleResult[];
   attribution: string;
+  // Searches the family has left today (the server's daily quota); only on /api/search.
+  quota_left?: number;
 }
 
 export interface ChatReply {
@@ -76,6 +78,8 @@ export interface ChatReply {
   reply: string;
   results: SearchResult | null;
   note: string | null;
+  // Ask Nido questions the family has left today.
+  quota_left: number;
 }
 
 export interface WatchlistItem {

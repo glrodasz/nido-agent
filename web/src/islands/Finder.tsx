@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "preact/hooks";
 import { api } from "../logic/api";
-import { familyLine, GENRES, newestFirst, releasedSince, seenLast } from "../logic/format";
+import { familyLine, GENRES, newestFirst, plural, releasedSince, seenLast } from "../logic/format";
 import type {
   AppConfig,
   MarkChange,
@@ -38,6 +38,9 @@ interface Filters {
   // "Last N years" as a string for the select; "" is any time.
   since: string;
 }
+
+// Below these, the ask panel says how much of today's quota the family has left.
+const LOW_QUOTA = { chat: 5, search: 10 };
 
 // Families want what is new: the filters start at five years back. A series counts while it
 // still airs, so Bluey stays in even though it started in 2018.
@@ -127,6 +130,8 @@ export default function Finder({
   // The quick filter whose search is running, so that chip is the one that spins.
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // What the family has left of today's quotas, as the last answers reported it.
+  const [left, setLeft] = useState<{ chat?: number; search?: number }>({});
   const session = useRef<string | null>(null);
   const [sinkSeen, setSinkSeen] = useState(loadSeenLast);
   const [order, setOrder] = useState<Order>(loadOrder);
@@ -174,6 +179,7 @@ export default function Finder({
       }),
     );
     if (found) {
+      setLeft((l) => ({ ...l, search: found.quota_left }));
       setResults(found);
       setAnswering(null);
     }
@@ -199,6 +205,7 @@ export default function Finder({
     const reply = await run("chat", () => api.chat(ask, session.current));
     if (!reply) return;
     session.current = reply.session_id;
+    setLeft((l) => ({ ...l, chat: reply.quota_left }));
     const text2 = [reply.reply, reply.note].filter(Boolean).join("\n\n");
     if (text2) setTurns((t) => [...t, { role: "nido", text: text2 }]);
     if (reply.results) {
@@ -224,6 +231,10 @@ export default function Finder({
   }, [results, sinkSeen, order]);
   const anySeen = picks.some(isSeen);
   const firstSunk = picks.length - sunk;
+  const quotaNote = [
+    left.chat !== undefined && left.chat <= LOW_QUOTA.chat && plural(left.chat, "Ask Nido question"),
+    left.search !== undefined && left.search <= LOW_QUOTA.search && plural(left.search, "search"),
+  ].filter(Boolean);
 
   return (
     <div class="finder">
@@ -269,6 +280,9 @@ export default function Finder({
             </button>
           ))}
         </div>
+        {quotaNote.length > 0 && (
+          <p class="quota-note muted">{quotaNote.join(" and ")} left today for your family.</p>
+        )}
         {turns.length > 0 && (
           <ol class="turns" aria-live="polite">
             {turns.map((t, i) => (

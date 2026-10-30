@@ -8,6 +8,7 @@ import {
   formatVotes,
   parseAges,
   parseRegions,
+  plural,
   posterHue,
   newestFirst,
   releasedSince,
@@ -208,5 +209,13 @@ describe("yearSpan", () => {
     expect(yearSpan({ year: 2018, media_type: "tv", released_on: "2026-09-14" })).toBe("2018–2026");
     expect(yearSpan({ year: 2024, media_type: "tv", released_on: "2024-05-01" })).toBe("2024");
     expect(yearSpan({ year: 2023, media_type: "movie", released_on: "2023-09-24" })).toBe("2023");
+  });
+});
+
+describe("plural", () => {
+  it("counts searches and questions", () => {
+    expect(plural(1, "search")).toBe("1 search");
+    expect(plural(3, "search")).toBe("3 searches");
+    expect(plural(0, "Ask Nido question")).toBe("0 Ask Nido questions");
   });
 });
