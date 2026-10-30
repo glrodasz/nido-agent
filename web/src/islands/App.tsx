@@ -15,6 +15,7 @@ import FamilyMembers from "./FamilyMembers";
 import Finder from "./Finder";
 import HiddenTitles from "./HiddenTitles";
 import Icon from "./Icon";
+import Landing from "./Landing";
 import Logo from "./Logo";
 import ProfileForm from "./ProfileForm";
 import Spinner from "./Spinner";
@@ -204,11 +205,20 @@ export default function App() {
     setThemeState(next);
   }
 
+  // Visitors without an invite get the Spanish landing page instead of the app.
+  const landing = session.state === "signed-out" && !invite;
+
   const header = (
-    <header class="top">
+    <header class={landing ? "top top-wide" : "top"}>
       <div class="brand">
         <Logo />
       </div>
+      {landing && (
+        <nav class="lp-nav" aria-label="Secciones" lang="es">
+          <a href="#que-hace">Qué hace</a>
+          <a href="#como-funciona">Cómo funciona</a>
+        </nav>
+      )}
       {session.state === "in" && profile && (
         <nav class="tabs" aria-label="Sections">
           {(
@@ -258,21 +268,14 @@ export default function App() {
       </p>
     );
   } else if (session.state === "signed-out") {
+    // Only an invite link gets here; other visitors see the landing page.
     body = (
       <section class="hero">
         <div class="hero-text">
-          <h1>
-            {invite
-              ? "You're invited to a family on Nido"
-              : "Find something the whole family will enjoy"}
-          </h1>
-          <p>
-            {invite
-              ? "Sign in with Google to join. You'll share the family's profile, watchlist and marks."
-              : "Nido searches the streaming services you already pay for, checks official age ratings from nine countries, and shows where every fact comes from."}
-          </p>
+          <h1>You're invited to a family on Nido</h1>
+          <p>Sign in with Google to join. You'll share the family's profile, watchlist and marks.</p>
           <button type="button" class="btn btn-primary" onClick={() => signIn().catch(() => {})}>
-            {invite ? "Sign in with Google to join" : "Sign in with Google"}
+            Sign in with Google to join
           </button>
         </div>
         <HeroSample />
@@ -313,6 +316,15 @@ export default function App() {
         marks={new Map(marks.map((m) => [m.key, m]))}
         onMark={markTitle}
       />
+    );
+  }
+
+  if (landing) {
+    return (
+      <>
+        {header}
+        <Landing onSignIn={signIn} error={error} />
+      </>
     );
   }
 
