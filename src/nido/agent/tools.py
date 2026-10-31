@@ -4,6 +4,7 @@ every value carries its source so the model can cite it and never has to invent 
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime, timedelta
 from itertools import zip_longest
 from typing import Any
@@ -22,6 +23,38 @@ from nido.store import Store
 
 # Session state key holding the family's banned title keys; the server sets it on every chat turn.
 HIDDEN_STATE_KEY = "hidden_titles"
+# Session state key holding the saved profile's limits ({"children_ages": [...], "avoid": [...]});
+# the server sets it on every chat turn. The model writes the tool arguments and whatever the chat
+# says can steer it ("my kid is 17 now", "violence is fine"), so the tools hold the saved profile
+# as the floor: the model may narrow a search, never loosen it.
+GUARD_STATE_KEY = "family_guard"
+
+# Regions one search may cover: each one multiplies the TMDB calls a search makes.
+MAX_REGIONS = 5
+IMDB_ID = re.compile(r"tt\d{5,10}")
+
+
+def guarded_ages(requested: list[int], guard: dict[str, Any] | None) -> list[int]:
+    """The children who watch this time: only children in the saved profile ("only the 9-year-old
+    tonight" keeps [9]); an age the profile does not have falls back to the whole family."""
+    saved = [int(a) for a in (guard or {}).get("children_ages") or []]
+    if not saved:
+        return requested
+    kept = [a for a in requested if a in saved]
+    return kept or saved
+
+
+def guarded_avoid(requested: list[str] | None, guard: dict[str, Any] | None) -> list[str]:
+    """Categories to avoid: the saved ones always, plus any the parent adds in the chat."""
+    saved = list((guard or {}).get("avoid") or [])
+    return list(dict.fromkeys([*saved, *(requested or [])]))
+
+
+def clean_regions(regions: list[str] | None) -> list[str]:
+    """Two-letter codes only, at most MAX_REGIONS of them."""
+    out = [r.strip().upper() for r in regions or [] if isinstance(r, str)]
+    return list(dict.fromkeys(r for r in out if len(r) == 2 and r.isalpha()))[:MAX_REGIONS]
+
 
 # Discover sorts by worldwide popularity, so for young children its first page is mostly titles
 # rated older (a 4-year-old's series pool opens with Raw, Friends and Seinfeld). Details are read
@@ -188,16 +221,18 @@ class Toolbox:
             released_since: only titles released in this year or later (series: that aired an
                 episode since then, so a series still running counts as recent).
         """
-        # Banned titles come from session state the server writes each turn, never from the model.
+        # Banned titles and the profile's limits come from session state the server writes each
+        # turn, never from the model.
         hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
+        guard = tool_context.state.get(GUARD_STATE_KEY) if tool_context else None
         return await self.search(
             media_type=media_type,
-            children_ages=children_ages,
+            children_ages=guarded_ages(children_ages, guard),
             services=services,
             genres=genres,
             max_runtime_min=max_runtime_min,
             min_imdb_rating=min_imdb_rating,
-            avoid=avoid,
+            avoid=guarded_avoid(avoid, guard),
             regions=regions,
             prefer_genres=prefer_genres,
             released_since=released_since,
@@ -221,7 +256,7 @@ class Toolbox:
         """find_titles without the model: `hidden` lists title keys ("movie:123") the family
         banned, which never reach details, ranking or near misses."""
         kind = MediaType(media_type)
-        regions = [r.upper() for r in regions or self._settings.regions]
+        regions = clean_regions(regions) or list(self._settings.regions)
         available = await self._genres(kind) if genres or prefer_genres else {}
         required = tmdb_source.resolve_genres(genres or [], available)
         preferred = tmdb_source.resolve_genres(prefer_genres or [], available)
@@ -345,14 +380,15 @@ class Toolbox:
             regions: catalog regions, ISO codes like ["SE"]; omit for the family's default.
         """
         hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
+        guard = tool_context.state.get(GUARD_STATE_KEY) if tool_context else None
         return await self.look_up(
             name,
             media_type,
-            children_ages,
+            guarded_ages(children_ages, guard),
             services,
             max_runtime_min=max_runtime_min,
             min_imdb_rating=min_imdb_rating,
-            avoid=avoid,
+            avoid=guarded_avoid(avoid, guard),
             regions=regions,
             hidden=hidden,
         )
@@ -372,7 +408,7 @@ class Toolbox:
         """look_up_title without the model. The title lands in "results" when it fits the family
         and in "near_misses", with what it misses, when it does not."""
         kind = MediaType(media_type)
-        regions = [r.upper() for r in regions or self._settings.regions]
+        regions = clean_regions(regions) or list(self._settings.regions)
         profile = FamilyProfile(
             children_ages=children_ages,
             regions=regions,
@@ -393,7 +429,11 @@ class Toolbox:
             return {**out, "not_found": name}
         ref = TitleRef(media_type=kind, tmdb_id=found[0].tmdb_id)
         if ref.key in set(hidden or []):
-            return {**out, "hidden": found[0].name}
+            return {
+                **out,
+                "hidden": found[0].name,
+                "note": "The family marked this title Don't suggest: say so, never recommend it.",
+            }
         candidate = await self._candidate(kind, ref.tmdb_id, regions)
         await self._rate(candidate)
         ranked = assess(candidate, profile)
@@ -414,7 +454,8 @@ class Toolbox:
         links = {
             "Common Sense Media": f"https://www.commonsensemedia.org/search/{q}",
         }
-        if imdb_id:
+        # The id lands in a URL path, so only a real IMDb id is used.
+        if imdb_id and IMDB_ID.fullmatch(imdb_id):
             links["IMDb Parents Guide"] = f"https://www.imdb.com/title/{imdb_id}/parentalguide"
         return {"links": links, "evidence": "none collected yet; links only"}
 
