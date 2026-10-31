@@ -43,6 +43,7 @@ from collections import OrderedDict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -333,9 +334,18 @@ _MD_LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]*)\)")
 _URL = re.compile(r"\b(?:https?://|www\.)[^\s<>()\[\]]+", re.IGNORECASE)
 
 
-def _host(url: str) -> str:
-    url = re.sub(r"^https?://", "", url, flags=re.IGNORECASE)
-    return re.split(r"[/?#:]", url, maxsplit=1)[0].lower().rstrip(".")
+def _host(url: str) -> str | None:
+    """The host a browser would open, or None for a URL that hides it behind userinfo
+    ("https://imdb.com:80@evil.example/") or has none."""
+    if not re.match(r"^https?://", url, flags=re.IGNORECASE):
+        url = "https://" + url
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return None
+    if "@" in parts.netloc or not parts.hostname:
+        return None
+    return parts.hostname.rstrip(".")
 
 
 def _tool_links(known: dict[str, dict[str, Any]]) -> set[str]:
@@ -356,6 +366,8 @@ def safe_links(reply: str, known: dict[str, dict[str, Any]]) -> str:
     def ok(url: str) -> bool:
         url = url.rstrip(".,;:!?")
         host = _host(url)
+        if host is None:
+            return False
         return url in allowed or any(host == h or host.endswith("." + h) for h in LINK_HOSTS)
 
     def markdown(m: re.Match[str]) -> str:

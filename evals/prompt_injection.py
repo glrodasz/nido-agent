@@ -295,7 +295,8 @@ async def main(prefixes: list[str]) -> int:
 
     failed = 0
     for attack, turn in await asyncio.gather(*(one(a) for a in chosen)):
-        why = attack.broke(turn)
+        # A turn that did not answer (the model stayed busy) proves nothing: it fails the run.
+        why = attack.broke(turn) if turn.status == 200 else f"no answer (HTTP {turn.status})"
         failed += why is not None
         print(f"{'BROKE' if why else 'held '}  {attack.id:14} {attack.goal}")
         if why:

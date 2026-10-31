@@ -256,7 +256,7 @@ class Toolbox:
         """find_titles without the model: `hidden` lists title keys ("movie:123") the family
         banned, which never reach details, ranking or near misses."""
         kind = MediaType(media_type)
-        regions = clean_regions(regions) or list(self._settings.regions)
+        regions = clean_regions(regions) or clean_regions(list(self._settings.regions))
         available = await self._genres(kind) if genres or prefer_genres else {}
         required = tmdb_source.resolve_genres(genres or [], available)
         preferred = tmdb_source.resolve_genres(prefer_genres or [], available)
@@ -408,7 +408,7 @@ class Toolbox:
         """look_up_title without the model. The title lands in "results" when it fits the family
         and in "near_misses", with what it misses, when it does not."""
         kind = MediaType(media_type)
-        regions = clean_regions(regions) or list(self._settings.regions)
+        regions = clean_regions(regions) or clean_regions(list(self._settings.regions))
         profile = FamilyProfile(
             children_ages=children_ages,
             regions=regions,

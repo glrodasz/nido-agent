@@ -88,6 +88,26 @@ def test_regions_are_capped_and_must_be_country_codes():
     assert clean_regions(["se", "SE", "Sweden", "../x", 3]) == ["SE"]  # type: ignore[list-item]
 
 
+async def test_default_regions_are_capped_too():
+    from dataclasses import replace
+
+    many = ("SE", "NO", "DK", "FI", "DE", "FR", "GB")
+
+    async def genres(kind: Any) -> dict[str, int]:
+        return {}
+
+    async def pool(kind: Any, regions: list[str], *args: Any) -> list[Any]:
+        seen_regions.append(regions)
+        return []
+
+    seen_regions: list[list[str]] = []
+    real = Toolbox(replace(Settings(tmdb_token="t"), regions=many))
+    real._genres = genres  # type: ignore[method-assign]
+    real._pool = pool  # type: ignore[method-assign]
+    out = await real.search(media_type="movie", children_ages=[4], services=["netflix"])
+    assert out["regions"] == list(many[:MAX_REGIONS]) == seen_regions[0]
+
+
 def test_guidance_links_only_take_real_imdb_ids():
     toolbox = Toolbox(Settings())
     assert "IMDb Parents Guide" in toolbox.guidance_links("Up", "tt1049413")["links"]
@@ -117,8 +137,10 @@ def test_reply_keeps_guidance_and_tool_links():
         "https://www.commonsensemedia.org/search/Up and https://www.netflix.com/title/1."
     )
     assert safe_links(reply, known) == reply
-    # A look-alike host is not a guidance source.
+    # A look-alike host is not a guidance source, nor is one hidden behind userinfo.
     assert "[link removed]" in safe_links("https://imdb.com.evil.example/x", known)
+    assert "[link removed]" in safe_links("https://imdb.com:80@evil.example/login", known)
+    assert "evil" not in safe_links("[IMDb](https://www.imdb.com@evil.example/)", known)
 
 
 def test_chat_reply_is_cleaned_before_it_reaches_the_app():
