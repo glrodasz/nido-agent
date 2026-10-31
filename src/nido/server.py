@@ -31,6 +31,13 @@ Search and chat return the same result shape (agent.tools._present), so the web 
 shortlist from tool output, never from the model's text. Chat orders those cards by the answer:
 the titles the reply names come first (see chat_cards). Chat sessions live in memory: a cold
 start forgets the conversation, not the profile or the watchlist.
+
+The model writes the tool arguments, and a chat message can steer it, so the limits that matter
+are code too: the saved profile's children's ages and content to avoid reach the tools through
+session state (family_guard), and the chat can narrow a search, never loosen it. Replies lose
+every link outside the guidance sources and the tools' own links (safe_links), so neither a
+message nor a title's synopsis can make Nido carry a phishing link. Live attacks on the model:
+evals/prompt_injection.py.
 """
 
 import logging
@@ -41,6 +48,7 @@ from collections import OrderedDict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -50,7 +58,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from nido.agent.app import APP_NAME, build_app
 from nido.agent.budget import LlmBudgetExceededError
-from nido.agent.tools import HIDDEN_STATE_KEY, Toolbox
+from nido.agent.tools import GUARD_STATE_KEY, HIDDEN_STATE_KEY, Toolbox
 from nido.auth import Authenticator, AuthError, FirebaseVerifier, User
 from nido.catalog import SERVICES, SERVICES_BY_KEY
 from nido.config import Settings, llm_credentials_available
@@ -288,6 +296,77 @@ def _final_text(event: Any) -> str:
     return "".join(p.text or "" for p in event.content.parts if not getattr(p, "thought", False))
 
 
+def family_guard(profile: FamilyProfile | None) -> dict[str, Any]:
+    """The saved profile's limits the tools enforce whatever the chat says (agent.tools)."""
+    if profile is None:
+        return {}
+    return {
+        "children_ages": list(profile.children_ages),
+        "avoid": [c.value for c in profile.avoid_categories],
+    }
+
+
+# Hosts the reply may link to: guidance and metadata sources. Links the tools returned (streaming
+# offers, IMDb pages) are allowed too. Anything else is dropped: the chat text and the titles'
+# synopses are not ours, so a reply could otherwise carry a phishing link ("verify your Netflix
+# account at ...") under Nido's name.
+LINK_HOSTS = (
+    "commonsensemedia.org",
+    "imdb.com",
+    "themoviedb.org",
+    "justwatch.com",
+)
+_MD_LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]*)\)")
+_URL = re.compile(r"\b(?:https?://|www\.)[^\s<>()\[\]]+", re.IGNORECASE)
+
+
+def _host(url: str) -> str | None:
+    """The host a browser would open, or None for a URL that hides it behind userinfo
+    ("https://imdb.com:80@evil.example/") or has none."""
+    if not re.match(r"^https?://", url, flags=re.IGNORECASE):
+        url = "https://" + url
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return None
+    if "@" in parts.netloc or not parts.hostname:
+        return None
+    return parts.hostname.rstrip(".")
+
+
+def _tool_links(known: dict[str, dict[str, Any]]) -> set[str]:
+    links: set[str] = set()
+    for item in known.values():
+        for offer in item.get("where_to_watch") or []:
+            if offer.get("link"):
+                links.add(str(offer["link"]))
+        if (item.get("imdb") or {}).get("url"):
+            links.add(str(item["imdb"]["url"]))
+    return links
+
+
+def safe_links(reply: str, known: dict[str, dict[str, Any]]) -> str:
+    """The reply with every link the app cannot vouch for removed (see LINK_HOSTS)."""
+    allowed = _tool_links(known)
+
+    def ok(url: str) -> bool:
+        url = url.rstrip(".,;:!?")
+        host = _host(url)
+        if host is None:
+            return False
+        return url in allowed or any(host == h or host.endswith("." + h) for h in LINK_HOSTS)
+
+    def markdown(m: re.Match[str]) -> str:
+        return m.group(0) if ok(m.group(2)) else m.group(1)
+
+    def bare(m: re.Match[str]) -> str:
+        return m.group(0) if ok(m.group(0)) else "[link removed]"
+
+    # Markdown links first; bare URLs are then checked outside the links that were kept.
+    parts = re.split(r"(\[[^\]]*\]\([^)\s]*\))", _MD_LINK.sub(markdown, reply))
+    return "".join(p if _MD_LINK.fullmatch(p) else _URL.sub(bare, p) for p in parts)
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -478,6 +557,7 @@ def create_app(
                     "family": describe_family(profile),
                     "today": date.today().isoformat(),
                     HIDDEN_STATE_KEY: hidden,
+                    GUARD_STATE_KEY: family_guard(profile),
                 },
             ):
                 for output in _find_titles_outputs(event):
@@ -494,7 +574,7 @@ def create_app(
                 busy = "The assistant is busy right now. Try again in a minute, or use the filters."
                 raise HTTPException(503, busy) from exc
             note = "The assistant stopped before finishing."
-        text = "\n\n".join(reply).strip()
+        text = safe_links("\n\n".join(reply).strip(), known)
         return {
             "session_id": session.id,
             "reply": text,
