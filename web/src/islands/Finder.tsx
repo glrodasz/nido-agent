@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState } from "preact/hooks";
-import { api } from "../logic/api";
-import { familyLine, GENRES, newestFirst, releasedSince, seenLast } from "../logic/format";
+import { ApiError, api } from "../logic/api";
+import { familyLine, GENRES, newestFirst, plural, releasedSince, seenLast } from "../logic/format";
 import type {
   AppConfig,
   MarkChange,
   MediaType,
   Profile,
+  Quota,
   SearchResult,
   TitleMark,
   TitleResult,
@@ -38,6 +39,12 @@ interface Filters {
   // "Last N years" as a string for the select; "" is any time.
   since: string;
 }
+
+// Below these, the ask panel says how much of today's quota the family has left.
+const LOW_QUOTA = { chat: 5, search: 10 };
+const QUOTA_NOUN = { chat: "Ask Nido question", search: "search" };
+const QUOTA_KINDS = ["chat", "search"] as const;
+type QuotaKind = (typeof QUOTA_KINDS)[number];
 
 // Families want what is new: the filters start at five years back. A series counts while it
 // still airs, so Bluey stays in even though it started in 2018.
@@ -127,6 +134,8 @@ export default function Finder({
   // The quick filter whose search is running, so that chip is the one that spins.
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The family's use of today's quotas, as the last answers reported it.
+  const [quota, setQuota] = useState<{ chat?: Quota; search?: Quota }>({});
   const session = useRef<string | null>(null);
   const [sinkSeen, setSinkSeen] = useState(loadSeenLast);
   const [order, setOrder] = useState<Order>(loadOrder);
@@ -156,7 +165,11 @@ export default function Finder({
     try {
       return await work();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      // Out of today's quota: the tag under the ask box says so, no need for a second message.
+      if (err instanceof ApiError && err.status === 429) {
+        setQuota((q) => ({ ...q, [kind]: { used: q[kind]?.limit ?? 0, limit: q[kind]?.limit ?? 0 } }));
+      }
+      else setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(null);
     }
@@ -174,6 +187,7 @@ export default function Finder({
       }),
     );
     if (found) {
+      setQuota((q) => ({ ...q, search: found.quota }));
       setResults(found);
       setAnswering(null);
     }
@@ -199,6 +213,7 @@ export default function Finder({
     const reply = await run("chat", () => api.chat(ask, session.current));
     if (!reply) return;
     session.current = reply.session_id;
+    setQuota((q) => ({ ...q, chat: reply.quota }));
     const text2 = [reply.reply, reply.note].filter(Boolean).join("\n\n");
     if (text2) setTurns((t) => [...t, { role: "nido", text: text2 }]);
     if (reply.results) {
@@ -224,6 +239,16 @@ export default function Finder({
   }, [results, sinkSeen, order]);
   const anySeen = picks.some(isSeen);
   const firstSunk = picks.length - sunk;
+  const left = (k: QuotaKind) => {
+    const q = quota[k];
+    return q && q.limit !== null ? Math.max(0, q.limit - q.used) : null;
+  };
+  // Owner families have no limit and always see what they used; the rest only when few are left.
+  const shownQuotas = QUOTA_KINDS.filter((k) => {
+    const q = quota[k];
+    if (!q) return false;
+    return q.limit === null ? q.used > 0 : left(k)! <= LOW_QUOTA[k];
+  });
 
   return (
     <div class="finder">
@@ -252,6 +277,37 @@ export default function Finder({
               Ask Nido
             </button>
           </form>
+        )}
+        {shownQuotas.length > 0 && (
+          <div class="quota-tags" role="status">
+            {shownQuotas.map((k) => (
+              <span
+                key={k}
+                class={
+                  left(k) === null
+                    ? "quota-tag quota-free"
+                    : left(k) === 0
+                      ? "quota-tag quota-out"
+                      : "quota-tag"
+                }
+              >
+                <Icon name={k === "chat" ? "bot" : "search"} />
+                {left(k) === null ? (
+                  <span>
+                    <strong>{plural(quota[k]!.used, QUOTA_NOUN[k])}</strong> today
+                  </span>
+                ) : left(k) === 0 ? (
+                  <span>
+                    <strong>{plural(0, QUOTA_NOUN[k]).replace(/^0/, "No")} left today.</strong> They come back tomorrow.
+                  </span>
+                ) : (
+                  <span>
+                    <strong>{plural(left(k)!, QUOTA_NOUN[k])} left</strong> today for your family
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
         )}
         <div class="quick" role="group" aria-label="Quick filters">
           {QUICK.map((q) => (

@@ -3,9 +3,8 @@
 Firebase Hosting forwards /api/** to a public Cloud Run service, so the service itself must decide
 who may use it. The web app signs in with Google through Firebase Auth and sends the ID token as
 `Authorization: Bearer <token>`; the token is verified here against Google's public certificates
-(no service account needed). Any verified Google account gets through; what it may do is decided
-by its family membership (server.py): emails in NIDO_ALLOWED_EMAILS may start a family, everyone
-else needs an invite link from a family member.
+(no service account needed). Any verified Google account gets through and gets a family of its own
+(server.py); families whose owner is in NIDO_ALLOWED_EMAILS have no daily quota.
 """
 
 from __future__ import annotations
@@ -36,7 +35,7 @@ class AuthError(Exception):
 class User:
     uid: str
     email: str | None = None
-    # On NIDO_ALLOWED_EMAILS: may start a family without an invite.
+    # On NIDO_ALLOWED_EMAILS: a family this account owns has no daily quota.
     allowed: bool = False
 
 

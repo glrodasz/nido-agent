@@ -315,7 +315,7 @@ export default function Landing({
                 Ver qué hace Nido
               </a>
             </div>
-            <p class="lp-fine">Por ahora Nido funciona por invitación.</p>
+            <p class="lp-fine">Gratis, con un límite diario de búsquedas por familia.</p>
           </div>
           <Demo />
         </div>
@@ -546,7 +546,7 @@ export default function Landing({
           <div class="lp-closing-box">
             <div>
               <h2>Menos tiempo eligiendo, más tiempo juntos.</h2>
-              <p>Entra con tu cuenta de Google. Por ahora, solo con invitación.</p>
+              <p>Entra con tu cuenta de Google y arma el perfil de tu familia en un minuto.</p>
             </div>
             {signInButton("closing", "Entrar con Google")}
           </div>

@@ -8,6 +8,8 @@ Two implementations behind one interface: `MemoryStore` for tests and local runs
     families/{uid}/titles/{key}       one TitleMark per marked title: seen, liked, rewatch, banned
     members/{uid}                     one Member per account: which family it belongs to
     invites/{token}                   one Invite per invite link (single use, expires)
+    usage/{family}_{day}              {<kind>: count, expire_at}: requests a family made that UTC
+                                      day, for the daily quotas; TTL on expire_at cleans them up
 
 A family's id is its owner's uid; the parameters below named `uid` are family ids.
     cache/{key}                       {payload (JSON), retrieved_at, expire_at}; a TTL policy
@@ -21,7 +23,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Protocol
 
 from nido.models import FamilyProfile, Invite, Member, TitleMark, WatchlistItem
@@ -54,6 +56,14 @@ class Store(Protocol):
         it does not exist, expired or was already used."""
         ...
 
+    async def take_quota(
+        self, family_id: str, kind: str, day: date, limit: int | None
+    ) -> int | None:
+        """Counts one `kind` request for the family on `day` and returns how many it has made that
+        day, this one included, or None (counting nothing) when `limit` is already used up. No
+        limit only counts. Atomic."""
+        ...
+
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None: ...
     async def cache_put(self, key: str, data: dict[str, Any], ttl: timedelta) -> datetime:
         """Stores `data` and returns its retrieval time."""
@@ -72,6 +82,7 @@ class MemoryStore:
         self._cache: dict[str, Cached] = {}
         self._members: dict[str, Member] = {}
         self._invites: dict[str, Invite] = {}
+        self._usage: dict[tuple[str, str, date], int] = {}
 
     async def get_profile(self, uid: str) -> FamilyProfile | None:
         return self._profiles.get(uid)
@@ -127,6 +138,15 @@ class MemoryStore:
             return None
         self._invites[token] = invite = invite.model_copy(update={"used_by": uid})
         return invite
+
+    async def take_quota(
+        self, family_id: str, kind: str, day: date, limit: int | None
+    ) -> int | None:
+        used = self._usage.get((family_id, kind, day), 0)
+        if limit is not None and used >= limit:
+            return None
+        self._usage[(family_id, kind, day)] = used + 1
+        return used + 1
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         hit = self._cache.get(key)
@@ -243,6 +263,26 @@ class FirestoreStore:
             return invite.model_copy(update={"used_by": uid})
 
         return await claim(self._db.transaction())
+
+    async def take_quota(
+        self, family_id: str, kind: str, day: date, limit: int | None
+    ) -> int | None:
+        from google.cloud import firestore
+
+        doc = self._db.collection("usage").document(f"{family_id}_{day.isoformat()}")
+        # Kept a day past its own, so a late request near midnight still finds it.
+        expire_at = datetime(day.year, day.month, day.day, tzinfo=UTC) + timedelta(days=2)
+
+        @firestore.async_transactional
+        async def take(transaction: Any) -> int | None:
+            snap = await doc.get(transaction=transaction)
+            used = int((snap.to_dict() or {}).get(kind, 0)) if snap.exists else 0
+            if limit is not None and used >= limit:
+                return None
+            transaction.set(doc, {kind: used + 1, "expire_at": expire_at}, merge=True)
+            return used + 1
+
+        return await take(self._db.transaction())
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         snap = await self._db.collection("cache").document(_doc_id(key)).get()

@@ -58,14 +58,19 @@ class Settings:
             os.getenv("NIDO_FIREBASE_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
         )
     )
-    # Verified Google emails allowed to sign in. Empty denies everyone under "firebase" auth, so a
-    # forgotten setting cannot open the model quota to the internet.
+    # Verified Google emails whose families have no daily quota (anyone else may sign in and start a
+    # family, within the quotas below).
     allowed_emails: tuple[str, ...] = field(
         default_factory=lambda: tuple(e.lower() for e in _env_list("NIDO_ALLOWED_EMAILS"))
     )
-    # Chat turns per user per UTC day (each turn is itself capped at max_llm_calls).
+    # Daily quotas per family (shared by its members, reset at 00:00 UTC), so the server's API
+    # keys last when more families use Nido. Ask Nido turns spend Gemini (each turn is itself
+    # capped at max_llm_calls); searches spend TMDB and OMDb.
     max_chat_turns_per_day: int = field(
-        default_factory=lambda: _env_int("NIDO_MAX_CHAT_TURNS_PER_DAY", 60)
+        default_factory=lambda: _env_int("NIDO_MAX_CHAT_TURNS_PER_DAY", 40)
+    )
+    max_searches_per_day: int = field(
+        default_factory=lambda: _env_int("NIDO_MAX_SEARCHES_PER_DAY", 150)
     )
     # Built web app (web/dist) to serve at "/", for single-origin local runs. Firebase Hosting
     # serves it in production.

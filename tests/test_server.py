@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -7,10 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from nido.agent.budget import LlmBudgetExceededError
-from nido.auth import Authenticator, User
+from nido.auth import LOCAL_UID, Authenticator, User
 from nido.config import Settings
 from nido.models import FamilyProfile, GuidanceCategory, MediaType
-from nido.server import ChatLimiter, chat_cards, create_app, describe_family, titles_named
+from nido.server import chat_cards, create_app, describe_family, titles_named
 from nido.store import MemoryStore
 
 PROFILE = {
@@ -48,8 +49,8 @@ class FakeToolbox:
 def client(**kwargs: Any) -> tuple[TestClient, FakeToolbox]:
     toolbox = kwargs.pop("toolbox", FakeToolbox())
     app = create_app(
-        Settings(store="memory", auth="none"),
-        store=MemoryStore(),
+        kwargs.pop("settings", None) or Settings(store="memory", auth="none"),
+        store=kwargs.pop("store", None) or MemoryStore(),
         toolbox=toolbox,
         authenticator=Authenticator("none"),
         **kwargs,
@@ -254,10 +255,52 @@ def test_chat_model_failure_without_output_is_503():
     assert c.post("/api/chat", json={"message": "x"}).status_code == 503
 
 
-def test_chat_limiter_caps_per_user():
-    limiter = ChatLimiter(per_day=1)
-    assert limiter.take("a") and limiter.take("b")
-    assert not limiter.take("a")
+def test_search_quota_is_per_family_per_day():
+    settings = replace(Settings(store="memory", auth="none"), max_searches_per_day=2)
+    c, toolbox = client(settings=settings)
+    c.put("/api/profile", json=PROFILE)
+    first = c.post("/api/search", json={"media_type": "movie"}).json()["quota"]
+    assert first == {"used": 1, "limit": 2}
+    assert c.post("/api/search", json={"media_type": "movie"}).json()["quota"]["used"] == 2
+    over = c.post("/api/search", json={"media_type": "movie"})
+    assert over.status_code == 429 and "2 searches" in over.json()["detail"]
+    assert len(toolbox.calls) == 2
+
+
+def test_chat_quota_is_separate_from_search():
+    settings = replace(Settings(store="memory", auth="none"), max_chat_turns_per_day=1)
+    c, _ = client(settings=settings, runner=FakeRunner([event(text="Hi")]))
+    c.put("/api/profile", json=PROFILE)
+    assert c.post("/api/chat", json={"message": "x"}).json()["quota"] == {"used": 1, "limit": 1}
+    assert c.post("/api/chat", json={"message": "x"}).status_code == 429
+    assert c.post("/api/search", json={"media_type": "movie"}).status_code == 200
+
+
+def test_quota_counts_by_family_and_day():
+    store = MemoryStore()
+    today, tomorrow = datetime(2026, 1, 1).date(), datetime(2026, 1, 2).date()
+
+    async def take(family: str, day: Any) -> int | None:
+        return await store.take_quota(family, "chat", day, 1)
+
+    assert asyncio.run(take("f1", today)) == 1
+    assert asyncio.run(take("f1", today)) is None
+    assert asyncio.run(take("f2", today)) == 1
+    assert asyncio.run(take("f1", tomorrow)) == 1
+
+
+def test_owner_on_allowlist_has_no_limit_but_sees_usage():
+    store = MemoryStore()
+    settings = replace(
+        Settings(store="memory", auth="none"), max_searches_per_day=1, allowed_emails=("me@x.se",)
+    )
+    c, _ = client(settings=settings, store=store)
+    c.put("/api/profile", json=PROFILE)  # creates the local owner
+    owner = asyncio.run(store.get_member(LOCAL_UID))
+    asyncio.run(store.put_member(owner.model_copy(update={"email": "me@x.se"})))
+    for used in (1, 2, 3):
+        quota = c.post("/api/search", json={"media_type": "movie"}).json()["quota"]
+        assert quota == {"used": used, "limit": None}
 
 
 def test_family_description_has_no_identifying_fields():
@@ -460,7 +503,7 @@ def invite(c: TestClient, headers: dict[str, str] = ME) -> str:
     return c.post("/api/family/invites", headers=headers).json()["token"]
 
 
-def test_an_allowed_account_keeps_its_existing_family_and_others_need_an_invite():
+def test_every_account_starts_its_own_family_and_existing_data_stays():
     store = MemoryStore()
     asyncio.run(store.put_profile("guillermo", FamilyProfile(children_ages=[4])))
     c = family_client(store)
@@ -468,8 +511,9 @@ def test_an_allowed_account_keeps_its_existing_family_and_others_need_an_invite(
     family = c.get("/api/family", headers=ME).json()
     assert family["role"] == "owner"
     assert [(m["email"], m["you"]) for m in family["members"]] == [("guillermo@example.com", True)]
-    response = c.get("/api/profile", headers=PARTNER)
-    assert response.status_code == 403 and "invite" in response.json()["detail"]
+    # Anyone else signing in gets an empty family of their own, never someone else's data.
+    assert c.get("/api/profile", headers=PARTNER).json()["profile"] is None
+    assert c.get("/api/family", headers=PARTNER).json()["role"] == "owner"
 
 
 def test_an_invite_shares_profile_watchlist_and_marks_and_works_once():
@@ -512,10 +556,11 @@ def test_only_the_owner_removes_members_and_the_owner_cannot_leave():
     assert c.delete("/api/family/members/stranger", headers=PARTNER).status_code == 403
     assert c.delete("/api/family/members/guillermo", headers=ME).status_code == 409
     assert c.delete("/api/family/members/stranger", headers=ME).json() == {"ok": True}
-    assert c.get("/api/profile", headers=STRANGER).status_code == 403
+    # Removed, they are back in a family of their own.
+    assert c.get("/api/profile", headers=STRANGER).json()["profile"] is None
     # A member may leave on their own.
     assert c.delete("/api/family/members/partner", headers=PARTNER).json() == {"ok": True}
-    assert c.get("/api/family", headers=PARTNER).status_code == 403
+    assert c.get("/api/family", headers=PARTNER).json()["role"] == "owner"
 
 
 def test_a_removed_member_cannot_come_back_with_their_old_link():
@@ -524,7 +569,7 @@ def test_a_removed_member_cannot_come_back_with_their_old_link():
     c.post(f"/api/invites/{token}", headers=PARTNER)
     c.delete("/api/family/members/partner", headers=ME)
     assert c.post(f"/api/invites/{token}", headers=PARTNER).status_code == 410
-    assert c.get("/api/profile", headers=PARTNER).status_code == 403
+    assert c.get("/api/profile", headers=PARTNER).json()["profile"] is None
 
 
 def test_a_member_of_a_shared_family_must_leave_before_joining_another():

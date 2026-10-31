@@ -190,6 +190,11 @@ gcloud firestore fields ttls update expire_at --collection-group=cache --enable-
   --format=none --async ||
   warn "could not enable the TTL policy on cache.expire_at (stale cache entries stay; harmless)"
 info "TTL policy on cache.expire_at"
+# Daily quota counters (usage/{family}_{day}) expire the same way.
+gcloud firestore fields ttls update expire_at --collection-group=usage --enable-ttl \
+  --format=none --async ||
+  warn "could not enable the TTL policy on usage.expire_at (old counters stay; harmless)"
+info "TTL policy on usage.expire_at"
 
 # --- Artifact Registry ---------------------------------------------------------------------------
 step "Artifact Registry repository ${AR_REPO} (${REGION})"
