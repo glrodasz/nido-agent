@@ -503,7 +503,7 @@ def invite(c: TestClient, headers: dict[str, str] = ME) -> str:
     return c.post("/api/family/invites", headers=headers).json()["token"]
 
 
-def test_an_allowed_account_keeps_its_existing_family_and_others_need_an_invite():
+def test_every_account_starts_its_own_family_and_existing_data_stays():
     store = MemoryStore()
     asyncio.run(store.put_profile("guillermo", FamilyProfile(children_ages=[4])))
     c = family_client(store)
@@ -511,8 +511,9 @@ def test_an_allowed_account_keeps_its_existing_family_and_others_need_an_invite(
     family = c.get("/api/family", headers=ME).json()
     assert family["role"] == "owner"
     assert [(m["email"], m["you"]) for m in family["members"]] == [("guillermo@example.com", True)]
-    response = c.get("/api/profile", headers=PARTNER)
-    assert response.status_code == 403 and "invite" in response.json()["detail"]
+    # Anyone else signing in gets an empty family of their own, never someone else's data.
+    assert c.get("/api/profile", headers=PARTNER).json()["profile"] is None
+    assert c.get("/api/family", headers=PARTNER).json()["role"] == "owner"
 
 
 def test_an_invite_shares_profile_watchlist_and_marks_and_works_once():
@@ -555,10 +556,11 @@ def test_only_the_owner_removes_members_and_the_owner_cannot_leave():
     assert c.delete("/api/family/members/stranger", headers=PARTNER).status_code == 403
     assert c.delete("/api/family/members/guillermo", headers=ME).status_code == 409
     assert c.delete("/api/family/members/stranger", headers=ME).json() == {"ok": True}
-    assert c.get("/api/profile", headers=STRANGER).status_code == 403
+    # Removed, they are back in a family of their own.
+    assert c.get("/api/profile", headers=STRANGER).json()["profile"] is None
     # A member may leave on their own.
     assert c.delete("/api/family/members/partner", headers=PARTNER).json() == {"ok": True}
-    assert c.get("/api/family", headers=PARTNER).status_code == 403
+    assert c.get("/api/family", headers=PARTNER).json()["role"] == "owner"
 
 
 def test_a_removed_member_cannot_come_back_with_their_old_link():
@@ -567,7 +569,7 @@ def test_a_removed_member_cannot_come_back_with_their_old_link():
     c.post(f"/api/invites/{token}", headers=PARTNER)
     c.delete("/api/family/members/partner", headers=ME)
     assert c.post(f"/api/invites/{token}", headers=PARTNER).status_code == 410
-    assert c.get("/api/profile", headers=PARTNER).status_code == 403
+    assert c.get("/api/profile", headers=PARTNER).json()["profile"] is None
 
 
 def test_a_member_of_a_shared_family_must_leave_before_joining_another():

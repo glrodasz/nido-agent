@@ -104,12 +104,7 @@ export default function App() {
         if (stale) return;
         setProfile(undefined);
         setError(
-          inviteProblem ??
-            (err instanceof ApiError && err.status === 403
-              ? "This Google account isn't part of a family on Nido yet. Ask someone in your family for an invite link."
-              : err instanceof Error
-                ? err.message
-                : "Could not load your family."),
+          inviteProblem ?? (err instanceof Error ? err.message : "Could not load your family."),
         );
       }
     })();

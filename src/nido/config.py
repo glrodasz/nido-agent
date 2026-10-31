@@ -58,8 +58,8 @@ class Settings:
             os.getenv("NIDO_FIREBASE_PROJECT") or os.getenv("GOOGLE_CLOUD_PROJECT")
         )
     )
-    # Verified Google emails allowed to sign in. Empty denies everyone under "firebase" auth, so a
-    # forgotten setting cannot open the model quota to the internet.
+    # Verified Google emails whose families have no daily quota (anyone else may sign in and start a
+    # family, within the quotas below).
     allowed_emails: tuple[str, ...] = field(
         default_factory=lambda: tuple(e.lower() for e in _env_list("NIDO_ALLOWED_EMAILS"))
     )

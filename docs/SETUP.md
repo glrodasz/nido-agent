@@ -8,7 +8,7 @@ Browser ── https://<project>.web.app ──► Firebase Hosting (static Astr
    │  Google sign-in (Firebase Auth)          │  /api/** rewrite
    │                                          ▼
    └── Authorization: Bearer <ID token> ──► Cloud Run service nido-api (europe-north1)
-                                              │  checks the token and NIDO_ALLOWED_EMAILS
+                                              │  checks the token and daily family quotas
                                               ├─► Firestore: families/, watchlist/, cache/
                                               ├─► TMDB, OMDb (keys from Secret Manager)
                                               └─► Gemini API (free tier key, chat only)
@@ -72,10 +72,10 @@ No service account keys are created: GitHub Actions uses short-lived OIDC tokens
 **Why the Cloud Run service is public.** Firebase Hosting forwards `/api/**` without credentials,
 so the service must accept unauthenticated calls. The app itself rejects every request without a
 valid Firebase ID token for this project from a verified email, except `/api/health` and
-`/api/config`, and every family endpoint also needs a family membership: an email in
-`NIDO_ALLOWED_EMAILS` starts its own family on first sign-in, any other account only gets in by
-opening an invite link that a family member made in the Family tab (single use, valid 7 days).
-With an empty allowlist nobody can start a family.
+`/api/config`. Every verified Google account starts a family of its own on first sign-in, and an
+invite link that a family member made in the Family tab (single use, valid 7 days) moves it into
+that family. Searches and Ask Nido turns are capped per family per day (see Cost guard); families
+whose owner is in `NIDO_ALLOWED_EMAILS` have no cap.
 
 Add a missing key later with:
 
@@ -96,7 +96,7 @@ bootstrap prints the `gh variable set` commands with the values filled in.
 | `GCP_GITHUB_SA` | `nido-github@my-project.iam.gserviceaccount.com` |
 | `GCP_API_SA` | `nido-api@my-project.iam.gserviceaccount.com` |
 | `AR_REPOSITORY` | `nido` |
-| `NIDO_ALLOWED_EMAILS` | `you@gmail.com` (who may start a family; others join by invite link) |
+| `NIDO_ALLOWED_EMAILS` | `you@gmail.com` (families these emails own have no daily quota) |
 | `FIREBASE_API_KEY` | from step 1.4 |
 | `FIREBASE_AUTH_DOMAIN` | `my-project.firebaseapp.com` |
 | `FIREBASE_APP_ID` | `1:123:web:abc` |

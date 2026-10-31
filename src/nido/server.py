@@ -15,9 +15,8 @@
     POST   /api/invites/{token}                   join the family that made the invite
 
 Every account works on its family's data, never its own: the profile, watchlist and marks belong
-to the family. A verified email on NIDO_ALLOWED_EMAILS starts its own family on first sign-in
-(family id = its uid, so data saved before families existed stays put); any other Google account
-gets in only through an invite link.
+to the family. Any verified Google account starts its own family on first sign-in (family id = its
+uid, so data saved before families existed stays put), and an invite link moves it into another.
 
 Search and chat count against daily quotas per family (NIDO_MAX_SEARCHES_PER_DAY,
 NIDO_MAX_CHAT_TURNS_PER_DAY), kept in the store so restarts do not reset them; past the quota they
@@ -414,7 +413,8 @@ def create_app(
 
     async def current_member(user: CurrentUser) -> Member:
         member = await store.get_member(user.uid)
-        if member is None and user.allowed:
+        if member is None:
+            # Anyone signed in starts a family of their own; the daily quotas bound what it costs.
             member = Member(
                 uid=user.uid,
                 family_id=user.uid,
@@ -423,10 +423,6 @@ def create_app(
                 joined_at=datetime.now(UTC),
             )
             await store.put_member(member)
-        if member is None:
-            raise HTTPException(
-                403, "this account is not in a family yet: open an invite link from a member"
-            )
         return member
 
     CurrentMember = Annotated[Member, Depends(current_member)]

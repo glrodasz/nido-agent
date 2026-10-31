@@ -294,7 +294,7 @@ export default function Finder({
                 <Icon name={k === "chat" ? "bot" : "search"} />
                 {left(k) === null ? (
                   <span>
-                    <strong>{plural(quota[k]!.used, QUOTA_NOUN[k])}</strong> today · no limit
+                    <strong>{plural(quota[k]!.used, QUOTA_NOUN[k])}</strong> today
                   </span>
                 ) : left(k) === 0 ? (
                   <span>
