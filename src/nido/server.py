@@ -231,66 +231,6 @@ class ChatLimiter:
         return True
 
 
-def family_guard(profile: FamilyProfile | None) -> dict[str, Any]:
-    """The saved profile's limits the tools enforce whatever the chat says (agent.tools)."""
-    if profile is None:
-        return {}
-    return {
-        "children_ages": list(profile.children_ages),
-        "avoid": [c.value for c in profile.avoid_categories],
-    }
-
-
-# Hosts the reply may link to: guidance and metadata sources. Links the tools returned (streaming
-# offers, IMDb pages) are allowed too. Anything else is dropped: the chat text and the titles'
-# synopses are not ours, so a reply could otherwise carry a phishing link ("verify your Netflix
-# account at ...") under Nido's name.
-LINK_HOSTS = (
-    "commonsensemedia.org",
-    "imdb.com",
-    "themoviedb.org",
-    "justwatch.com",
-)
-_MD_LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]*)\)")
-_URL = re.compile(r"\b(?:https?://|www\.)[^\s<>()\[\]]+", re.IGNORECASE)
-
-
-def _host(url: str) -> str:
-    url = re.sub(r"^https?://", "", url, flags=re.IGNORECASE)
-    return re.split(r"[/?#:]", url, maxsplit=1)[0].lower().rstrip(".")
-
-
-def _tool_links(known: dict[str, dict[str, Any]]) -> set[str]:
-    links: set[str] = set()
-    for item in known.values():
-        for offer in item.get("where_to_watch") or []:
-            if offer.get("link"):
-                links.add(str(offer["link"]))
-        if (item.get("imdb") or {}).get("url"):
-            links.add(str(item["imdb"]["url"]))
-    return links
-
-
-def safe_links(reply: str, known: dict[str, dict[str, Any]]) -> str:
-    """The reply with every link the app cannot vouch for removed (see LINK_HOSTS)."""
-    allowed = _tool_links(known)
-
-    def ok(url: str) -> bool:
-        url = url.rstrip(".,;:!?")
-        host = _host(url)
-        return url in allowed or any(host == h or host.endswith("." + h) for h in LINK_HOSTS)
-
-    def markdown(m: re.Match[str]) -> str:
-        return m.group(0) if ok(m.group(2)) else m.group(1)
-
-    def bare(m: re.Match[str]) -> str:
-        return m.group(0) if ok(m.group(0)) else "[link removed]"
-
-    # Markdown links first; bare URLs are then checked outside the links that were kept.
-    parts = re.split(r"(\[[^\]]*\]\([^)\s]*\))", _MD_LINK.sub(markdown, reply))
-    return "".join(p if _MD_LINK.fullmatch(p) else _URL.sub(bare, p) for p in parts)
-
-
 # Tools whose output the web app shows as title cards.
 TITLE_TOOLS = ("find_titles", "look_up_title")
 
@@ -367,6 +307,66 @@ def _final_text(event: Any) -> str:
     if not event.is_final_response() or not event.content or not event.content.parts:
         return ""
     return "".join(p.text or "" for p in event.content.parts if not getattr(p, "thought", False))
+
+
+def family_guard(profile: FamilyProfile | None) -> dict[str, Any]:
+    """The saved profile's limits the tools enforce whatever the chat says (agent.tools)."""
+    if profile is None:
+        return {}
+    return {
+        "children_ages": list(profile.children_ages),
+        "avoid": [c.value for c in profile.avoid_categories],
+    }
+
+
+# Hosts the reply may link to: guidance and metadata sources. Links the tools returned (streaming
+# offers, IMDb pages) are allowed too. Anything else is dropped: the chat text and the titles'
+# synopses are not ours, so a reply could otherwise carry a phishing link ("verify your Netflix
+# account at ...") under Nido's name.
+LINK_HOSTS = (
+    "commonsensemedia.org",
+    "imdb.com",
+    "themoviedb.org",
+    "justwatch.com",
+)
+_MD_LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]*)\)")
+_URL = re.compile(r"\b(?:https?://|www\.)[^\s<>()\[\]]+", re.IGNORECASE)
+
+
+def _host(url: str) -> str:
+    url = re.sub(r"^https?://", "", url, flags=re.IGNORECASE)
+    return re.split(r"[/?#:]", url, maxsplit=1)[0].lower().rstrip(".")
+
+
+def _tool_links(known: dict[str, dict[str, Any]]) -> set[str]:
+    links: set[str] = set()
+    for item in known.values():
+        for offer in item.get("where_to_watch") or []:
+            if offer.get("link"):
+                links.add(str(offer["link"]))
+        if (item.get("imdb") or {}).get("url"):
+            links.add(str(item["imdb"]["url"]))
+    return links
+
+
+def safe_links(reply: str, known: dict[str, dict[str, Any]]) -> str:
+    """The reply with every link the app cannot vouch for removed (see LINK_HOSTS)."""
+    allowed = _tool_links(known)
+
+    def ok(url: str) -> bool:
+        url = url.rstrip(".,;:!?")
+        host = _host(url)
+        return url in allowed or any(host == h or host.endswith("." + h) for h in LINK_HOSTS)
+
+    def markdown(m: re.Match[str]) -> str:
+        return m.group(0) if ok(m.group(2)) else m.group(1)
+
+    def bare(m: re.Match[str]) -> str:
+        return m.group(0) if ok(m.group(0)) else "[link removed]"
+
+    # Markdown links first; bare URLs are then checked outside the links that were kept.
+    parts = re.split(r"(\[[^\]]*\]\([^)\s]*\))", _MD_LINK.sub(markdown, reply))
+    return "".join(p if _MD_LINK.fullmatch(p) else _URL.sub(bare, p) for p in parts)
 
 
 def create_app(
