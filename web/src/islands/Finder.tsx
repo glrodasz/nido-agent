@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "preact/hooks";
-import { api } from "../logic/api";
+import { ApiError, api } from "../logic/api";
 import { familyLine, GENRES, newestFirst, plural, releasedSince, seenLast } from "../logic/format";
 import type {
   AppConfig,
@@ -41,6 +41,7 @@ interface Filters {
 
 // Below these, the ask panel says how much of today's quota the family has left.
 const LOW_QUOTA = { chat: 5, search: 10 };
+const QUOTA_NOUN = { chat: "Ask Nido question", search: "search" };
 
 // Families want what is new: the filters start at five years back. A series counts while it
 // still airs, so Bluey stays in even though it started in 2018.
@@ -161,7 +162,9 @@ export default function Finder({
     try {
       return await work();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      // Out of today's quota: the tag under the ask box says so, no need for a second message.
+      if (err instanceof ApiError && err.status === 429) setLeft((l) => ({ ...l, [kind]: 0 }));
+      else setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(null);
     }
@@ -231,10 +234,9 @@ export default function Finder({
   }, [results, sinkSeen, order]);
   const anySeen = picks.some(isSeen);
   const firstSunk = picks.length - sunk;
-  const quotaNote = [
-    left.chat !== undefined && left.chat <= LOW_QUOTA.chat && plural(left.chat, "Ask Nido question"),
-    left.search !== undefined && left.search <= LOW_QUOTA.search && plural(left.search, "search"),
-  ].filter(Boolean);
+  const lowQuotas = (["chat", "search"] as const).filter(
+    (k) => left[k] !== undefined && left[k]! <= LOW_QUOTA[k],
+  );
 
   return (
     <div class="finder">
@@ -264,6 +266,24 @@ export default function Finder({
             </button>
           </form>
         )}
+        {lowQuotas.length > 0 && (
+          <div class="quota-tags" role="status">
+            {lowQuotas.map((k) => (
+              <span key={k} class={left[k] === 0 ? "quota-tag quota-out" : "quota-tag"}>
+                <Icon name="alert" />
+                {left[k] === 0 ? (
+                  <span>
+                    <strong>{plural(0, QUOTA_NOUN[k]).replace(/^0/, "No")} left today.</strong> They come back tomorrow.
+                  </span>
+                ) : (
+                  <span>
+                    <strong>{plural(left[k]!, QUOTA_NOUN[k])} left</strong> today for your family
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
         <div class="quick" role="group" aria-label="Quick filters">
           {QUICK.map((q) => (
             <button
@@ -280,9 +300,6 @@ export default function Finder({
             </button>
           ))}
         </div>
-        {quotaNote.length > 0 && (
-          <p class="quota-note muted">{quotaNote.join(" and ")} left today for your family.</p>
-        )}
         {turns.length > 0 && (
           <ol class="turns" aria-live="polite">
             {turns.map((t, i) => (

@@ -581,9 +581,33 @@ input:not([type="checkbox"]) {
   gap: 0.5rem;
 }
 
-.quota-note {
-  margin: 0;
-  font-size: 0.875rem;
+.quota-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: -0.25rem;
+}
+
+.quota-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: 0.9rem;
+}
+
+.quota-tag svg {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.quota-out {
+  background: var(--coral-soft);
+  color: var(--coral-ink);
 }
 
 .quick .chip-btn {
