@@ -270,7 +270,7 @@ export default function Finder({
           <div class="quota-tags" role="status">
             {lowQuotas.map((k) => (
               <span key={k} class={left[k] === 0 ? "quota-tag quota-out" : "quota-tag"}>
-                <Icon name="alert" />
+                <Icon name={k === "chat" ? "bot" : "search"} />
                 {left[k] === 0 ? (
                   <span>
                     <strong>{plural(0, QUOTA_NOUN[k]).replace(/^0/, "No")} left today.</strong> They come back tomorrow.
