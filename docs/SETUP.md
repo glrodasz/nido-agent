@@ -129,7 +129,8 @@ Without `GOOGLE_API_KEY` the chat box is hidden and the filter search still work
 - Each chat turn is capped at `NIDO_MAX_LLM_CALLS` model calls. Each family (all its members
   together) gets `NIDO_MAX_CHAT_TURNS_PER_DAY` Ask Nido turns (default 40) and
   `NIDO_MAX_SEARCHES_PER_DAY` searches (default 150) per UTC day, counted in Firestore so a
-  restart does not reset them. The filter search never calls the model.
+  restart does not reset them. Families whose owner is on `NIDO_ALLOWED_EMAILS` have no limit
+  and see today's usage instead. The filter search never calls the model.
 - TMDB details are cached for a day and IMDb scores for a week in Firestore, so repeated searches
   do not spend the OMDb free quota.
 - The budget sends emails at 50, 90 and 100 % and the kill switch unlinks billing at 100 %.

@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from nido.agent.budget import LlmBudgetExceededError
-from nido.auth import Authenticator, User
+from nido.auth import LOCAL_UID, Authenticator, User
 from nido.config import Settings
 from nido.models import FamilyProfile, GuidanceCategory, MediaType
 from nido.server import chat_cards, create_app, describe_family, titles_named
@@ -50,7 +50,7 @@ def client(**kwargs: Any) -> tuple[TestClient, FakeToolbox]:
     toolbox = kwargs.pop("toolbox", FakeToolbox())
     app = create_app(
         kwargs.pop("settings", None) or Settings(store="memory", auth="none"),
-        store=MemoryStore(),
+        store=kwargs.pop("store", None) or MemoryStore(),
         toolbox=toolbox,
         authenticator=Authenticator("none"),
         **kwargs,
@@ -259,8 +259,9 @@ def test_search_quota_is_per_family_per_day():
     settings = replace(Settings(store="memory", auth="none"), max_searches_per_day=2)
     c, toolbox = client(settings=settings)
     c.put("/api/profile", json=PROFILE)
-    assert c.post("/api/search", json={"media_type": "movie"}).json()["quota_left"] == 1
-    assert c.post("/api/search", json={"media_type": "movie"}).json()["quota_left"] == 0
+    first = c.post("/api/search", json={"media_type": "movie"}).json()["quota"]
+    assert first == {"used": 1, "limit": 2}
+    assert c.post("/api/search", json={"media_type": "movie"}).json()["quota"]["used"] == 2
     over = c.post("/api/search", json={"media_type": "movie"})
     assert over.status_code == 429 and "2 searches" in over.json()["detail"]
     assert len(toolbox.calls) == 2
@@ -270,7 +271,7 @@ def test_chat_quota_is_separate_from_search():
     settings = replace(Settings(store="memory", auth="none"), max_chat_turns_per_day=1)
     c, _ = client(settings=settings, runner=FakeRunner([event(text="Hi")]))
     c.put("/api/profile", json=PROFILE)
-    assert c.post("/api/chat", json={"message": "x"}).json()["quota_left"] == 0
+    assert c.post("/api/chat", json={"message": "x"}).json()["quota"] == {"used": 1, "limit": 1}
     assert c.post("/api/chat", json={"message": "x"}).status_code == 429
     assert c.post("/api/search", json={"media_type": "movie"}).status_code == 200
 
@@ -282,10 +283,24 @@ def test_quota_counts_by_family_and_day():
     async def take(family: str, day: Any) -> int | None:
         return await store.take_quota(family, "chat", day, 1)
 
-    assert asyncio.run(take("f1", today)) == 0
+    assert asyncio.run(take("f1", today)) == 1
     assert asyncio.run(take("f1", today)) is None
-    assert asyncio.run(take("f2", today)) == 0
-    assert asyncio.run(take("f1", tomorrow)) == 0
+    assert asyncio.run(take("f2", today)) == 1
+    assert asyncio.run(take("f1", tomorrow)) == 1
+
+
+def test_owner_on_allowlist_has_no_limit_but_sees_usage():
+    store = MemoryStore()
+    settings = replace(
+        Settings(store="memory", auth="none"), max_searches_per_day=1, allowed_emails=("me@x.se",)
+    )
+    c, _ = client(settings=settings, store=store)
+    c.put("/api/profile", json=PROFILE)  # creates the local owner
+    owner = asyncio.run(store.get_member(LOCAL_UID))
+    asyncio.run(store.put_member(owner.model_copy(update={"email": "me@x.se"})))
+    for used in (1, 2, 3):
+        quota = c.post("/api/search", json={"media_type": "movie"}).json()["quota"]
+        assert quota == {"used": used, "limit": None}
 
 
 def test_family_description_has_no_identifying_fields():

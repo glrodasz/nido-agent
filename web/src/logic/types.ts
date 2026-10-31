@@ -63,14 +63,20 @@ export interface TitleResult {
   mark?: TitleMark | null;
 }
 
+/** Requests a family made today, and its daily limit; null limit = no limit (owner families). */
+export interface Quota {
+  used: number;
+  limit: number | null;
+}
+
 export interface SearchResult {
   regions: string[];
   results: TitleResult[];
   // The closest titles that break the profile, sent only when results is empty.
   near_misses?: TitleResult[];
   attribution: string;
-  // Searches the family has left today (the server's daily quota); only on /api/search.
-  quota_left?: number;
+  // The family's searches today; only on /api/search.
+  quota?: Quota;
 }
 
 export interface ChatReply {
@@ -78,8 +84,8 @@ export interface ChatReply {
   reply: string;
   results: SearchResult | null;
   note: string | null;
-  // Ask Nido questions the family has left today.
-  quota_left: number;
+  // The family's Ask Nido questions today.
+  quota: Quota;
 }
 
 export interface WatchlistItem {

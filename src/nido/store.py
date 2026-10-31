@@ -56,9 +56,12 @@ class Store(Protocol):
         it does not exist, expired or was already used."""
         ...
 
-    async def take_quota(self, family_id: str, kind: str, day: date, limit: int) -> int | None:
-        """Counts one `kind` request for the family on `day` and returns how many are left, or
-        None (counting nothing) when `limit` is already used up. Atomic."""
+    async def take_quota(
+        self, family_id: str, kind: str, day: date, limit: int | None
+    ) -> int | None:
+        """Counts one `kind` request for the family on `day` and returns how many it has made that
+        day, this one included, or None (counting nothing) when `limit` is already used up. No
+        limit only counts. Atomic."""
         ...
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None: ...
@@ -136,12 +139,14 @@ class MemoryStore:
         self._invites[token] = invite = invite.model_copy(update={"used_by": uid})
         return invite
 
-    async def take_quota(self, family_id: str, kind: str, day: date, limit: int) -> int | None:
+    async def take_quota(
+        self, family_id: str, kind: str, day: date, limit: int | None
+    ) -> int | None:
         used = self._usage.get((family_id, kind, day), 0)
-        if used >= limit:
+        if limit is not None and used >= limit:
             return None
         self._usage[(family_id, kind, day)] = used + 1
-        return limit - used - 1
+        return used + 1
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         hit = self._cache.get(key)
@@ -259,7 +264,9 @@ class FirestoreStore:
 
         return await claim(self._db.transaction())
 
-    async def take_quota(self, family_id: str, kind: str, day: date, limit: int) -> int | None:
+    async def take_quota(
+        self, family_id: str, kind: str, day: date, limit: int | None
+    ) -> int | None:
         from google.cloud import firestore
 
         doc = self._db.collection("usage").document(f"{family_id}_{day.isoformat()}")
@@ -270,10 +277,10 @@ class FirestoreStore:
         async def take(transaction: Any) -> int | None:
             snap = await doc.get(transaction=transaction)
             used = int((snap.to_dict() or {}).get(kind, 0)) if snap.exists else 0
-            if used >= limit:
+            if limit is not None and used >= limit:
                 return None
             transaction.set(doc, {kind: used + 1, "expire_at": expire_at}, merge=True)
-            return limit - used - 1
+            return used + 1
 
         return await take(self._db.transaction())
 

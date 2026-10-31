@@ -605,6 +605,11 @@ input:not([type="checkbox"]) {
   height: 1.05rem;
 }
 
+.quota-free {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .quota-out {
   background: var(--coral-soft);
   color: var(--coral-ink);

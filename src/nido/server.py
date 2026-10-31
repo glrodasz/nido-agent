@@ -21,7 +21,8 @@ gets in only through an invite link.
 
 Search and chat count against daily quotas per family (NIDO_MAX_SEARCHES_PER_DAY,
 NIDO_MAX_CHAT_TURNS_PER_DAY), kept in the store so restarts do not reset them; past the quota they
-answer 429, and below it they report `quota_left`.
+answer 429, and below it they report `quota` ({used, limit}). A family whose owner is on
+NIDO_ALLOWED_EMAILS has no limit (limit null) and still sees what it used.
 
 Banned titles are left out of search and chat by code: the server hands their keys to the
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
@@ -414,13 +415,16 @@ def create_app(
         await store.put_profile(family, profile)
         return {"profile": profile.model_dump(mode="json")}
 
-    async def take_quota(family: str, kind: str) -> int:
-        """Counts one request against the family's daily quota; returns how many are left."""
-        limit = limits[kind]
-        left = await store.take_quota(family, kind, datetime.now(UTC).date(), limit)
-        if left is None:
+    async def take_quota(family: str, kind: str) -> dict[str, int | None]:
+        """Counts one request against the family's daily quota: {used today, limit or None}."""
+        # The family id is its owner's uid; owners on NIDO_ALLOWED_EMAILS have no limit.
+        owner = await store.get_member(family)
+        unlimited = bool(owner and owner.email and owner.email.lower() in settings.allowed_emails)
+        limit = None if unlimited else limits[kind]
+        used = await store.take_quota(family, kind, datetime.now(UTC).date(), limit)
+        if used is None:
             raise HTTPException(429, over_limit[kind].format(limit=limit))
-        return left
+        return {"used": used, "limit": limit}
 
     async def require_profile(family: str) -> FamilyProfile:
         profile = await store.get_profile(family)
@@ -431,16 +435,16 @@ def create_app(
     @app.post("/api/search")
     async def search(request: SearchRequest, family: Family) -> dict[str, Any]:
         profile = await require_profile(family)
-        left = await take_quota(family, "search")
+        quota = await take_quota(family, "search")
         marks = await store.list_marks(family)
         found = with_marks(await find(profile, request, marks), marks, profile) or {}
-        return {**found, "quota_left": left}
+        return {**found, "quota": quota}
 
     @app.post("/api/chat")
     async def chat(request: ChatRequest, user: CurrentUser, family: Family) -> dict[str, Any]:
         if runner is None:
             raise HTTPException(503, "chat is off: no model credentials on the server")
-        left = await take_quota(family, "chat")
+        quota = await take_quota(family, "chat")
         from google.genai import types
 
         profile = await store.get_profile(family)
@@ -496,7 +500,7 @@ def create_app(
             "reply": text,
             "results": with_marks(chat_cards(text, results, known), marks, profile),
             "note": note,
-            "quota_left": left,
+            "quota": quota,
         }
 
     @app.get("/api/watchlist")
