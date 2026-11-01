@@ -1,3 +1,4 @@
+import { fmt, formatNumber, plural, t } from "../i18n";
 import type { Access, Ban, MediaType, Offer, Profile } from "./types";
 
 const DAY_MS = 86_400_000;
@@ -5,20 +6,12 @@ const DAY_MS = 86_400_000;
 /** "today", "1 day ago", "12 days ago": how fresh a sourced value is. */
 export function verifiedAgo(iso: string, now: Date = new Date()): string {
   const days = Math.floor((now.getTime() - new Date(iso).getTime()) / DAY_MS);
-  if (!Number.isFinite(days) || days <= 0) return "today";
-  return days === 1 ? "1 day ago" : `${days} days ago`;
+  if (!Number.isFinite(days) || days <= 0) return t.ago.today;
+  return plural(days, t.ago.days);
 }
 
-const ACCESS_LABEL: Record<Access, string> = {
-  subscription: "Included",
-  ads: "Included with ads",
-  addon: "Add-on channel",
-  rent: "Rent",
-  buy: "Buy",
-};
-
 export function accessLabel(access: Access): string {
-  return ACCESS_LABEL[access] ?? access;
+  return t.access[access] ?? access;
 }
 
 export function isIncluded(offer: Offer, services: string[]): boolean {
@@ -56,27 +49,18 @@ export function sortOffers(offers: Offer[], services: string[]): Offer[] {
   return unique.sort((a, b) => rank(a) - rank(b) || a.provider.localeCompare(b.provider));
 }
 
-const CATEGORY_LABEL: Record<string, string> = {
-  violence: "Violence",
-  frightening: "Scary scenes",
-  language: "Language",
-  sex_nudity: "Sex and nudity",
-  romance: "Romance",
-  substances: "Drinking, drugs, smoking",
-  bullying_discrimination: "Bullying and discrimination",
-  death_grief: "Death and grief",
-  imitable_behavior: "Imitable behavior",
-};
-
 export function categoryLabel(category: string): string {
-  return CATEGORY_LABEL[category] ?? category.replaceAll("_", " ");
+  return t.categories[category] ?? category.replaceAll("_", " ");
 }
 
 export function formatVotes(votes: number | null): string {
   if (votes === null) return "";
-  if (votes >= 1_000_000) return `${(votes / 1_000_000).toFixed(1)}M votes`;
-  if (votes >= 1_000) return `${Math.round(votes / 1_000)}k votes`;
-  return `${votes} votes`;
+  if (votes >= 1_000_000) {
+    const n = formatNumber(votes / 1_000_000, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    return fmt(t.card.votesM, { n });
+  }
+  if (votes >= 1_000) return fmt(t.card.votesK, { n: Math.round(votes / 1_000) });
+  return fmt(t.card.votes, { n: votes });
 }
 
 /** "6, 9" -> [6, 9]; null when any entry is not an age from 0 to 17. */
@@ -148,8 +132,8 @@ export function defaultBanUntil(youngest: number, baselineAge: number | null): n
 }
 
 export function banLabel(ban: Ban, active: boolean): string {
-  if (ban.scope === "always") return "Hidden at every age";
-  return active ? `Hidden until your youngest is ${ban.until_age}` : `Was hidden until ${ban.until_age}: back in results`;
+  if (ban.scope === "always") return t.ban.always;
+  return fmt(active ? t.ban.until : t.ban.lifted, { age: ban.until_age ?? "" });
 }
 
 export type VerdictLevel = "fit" | "grown-up" | "later" | "settings";
@@ -169,19 +153,19 @@ export function verdictFor(
   baselineAge: number | null,
   youngest: number,
 ): Verdict {
-  if (misses.length === 0) return { level: "fit", label: "Good for all of you" };
+  if (misses.length === 0) return { level: "fit", label: t.verdict.fit };
   if (baselineAge !== null && baselineAge > youngest) {
     return baselineAge - youngest <= GROWN_UP_GAP
-      ? { level: "grown-up", label: "Best with a grown-up" }
-      : { level: "later", label: "For after bedtime" };
+      ? { level: "grown-up", label: t.verdict.grownUp }
+      : { level: "later", label: t.verdict.later };
   }
-  return { level: "settings", label: "Outside your settings" };
+  return { level: "settings", label: t.verdict.settings };
 }
 
 function joinAnd(items: string[]): string {
   return items.length <= 1
     ? (items[0] ?? "")
-    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+    : `${items.slice(0, -1).join(", ")} ${t.family.and} ${items[items.length - 1]}`;
 }
 
 /** "For your 4-year-old · on Netflix and Disney+": who and where the picks are for. */
@@ -189,12 +173,12 @@ export function familyLine(profile: Profile, serviceNames: Record<string, string
   const ages = [...profile.children_ages].sort((a, b) => a - b);
   const who =
     ages.length === 0
-      ? "For your family"
+      ? t.family.forFamily
       : ages.length === 1
-        ? `For your ${ages[0]}-year-old`
-        : `For your kids aged ${joinAnd(ages.map(String))}`;
+        ? fmt(t.family.forOne, { age: ages[0] })
+        : fmt(t.family.forMany, { ages: joinAnd(ages.map(String)) });
   const services = profile.services.map((s) => serviceNames[s] ?? s);
-  return services.length ? `${who} · on ${joinAnd(services)}` : who;
+  return services.length ? fmt(t.family.on, { who, services: joinAnd(services) }) : who;
 }
 
 /** A stable hue per title, so a missing poster still gets its own colour. */
@@ -297,20 +281,18 @@ export function nearestStop(
 
 /** Score slider ticks: the first stop reads "Any" (the server still drops anything IMDb scores
  * below 4, see ranking.IMDB_FLOOR). */
-export const scoreTick = (stop: number) => (stop === SCORE_STOPS[0] ? "Any" : String(stop));
+export const scoreTick = (stop: number) => (stop === SCORE_STOPS[0] ? t.finder.any : String(stop));
 
 /** "10 min", "1h", "2h", "Any". */
 export function lengthLabel(min: number | null): string {
-  if (min === null) return "Any";
-  return min >= 60 && min % 60 === 0 ? `${min / 60}h` : `${min} min`;
+  if (min === null) return t.finder.any;
+  return min >= 60 && min % 60 === 0 ? `${min / 60}h` : fmt(t.card.minutes, { n: min });
 }
+
+/** Max length slider ticks: "Any", "10", "30", "1h". */
+export const lengthTick = (min: number | null) =>
+  min === null ? t.finder.any : min >= 60 ? `${min / 60}h` : String(min);
 
 export function seenLast<T>(items: T[], isSeen: (item: T) => boolean): T[] {
   return [...items.filter((i) => !isSeen(i)), ...items.filter(isSeen)];
-}
-
-/** "1 search", "3 searches", "0 Ask Nido questions". */
-export function plural(count: number, noun: string): string {
-  if (count === 1) return `1 ${noun}`;
-  return `${count} ${noun.endsWith("h") ? `${noun}es` : `${noun}s`}`;
 }

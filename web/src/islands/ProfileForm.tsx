@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { fmt, genreLabel, t } from "../i18n";
 import {
   categoryLabel,
   GENRES,
@@ -7,6 +8,7 @@ import {
   parseAges,
   parseRegions,
   SCORE_STOPS,
+  lengthTick,
   scoreTick,
   SHORT_MAX_MIN,
 } from "../logic/format";
@@ -43,9 +45,9 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
     e.preventDefault();
     const parsedAges = parseAges(ages);
     const parsedRegions = parseRegions(regions);
-    if (!parsedAges) return setError("Enter each child's age, from 0 to 17, separated by commas.");
-    if (!parsedRegions) return setError("Enter catalog regions as two-letter codes, such as SE.");
-    if (services.length === 0) return setError("Pick at least one streaming service.");
+    if (!parsedAges) return setError(t.profile.agesInvalid);
+    if (!parsedRegions) return setError(t.profile.regionsInvalid);
+    if (services.length === 0) return setError(t.profile.servicesMissing);
     setError(null);
     setSaving(true);
     try {
@@ -61,7 +63,7 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
       });
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the profile.");
+      setError(err instanceof Error ? err.message : t.profile.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -69,14 +71,11 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
 
   return (
     <form class="panel profile" onSubmit={submit}>
-      <h2>{firstRun ? "Tell Nido about your family" : "Family profile"}</h2>
-      <p class="muted">
-        Nido stores ages only, never names or birthdates. These become the default for every
-        search, and you can change them per search.
-      </p>
+      <h2>{firstRun ? t.profile.firstTitle : t.profile.title}</h2>
+      <p class="muted">{t.profile.intro}</p>
 
       <label class="field">
-        <span>Children's ages</span>
+        <span>{t.profile.ages}</span>
         <input
           value={ages}
           onInput={(e) => setAges(e.currentTarget.value)}
@@ -87,7 +86,7 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
       </label>
 
       <fieldset class="field">
-        <legend>Streaming services you pay for</legend>
+        <legend>{t.profile.services}</legend>
         <div class="chips">
           {config.services.map((s) => (
             <label key={s.key} class="chip">
@@ -103,16 +102,13 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
       </fieldset>
 
       <label class="field">
-        <span>Catalog regions</span>
+        <span>{t.profile.regions}</span>
         <input value={regions} onInput={(e) => setRegions(e.currentTarget.value)} placeholder="SE" />
-        <small class="muted">
-          Where you watch from. Add more (for example SE, NO) if you use another country's catalog.
-          Age ratings always come from nine reference countries, whatever you pick here.
-        </small>
+        <small class="muted">{t.profile.regionsHint}</small>
       </label>
 
       <fieldset class="field">
-        <legend>Content to avoid</legend>
+        <legend>{t.profile.avoid}</legend>
         <div class="chips">
           {config.categories.map((c) => (
             <label key={c} class="chip">
@@ -125,14 +121,11 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
             </label>
           ))}
         </div>
-        <small class="muted">
-          Used once guidance sources are connected. Until then each result links to Common Sense
-          Media and the IMDb Parents Guide.
-        </small>
+        <small class="muted">{t.profile.avoidHint}</small>
       </fieldset>
 
       <fieldset class="field">
-        <legend>Favourite genres</legend>
+        <legend>{t.profile.genres}</legend>
         <div class="chips">
           {GENRES.map((g) => (
             <label key={g} class="chip">
@@ -141,34 +134,35 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
                 checked={genres.includes(g)}
                 onChange={() => setGenres(toggle(genres, g))}
               />
-              {g}
+              {genreLabel(g)}
             </label>
           ))}
         </div>
       </fieldset>
 
       <fieldset class="field profile-defaults">
-        <legend>Default filters</legend>
-        <small class="muted">
-          Where Find's filters start, and what Clear filters goes back to. They are not fixed
-          rules: change them for any search.
-        </small>
+        <legend>{t.profile.defaults}</legend>
+        <small class="muted">{t.profile.defaultsHint}</small>
         <div class="filters-grid">
           <StopSlider
             id="profile-length"
-            label="Max length"
+            label={t.finder.maxLength}
             stops={LENGTH_STOPS}
             value={runtime}
-            valueText={runtime !== null && runtime <= SHORT_MAX_MIN ? `${lengthLabel(runtime)} · Shorts` : lengthLabel(runtime)}
-            tick={(m) => (m === null ? "Any" : m >= 60 ? `${m / 60}h` : String(m))}
+            valueText={
+              runtime !== null && runtime <= SHORT_MAX_MIN
+                ? fmt(t.profile.lengthShorts, { length: lengthLabel(runtime) })
+                : lengthLabel(runtime)
+            }
+            tick={lengthTick}
             onChange={setRuntime}
           />
           <StopSlider
             id="profile-score"
-            label="Min IMDb score"
+            label={t.finder.minScore}
             stops={SCORE_STOPS}
             value={minImdb}
-            valueText={minImdb > SCORE_STOPS[0] ? `${minImdb}+` : "Any"}
+            valueText={minImdb > SCORE_STOPS[0] ? `${minImdb}+` : t.finder.any}
             tick={scoreTick}
             onChange={setMinImdb}
           />
@@ -185,15 +179,15 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
           {saving ? (
             <>
               <Spinner />
-              Saving…
+              {t.profile.saving}
             </>
           ) : firstRun ? (
-            "Start finding"
+            t.profile.start
           ) : (
-            "Save profile"
+            t.profile.save
           )}
         </button>
-        {saved && !firstRun && <span class="muted">Saved.</span>}
+        {saved && !firstRun && <span class="muted">{t.profile.saved}</span>}
       </div>
     </form>
   );

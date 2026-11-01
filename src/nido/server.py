@@ -62,6 +62,7 @@ from nido.agent.tools import GUARD_STATE_KEY, HIDDEN_STATE_KEY, Toolbox
 from nido.auth import Authenticator, AuthError, FirebaseVerifier, User
 from nido.catalog import SERVICES, SERVICES_BY_KEY
 from nido.config import Settings, llm_credentials_available
+from nido.i18n import LANGUAGE_NAMES, localize_output, message, request_locale
 from nido.models import (
     Ban,
     BanScope,
@@ -81,10 +82,6 @@ from nido.store import Store, build_store
 log = logging.getLogger(__name__)
 
 MAX_MESSAGE_CHARS = 2000
-ATTRIBUTION = (
-    "Metadata: TMDB (this product uses the TMDB API but is not endorsed or certified by TMDB). "
-    "Streaming availability: JustWatch via TMDB. IMDb ratings via OMDb."
-)
 
 
 INVITE_TTL = timedelta(days=7)
@@ -397,11 +394,6 @@ def create_app(
 
         runner = Runner(app=build_app(settings, toolbox), session_service=InMemorySessionService())
     limits = {"chat": settings.max_chat_turns_per_day, "search": settings.max_searches_per_day}
-    over_limit = {
-        "chat": "Your family has used today's {limit} Ask Nido questions. They come back "
-        "tomorrow; the filters still work.",
-        "search": "Your family has used today's {limit} searches. They come back tomorrow.",
-    }
     # Per chat session: every title the tools returned, by key, so later answers get cards.
     session_titles: OrderedDict[tuple[str, str], dict[str, dict[str, Any]]] = OrderedDict()
 
@@ -415,6 +407,12 @@ def create_app(
         return await authenticator(authorization)
 
     CurrentUser = Annotated[User, Depends(current_user)]
+
+    async def page_locale(x_nido_locale: Annotated[str | None, Header()] = None) -> str:
+        """The web app's page language (es, en or pt); English for any other client."""
+        return request_locale(x_nido_locale)
+
+    PageLocale = Annotated[str, Depends(page_locale)]
 
     async def current_member(user: CurrentUser) -> Member:
         member = await store.get_member(user.uid)
@@ -438,7 +436,7 @@ def create_app(
     Family = Annotated[str, Depends(current_family)]
 
     async def find(
-        profile: FamilyProfile, request: SearchRequest, marks: list[TitleMark]
+        profile: FamilyProfile, request: SearchRequest, marks: list[TitleMark], locale: str
     ) -> dict[str, Any]:
         try:
             return await toolbox.search(
@@ -475,21 +473,21 @@ def create_app(
             raise HTTPException(503, str(exc)) from exc
         except httpx.HTTPError as exc:
             log.warning("search failed: %s", exc)
-            raise HTTPException(502, "a data source did not answer; try again") from exc
+            raise HTTPException(502, message("source_down", locale)) from exc
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
         return {"ok": True}
 
     @app.get("/api/config")
-    async def config() -> dict[str, Any]:
+    async def config(locale: PageLocale) -> dict[str, Any]:
         return {
             "services": [{"key": s.key, "name": s.name} for s in SERVICES],
             "categories": [c.value for c in GuidanceCategory if c is not GuidanceCategory.OTHER],
             "default_regions": list(settings.regions),
             "chat_enabled": runner is not None,
             "auth": authenticator.mode,
-            "attribution": ATTRIBUTION,
+            "attribution": message("attribution", locale),
         }
 
     @app.get("/api/profile")
@@ -503,7 +501,7 @@ def create_app(
         await store.put_profile(family, profile)
         return {"profile": profile.model_dump(mode="json")}
 
-    async def take_quota(family: str, kind: str) -> dict[str, int | None]:
+    async def take_quota(family: str, kind: str, locale: str) -> dict[str, int | None]:
         """Counts one request against the family's daily quota: {used today, limit or None}."""
         # The family id is its owner's uid; owners on NIDO_ALLOWED_EMAILS have no limit.
         owner = await store.get_member(family)
@@ -511,7 +509,7 @@ def create_app(
         limit = None if unlimited else limits[kind]
         used = await store.take_quota(family, kind, datetime.now(UTC).date(), limit)
         if used is None:
-            raise HTTPException(429, over_limit[kind].format(limit=limit))
+            raise HTTPException(429, message(f"over_limit_{kind}", locale, limit=limit))
         return {"used": used, "limit": limit}
 
     async def require_profile(family: str) -> FamilyProfile:
@@ -521,18 +519,20 @@ def create_app(
         return profile
 
     @app.post("/api/search")
-    async def search(request: SearchRequest, family: Family) -> dict[str, Any]:
+    async def search(request: SearchRequest, family: Family, locale: PageLocale) -> dict[str, Any]:
         profile = await require_profile(family)
-        quota = await take_quota(family, "search")
+        quota = await take_quota(family, "search", locale)
         marks = await store.list_marks(family)
-        found = with_marks(await find(profile, request, marks), marks, profile) or {}
-        return {**found, "quota": quota}
+        found = with_marks(await find(profile, request, marks, locale), marks, profile) or {}
+        return {**(localize_output(found, locale) or {}), "quota": quota}
 
     @app.post("/api/chat")
-    async def chat(request: ChatRequest, user: CurrentUser, family: Family) -> dict[str, Any]:
+    async def chat(
+        request: ChatRequest, user: CurrentUser, family: Family, locale: PageLocale
+    ) -> dict[str, Any]:
         if runner is None:
             raise HTTPException(503, "chat is off: no model credentials on the server")
-        quota = await take_quota(family, "chat")
+        quota = await take_quota(family, "chat", locale)
         from google.genai import types
 
         profile = await store.get_profile(family)
@@ -565,6 +565,8 @@ def create_app(
                 state_delta={
                     "family": describe_family(profile),
                     "today": date.today().isoformat(),
+                    # The page's language, so the answer follows the language the family picked.
+                    "language": LANGUAGE_NAMES[locale],
                     HIDDEN_STATE_KEY: hidden,
                     GUARD_STATE_KEY: family_guard(profile),
                 },
@@ -576,18 +578,19 @@ def create_app(
                 if text := _final_text(event):
                     reply.append(text)
         except LlmBudgetExceededError:
-            note = "Stopped early: this turn reached its model call limit."
+            note = message("stopped_budget", locale)
         except Exception as exc:  # model quota, network: report, keep the session
             log.warning("chat turn failed: %s", exc)
             if results is None and not reply:
-                busy = "The assistant is busy right now. Try again in a minute, or use the filters."
-                raise HTTPException(503, busy) from exc
-            note = "The assistant stopped before finishing."
+                raise HTTPException(503, message("busy", locale)) from exc
+            note = message("stopped", locale)
         text = safe_links("\n\n".join(reply).strip(), known)
         return {
             "session_id": session.id,
             "reply": text,
-            "results": with_marks(chat_cards(text, results, known), marks, profile),
+            "results": localize_output(
+                with_marks(chat_cards(text, results, known), marks, profile), locale
+            ),
             "note": note,
             "quota": quota,
         }
@@ -628,7 +631,9 @@ def create_app(
         return {"items": [present_mark(m, profile) for m in marks]}
 
     @app.get("/api/titles/{media_type}/{tmdb_id}")
-    async def title_details(media_type: MediaType, tmdb_id: int, family: Family) -> dict[str, Any]:
+    async def title_details(
+        media_type: MediaType, tmdb_id: int, family: Family, locale: PageLocale
+    ) -> dict[str, Any]:
         # Opening a title the family saved is not a search: TMDB and OMDb answers are cached,
         # so it does not count against the daily quota. Only saved or marked titles open, so
         # the route cannot be used to look up any title without spending searches.
@@ -648,11 +653,12 @@ def create_app(
             if exc.response.status_code == 404:
                 raise HTTPException(404, "title not found") from exc
             log.warning("title details failed: %s", exc)
-            raise HTTPException(502, "a data source did not answer; try again") from exc
+            raise HTTPException(502, message("source_down", locale)) from exc
         except httpx.HTTPError as exc:
             log.warning("title details failed: %s", exc)
-            raise HTTPException(502, "a data source did not answer; try again") from exc
-        return {"result": with_marks({"results": [result]}, marks, profile)["results"][0]}
+            raise HTTPException(502, message("source_down", locale)) from exc
+        output = localize_output(with_marks({"results": [result]}, marks, profile), locale) or {}
+        return {"result": output["results"][0]}
 
     @app.put("/api/titles/{media_type}/{tmdb_id}")
     async def put_mark(
@@ -726,7 +732,7 @@ def create_app(
         return {"token": invite.token, "expires_at": invite.expires_at.isoformat()}
 
     @app.post("/api/invites/{token}")
-    async def accept_invite(token: str, user: CurrentUser) -> dict[str, Any]:
+    async def accept_invite(token: str, user: CurrentUser, locale: PageLocale) -> dict[str, Any]:
         gone = HTTPException(410, "this invite link has expired or was already used")
         now = datetime.now(UTC)
         invite = await store.get_invite(token)
@@ -740,7 +746,7 @@ def create_app(
             raise gone
         if current and len(await store.list_members(current.family_id)) > 1:
             # Leaving would strand the others' shared data behind someone who no longer sees it.
-            raise HTTPException(409, "leave your current family first (Family tab)")
+            raise HTTPException(409, message("leave_first", locale))
         if len(await store.list_members(invite.family_id)) >= MAX_FAMILY_MEMBERS:
             raise HTTPException(409, f"that family already has {MAX_FAMILY_MEMBERS} members")
         if await store.claim_invite(token, user.uid, now) is None:

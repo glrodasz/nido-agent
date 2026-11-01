@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
+import { t } from "../i18n";
 import { api, type TitleInfo } from "../logic/api";
 import { posterHue } from "../logic/format";
 import type {
@@ -66,9 +67,9 @@ const info = (e: Entry): TitleInfo => ({
 function MarkBadges({ mark }: { mark: TitleMark | undefined }) {
   if (!mark) return null;
   const on = [
-    mark.liked_adults && (["heart", "We liked it"] as const),
-    mark.liked_child && (["smile", "Our kid liked it"] as const),
-    mark.rewatch && (["repeat", "On repeat"] as const),
+    mark.liked_adults && (["heart", t.marks.likedAdults] as const),
+    mark.liked_child && (["smile", t.marks.likedChild] as const),
+    mark.rewatch && (["repeat", t.marks.rewatch] as const),
   ].filter(Boolean) as (readonly ["heart" | "smile" | "repeat", string])[];
   if (on.length === 0) return null;
   return (
@@ -110,8 +111,8 @@ export default function Watchlist({
   if (items.length === 0 && onRepeat.length === 0) {
     return (
       <div class="empty">
-        <h2 class="section-title">Your watchlist is empty</h2>
-        <p class="muted">Press Save on any pick to keep it here for movie night.</p>
+        <h2 class="section-title">{t.watchlist.emptyTitle}</h2>
+        <p class="muted">{t.watchlist.emptyBody}</p>
       </div>
     );
   }
@@ -136,7 +137,7 @@ export default function Watchlist({
       } catch (err) {
         setFailed((all) => ({
           ...all,
-          [e.key]: err instanceof Error ? err.message : "Could not load the details.",
+          [e.key]: err instanceof Error ? err.message : t.watchlist.detailsFailed,
         }));
         return;
       } finally {
@@ -148,13 +149,13 @@ export default function Watchlist({
 
   const row = (e: Entry, actions: ComponentChildren) => {
     const isOpen = open.has(e.key) && details[e.key];
-    const meta = [e.year, e.media_type === "tv" ? "Series" : "Movie"].filter(Boolean).join(" · ");
+    const meta = [e.year, e.media_type === "tv" ? t.card.series : t.card.movie].filter(Boolean).join(" · ");
     const hide = (
       <button type="button" class="link link-quiet" onClick={() => close(e.key)}>
         <span class="chev-up">
           <Icon name="chevron-down" />
         </span>
-        Hide details
+        {t.watchlist.hideDetails}
       </button>
     );
     return (
@@ -202,7 +203,7 @@ export default function Watchlist({
               <span class="wl-chev" aria-hidden="true">
                 {opening === e.key ? <Spinner /> : <Icon name="chevron-down" />}
               </span>
-              <span class="sr-only">Show details and marks</span>
+              <span class="sr-only">{t.watchlist.showDetails}</span>
             </button>
             {actions}
           </div>
@@ -224,7 +225,7 @@ export default function Watchlist({
           onClick={() => track(`watched:${key}`, () => onWatched(item, !item.watched))}
         >
           {pending === `watched:${key}` ? <Spinner /> : <Icon name="eye" />}
-          Watched
+          {t.watchlist.watched}
         </button>
         <button
           type="button"
@@ -234,7 +235,7 @@ export default function Watchlist({
           onClick={() => track(`remove:${key}`, () => onRemove(item))}
         >
           {pending === `remove:${key}` && <Spinner />}
-          Remove
+          {t.watchlist.remove}
         </button>
       </>
     );
@@ -250,9 +251,9 @@ export default function Watchlist({
       {onRepeat.length > 0 && (
         <section class="on-repeat">
           <h2 class="section-title">
-            <Icon name="repeat" /> On repeat
+            <Icon name="repeat" /> {t.watchlist.onRepeat}
           </h2>
-          <p class="muted">Already seen, but the kids love to watch these again.</p>
+          <p class="muted">{t.watchlist.onRepeatBody}</p>
           <ul class="watchlist">
             {onRepeat.map((m) =>
               row(
@@ -267,7 +268,7 @@ export default function Watchlist({
                   }
                 >
                   {pending === `repeat:${m.key}` && <Spinner />}
-                  Remove
+                  {t.watchlist.remove}
                 </button>,
               ),
             )}
@@ -276,13 +277,13 @@ export default function Watchlist({
       )}
       {toWatch.length > 0 && (
         <>
-          <h2 class="section-title">To watch</h2>
+          <h2 class="section-title">{t.watchlist.toWatch}</h2>
           {list(toWatch)}
         </>
       )}
       {watched.length > 0 && (
         <>
-          <h2 class="section-title">Watched</h2>
+          <h2 class="section-title">{t.watchlist.watchedList}</h2>
           {list(watched)}
         </>
       )}

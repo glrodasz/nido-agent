@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { t } from "../i18n";
 import { banLabel, posterHue } from "../logic/format";
 import type { MarkChange, TitleMark } from "../logic/types";
 import Spinner, { usePending } from "./Spinner";
@@ -16,11 +17,9 @@ export default function HiddenTitles({ marks, onMark }: Props) {
     .sort((a, b) => Number(b.ban_active) - Number(a.ban_active));
   return (
     <section class="panel hidden-titles">
-      <h2 class="section-title">Titles Nido won't suggest</h2>
+      <h2 class="section-title">{t.hidden.title}</h2>
       {banned.length === 0 ? (
-        <p class="muted">
-          None yet. Press "Don't suggest…" on a result to hide it for now or for good.
-        </p>
+        <p class="muted">{t.hidden.none}</p>
       ) : (
         <ul class="watchlist">
           {banned.map((m) => (
@@ -29,7 +28,7 @@ export default function HiddenTitles({ marks, onMark }: Props) {
               <div class="wl-text">
                 <strong>{m.name}</strong>
                 <span class={m.ban_active ? "muted" : "muted lifted"}>
-                  {[m.year, m.title.media_type === "tv" ? "Series" : "Movie"]
+                  {[m.year, m.title.media_type === "tv" ? t.card.series : t.card.movie]
                     .filter(Boolean)
                     .join(" · ")}{" "}
                   · {banLabel(m.ban!, m.ban_active)}
@@ -46,7 +45,7 @@ export default function HiddenTitles({ marks, onMark }: Props) {
                   }
                 >
                   {pending === `always:${m.key}` && <Spinner />}
-                  Hide at every age
+                  {t.hidden.hideAlways}
                 </button>
               )}
               <button
@@ -57,7 +56,7 @@ export default function HiddenTitles({ marks, onMark }: Props) {
                 onClick={() => track(`clear:${m.key}`, () => onMark(m, { ban: null }))}
               >
                 {pending === `clear:${m.key}` && <Spinner />}
-                {m.ban_active ? "Suggest again" : "Clear"}
+                {m.ban_active ? t.hidden.suggestAgain : t.hidden.clear}
               </button>
             </li>
           ))}

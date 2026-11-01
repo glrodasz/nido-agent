@@ -1,13 +1,9 @@
 ---
+// Spanish, the default language: served at / with no prefix (src/i18n/locale.ts).
 import App from "../islands/App";
 import Base from "../layouts/Base.astro";
 ---
 
-<Base
-  title="Nido"
-  socialTitle="Nido: what should we watch tonight?"
-  description="Find movies and series the whole family will enjoy, on the services you already pay for."
->
+<Base locale="es">
   <App client:only="preact" />
-  <noscript><p class="center">Nido needs JavaScript.</p></noscript>
 </Base>

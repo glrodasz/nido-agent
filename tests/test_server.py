@@ -625,3 +625,18 @@ def test_title_details_only_open_saved_or_marked_titles():
     c.put("/api/profile", json=PROFILE)
     assert c.get("/api/titles/movie/99").status_code == 404
     assert not any("details" in call for call in toolbox.calls)
+
+
+def test_chat_answers_in_the_page_language_and_translates_the_cards():
+    card = {**RESULT["results"][0], "why": ["Included in your subscriptions."]}
+    found = {**RESULT, "results": [card]}
+    runner = FakeRunner([event(tool_output=found), event(text="Paddington 2")])
+    c, _ = client(runner=runner)
+    c.put("/api/profile", json=PROFILE)
+    body = c.post(
+        "/api/chat", json={"message": "algo divertido"}, headers={"X-Nido-Locale": "es"}
+    ).json()
+    assert runner.state_deltas[0]["language"].startswith("Spanish")
+    assert body["results"]["results"][0]["why"] == ["Incluida en tus suscripciones."]
+    c.post("/api/chat", json={"message": "something fun"})
+    assert runner.state_deltas[1]["language"] == "English"

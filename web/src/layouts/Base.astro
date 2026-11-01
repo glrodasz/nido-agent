@@ -1,32 +1,39 @@
 ---
 import "../styles/global.css";
+import { MESSAGES } from "../i18n";
+import { localeBootScript } from "../i18n/boot";
+import { LOCALES, OG_LOCALES, alternateLinks, localizePath, type Locale } from "../i18n/locale";
 import { canonicalRedirect } from "../logic/canonical";
 
 interface Props {
-  title: string;
-  description: string;
-  socialTitle?: string;
+  locale: Locale;
 }
-const { title, description, socialTitle = title } = Astro.props;
-const url = new URL(Astro.url.pathname, Astro.site);
+const { locale } = Astro.props;
+const { title, description, socialTitle, ogAlt } = MESSAGES[locale].meta;
+const site = Astro.site ?? Astro.url;
+const url = new URL(localizePath("/", locale), site);
+const alternates = alternateLinks("/", site.origin);
 const ogImage = new URL("/og/nido-og.png", Astro.site);
 const canonicalScript = `try{var t=(${canonicalRedirect})(location.href,${JSON.stringify(
   new URL(Astro.site ?? Astro.url).origin,
 )});if(t)location.replace(t)}catch(e){}`;
-const ogAlt = "Nido: what should we watch tonight? Family picks on the services you already pay for.";
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="utf-8" />
     <!-- First, before anything loads: move the default Firebase domains to the canonical one. -->
     <script is:inline set:html={canonicalScript} />
+    <!-- Then send an unprefixed first visit to the saved or browser language (src/i18n/locale.ts). -->
+    <script is:inline set:html={localeBootScript()} />
+    <style is:inline>html[data-locale-pending] body{opacity:0}</style>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#1F2A35" />
     <link rel="canonical" href={url} />
+    {alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={a.href} />)}
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
@@ -42,7 +49,10 @@ const ogAlt = "Nido: what should we watch tonight? Family picks on the services 
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content={ogAlt} />
-    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale" content={OG_LOCALES[locale]} />
+    {LOCALES.filter((l) => l !== locale).map((l) => (
+      <meta property="og:locale:alternate" content={OG_LOCALES[l]} />
+    ))}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={socialTitle} />
     <meta name="twitter:description" content={description} />
@@ -61,5 +71,6 @@ const ogAlt = "Nido: what should we watch tonight? Family picks on the services 
   </head>
   <body>
     <slot />
+    <noscript><p class="center">{MESSAGES[locale].meta.noscript}</p></noscript>
   </body>
 </html>

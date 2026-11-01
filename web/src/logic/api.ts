@@ -1,3 +1,4 @@
+import { locale } from "../i18n";
 import { idToken } from "./auth";
 import type {
   AppConfig,
@@ -25,7 +26,8 @@ export class ApiError extends Error {
 }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  // The page's language: Ask Nido answers in it and the server writes card reasons in it.
+  const headers: Record<string, string> = { Accept: "application/json", "X-Nido-Locale": locale };
   const token = await idToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";

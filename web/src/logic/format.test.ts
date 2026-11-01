@@ -1,3 +1,4 @@
+import { plural, t } from "../i18n";
 import { describe, expect, it } from "vitest";
 import {
   accessLabel,
@@ -9,7 +10,6 @@ import {
   genresFor,
   parseAges,
   parseRegions,
-  plural,
   posterHue,
   newestFirst,
   releasedSince,
@@ -219,9 +219,9 @@ describe("yearSpan", () => {
 
 describe("plural", () => {
   it("counts searches and questions", () => {
-    expect(plural(1, "search")).toBe("1 search");
-    expect(plural(3, "search")).toBe("3 searches");
-    expect(plural(0, "Ask Nido question")).toBe("0 Ask Nido questions");
+    expect(plural(1, t.quota.search)).toBe("1 search");
+    expect(plural(3, t.quota.search)).toBe("3 searches");
+    expect(plural(0, t.quota.chat)).toBe("0 Ask Nido questions");
   });
 });
 

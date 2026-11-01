@@ -10,12 +10,14 @@ import type {
   TitleResult,
   WatchlistItem,
 } from "../logic/types";
+import { fmt, formatNumber, t } from "../i18n";
 import { currentTheme, setTheme, type Theme } from "../logic/theme";
 import FamilyMembers from "./FamilyMembers";
 import Finder from "./Finder";
 import HiddenTitles from "./HiddenTitles";
 import Icon from "./Icon";
 import Landing from "./Landing";
+import LanguageMenu from "./LanguageMenu";
 import Logo from "./Logo";
 import ProfileForm from "./ProfileForm";
 import Spinner from "./Spinner";
@@ -56,7 +58,7 @@ export default function App() {
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    api.config().then(setConfig, () => setError("Nido's server is not reachable."));
+    api.config().then(setConfig, () => setError(t.app.serverDown));
     if (!authEnabled) return;
     let stop: (() => void) | undefined;
     watchUser((user) =>
@@ -85,10 +87,10 @@ export default function App() {
           () => null,
           (err) =>
             err instanceof ApiError && err.status === 410
-              ? "This invite link has expired or was already used. Ask for a new one."
+              ? t.app.inviteGone
               : err instanceof Error
                 ? err.message
-                : "Could not use the invite link.",
+                : t.app.inviteFailed,
         );
         forgetInviteInUrl();
         setInvite(null);
@@ -104,7 +106,7 @@ export default function App() {
         if (stale) return;
         setProfile(undefined);
         setError(
-          inviteProblem ?? (err instanceof Error ? err.message : "Could not load your family."),
+          inviteProblem ?? (err instanceof Error ? err.message : t.app.loadFailed),
         );
       }
     })();
@@ -135,7 +137,7 @@ export default function App() {
         !updated.ban;
       setMarks((all) => [...(empty ? [] : [updated]), ...all.filter((m) => m.key !== updated.key)]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save that mark.");
+      setError(err instanceof Error ? err.message : t.app.markFailed);
     }
   }
 
@@ -163,7 +165,7 @@ export default function App() {
         setWatchlist((w) => [item, ...w]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update the watchlist.");
+      setError(err instanceof Error ? err.message : t.app.watchlistFailed);
     }
   }
 
@@ -181,7 +183,7 @@ export default function App() {
       );
       setWatchlist((w) => w.map((i) => (itemKey(i) === itemKey(item) ? updated : i)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update the watchlist.");
+      setError(err instanceof Error ? err.message : t.app.watchlistFailed);
     }
   }
 
@@ -190,7 +192,7 @@ export default function App() {
       await api.unsave(item.title.media_type, item.title.tmdb_id);
       setWatchlist((w) => w.filter((i) => itemKey(i) !== itemKey(item)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update the watchlist.");
+      setError(err instanceof Error ? err.message : t.app.watchlistFailed);
     }
   }
 
@@ -200,7 +202,7 @@ export default function App() {
     setThemeState(next);
   }
 
-  // Visitors without an invite get the Spanish landing page instead of the app.
+  // Visitors without an invite get the landing page instead of the app.
   const landing = session.state === "signed-out" && !invite;
 
   const header = (
@@ -209,18 +211,21 @@ export default function App() {
         <Logo />
       </div>
       {landing && (
-        <nav class="lp-nav" aria-label="Secciones" lang="es">
-          <a href="#que-hace">Qué hace</a>
-          <a href="#como-funciona">Cómo funciona</a>
+        <nav class="lp-nav" aria-label={t.header.landingNav}>
+          <a href="#que-hace">{t.header.whatItDoes}</a>
+          <a href="#como-funciona">{t.header.howItWorks}</a>
         </nav>
       )}
       {session.state === "in" && profile && (
-        <nav class="tabs" aria-label="Sections">
+        <nav class="tabs" aria-label={t.header.sections}>
           {(
             [
-              ["find", "Find"],
-              ["watchlist", `Watchlist${watchlist.length ? ` (${watchlist.length})` : ""}`],
-              ["family", "Family"],
+              ["find", t.header.find],
+              [
+                "watchlist",
+                watchlist.length ? fmt(t.header.watchlistCount, { n: watchlist.length }) : t.header.watchlist,
+              ],
+              ["family", t.header.family],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -236,18 +241,19 @@ export default function App() {
         </nav>
       )}
       <div class="top-end">
+        <LanguageMenu />
         <button
           type="button"
           class="icon-btn"
-          aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"}
-          title={theme === "dark" ? "Light theme" : "Dark theme"}
+          aria-label={theme === "dark" ? t.header.useLight : t.header.useDark}
+          title={theme === "dark" ? t.header.lightTheme : t.header.darkTheme}
           onClick={toggleTheme}
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
         {authEnabled && session.state === "in" && (
           <button type="button" class="link" onClick={() => signOut()}>
-            Sign out
+            {t.header.signOut}
           </button>
         )}
       </div>
@@ -259,7 +265,7 @@ export default function App() {
     body = (
       <p class="loading" role="status">
         <Spinner />
-        Loading…
+        {t.app.loading}
       </p>
     );
   } else if (session.state === "signed-out") {
@@ -267,10 +273,10 @@ export default function App() {
     body = (
       <section class="hero">
         <div class="hero-text">
-          <h1>You're invited to a family on Nido</h1>
-          <p>Sign in with Google to join. You'll share the family's profile, watchlist and marks.</p>
+          <h1>{t.invite.title}</h1>
+          <p>{t.invite.body}</p>
           <button type="button" class="btn btn-primary" onClick={() => signIn().catch(() => {})}>
-            Sign in with Google to join
+            {t.invite.signIn}
           </button>
         </div>
         <HeroSample />
@@ -352,7 +358,7 @@ function HeroSample() {
         <div class="card-head">
           <div>
             <h3>My Neighbor Totoro</h3>
-            <p class="muted">1988 · Movie · 86 min</p>
+            <p class="muted">1988 · {t.card.movie} · {fmt(t.card.minutes, { n: 86 })}</p>
           </div>
         </div>
         <div class="watch">
@@ -362,13 +368,13 @@ function HeroSample() {
           </span>
           <span class="imdb">
             <Icon name="star" filled />
-            IMDb <strong>8.1</strong>
+            IMDb <strong>{formatNumber(8.1)}</strong>
           </span>
         </div>
         <p class="verdict verdict-fit">
           <span class="verdict-dot" />
-          <strong>Good for all of you</strong>
-          <span class="verdict-why"> · Fits your ages and services</span>
+          <strong>{t.invite.sampleVerdict}</strong>
+          <span class="verdict-why"> · {t.invite.sampleWhy}</span>
         </p>
       </div>
     </div>
