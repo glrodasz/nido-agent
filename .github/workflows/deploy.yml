@@ -172,12 +172,17 @@ jobs:
           PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
           PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           PUBLIC_FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          # Optional custom domain (docs/SETUP.md). Once set, the default Firebase domains
+          # redirect to it.
+          PUBLIC_SITE_URL: ${{ vars.SITE_URL }}
         run: |
           npm ci
           npm run build
 
       - name: Deploy to Firebase Hosting
         if: steps.cfg.outputs.ok == 'true'
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
         run: |
           # The rewrite in firebase.json names the service's region; keep it in sync with GCP_REGION.
           jq --arg region "${REGION}" '.hosting.rewrites[0].run.region = $region' firebase.json \
@@ -187,6 +192,6 @@ jobs:
           {
             echo "### Deployed"
             echo ""
-            echo "- App: https://${PROJECT_ID}.web.app"
+            echo "- App: ${SITE_URL:-https://${PROJECT_ID}.web.app}"
             echo "- API: Cloud Run \`${SERVICE}\` (${REGION}), image \`${{ steps.image.outputs.ref }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
