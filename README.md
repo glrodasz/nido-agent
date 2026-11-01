@@ -14,7 +14,7 @@
 
 [**Live app**](https://nido-agent.web.app) · [How it works](#how-it-works) · [Architecture](#architecture) · [Quick start](#quick-start) · [Deploy](docs/SETUP.md)
 
-<img src="docs/assets/landing.png" alt="Nido's landing page (in Spanish) with its built-in example: a parent asks for a fun science fiction movie, Nido answers in two sentences and shows two title cards with the streaming service, the IMDb score and an age verdict for a 4-year-old" width="860">
+<img src="web/public/og/nido-og.png" alt="Nido: What should we watch tonight? Family picks the grown-ups will enjoy too, on the services you already pay for. Age-checked, well rated, where to stream." width="860">
 
 ## Why
 
