@@ -29,6 +29,10 @@ describe("canonicalRedirect", () => {
     expect(canonicalRedirect("https://evilweb.app.example.com/", WEB_APP)).toBeNull();
   });
 
+  it("lets Firebase preview channels be tested", () => {
+    expect(canonicalRedirect("https://nido-agent--pr34-abc123.web.app/", CUSTOM)).toBeNull();
+  });
+
   it("never touches Firebase's reserved paths, such as the sign-in handler", () => {
     expect(
       canonicalRedirect("https://nido-agent.firebaseapp.com/__/auth/handler?apiKey=k", WEB_APP),
