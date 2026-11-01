@@ -15,7 +15,15 @@ from google.adk.tools import ToolContext
 from nido.catalog import SERVICES_BY_KEY, SYSTEMS
 from nido.config import Settings
 from nido.models import FamilyProfile, GuidanceCategory, MediaType, Rating, TitleRef
-from nido.ranking import Candidate, Ranked, assess, evaluate, near_misses, shortlist
+from nido.ranking import (
+    Candidate,
+    Ranked,
+    age_baseline,
+    assess,
+    evaluate,
+    near_misses,
+    shortlist,
+)
 from nido.sources import tmdb as tmdb_source
 from nido.sources.omdb import OmdbClient
 from nido.sources.tmdb import TmdbClient
@@ -443,6 +451,36 @@ class Toolbox:
             return {**out, "not_available": candidate.title.name}
         bucket = "near_misses" if ranked.misses else "results"
         return {**out, bucket: [_present(ranked, regions)]}
+
+    async def details(
+        self, media_type: str, tmdb_id: int, profile: FamilyProfile
+    ) -> dict[str, Any]:
+        """One title the family already knows (from the watchlist or its marks), as a result card
+        judged against its profile. Unlike look_up it never drops the title: one that is not
+        streaming in the family's regions still opens, with a caution saying so."""
+        kind = MediaType(media_type)
+        regions = clean_regions(profile.regions) or clean_regions(list(self._settings.regions))
+        profile = profile.model_copy(update={"regions": regions})
+        candidate = await self._candidate(kind, tmdb_id, regions)
+        await self._rate(candidate)
+        ranked = assess(candidate, profile)
+        if ranked is None:
+            baseline = age_baseline(candidate.classifications)
+            misses = (
+                [f"Rated {baseline.age}+, and your youngest is {profile.youngest}."]
+                if baseline and baseline.age > profile.youngest
+                else []
+            )
+            ranked = Ranked(
+                candidate=candidate,
+                score=0.0,
+                included=False,
+                baseline=baseline,
+                reasons=[],
+                cautions=["Not streaming in your regions right now."],
+                misses=misses,
+            )
+        return _present(ranked, regions)
 
     def guidance_links(self, title: str, imdb_id: str | None = None) -> dict[str, Any]:
         """Links to parental guidance sources for one title. Use them to point parents to the

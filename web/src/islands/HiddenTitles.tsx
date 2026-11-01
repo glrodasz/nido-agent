@@ -72,6 +72,6 @@ export function Poster({ url, hue }: { url: string | null; hue: number }) {
   return url && !failed ? (
     <img src={url} alt="" width={46} height={69} loading="lazy" onError={() => setFailed(true)} />
   ) : (
-    <div class="poster-empty small" style={{ "--hue": hue }} aria-hidden="true" />
+    <span class="poster-empty small" style={{ "--hue": hue }} aria-hidden="true" />
   );
 }

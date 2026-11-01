@@ -3,7 +3,7 @@ import { ApiError, api } from "../logic/api";
 import {
   familyLine,
   type FindKind,
-  GENRES,
+  genresFor,
   LENGTH_STOPS,
   lengthLabel,
   newestFirst,
@@ -132,6 +132,13 @@ function loadSeenLast(): boolean {
   }
 }
 
+/** The picked genres that exist for the chosen type: a genre picked for movies stays picked
+ * when switching to series, but only filters the type that has it. */
+const applicable = (f: Filters) => {
+  const offered = genresFor(f.kind === "tv" ? "tv" : "movie");
+  return f.genres.filter((g) => offered.includes(g));
+};
+
 export default function Finder({
   config,
   profile,
@@ -204,7 +211,7 @@ export default function Finder({
     const found = await run("search", () =>
       api.search({
         ...searchKind(f.kind, f.runtime),
-        genres: f.genres.length ? f.genres : undefined,
+        genres: applicable(f).length ? applicable(f) : undefined,
         min_imdb_rating: f.minImdb > SCORE_STOPS[0] ? f.minImdb : undefined,
         released_since: releasedSince(f.since ? Number(f.since) : null),
       }),
@@ -446,7 +453,7 @@ export default function Finder({
           <fieldset class="filter-field filter-genres">
             <legend class="filter-label">Genres</legend>
             <div class="chips chips-small">
-              {GENRES.map((g) => (
+              {genresFor(kind === "tv" ? "tv" : "movie").map((g) => (
                 <label key={g} class="chip">
                   <input type="checkbox" checked={genres.includes(g)} onChange={() => toggleGenre(g)} />
                   {g}

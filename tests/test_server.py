@@ -45,6 +45,10 @@ class FakeToolbox:
     def guidance_links(self, title: str) -> dict[str, Any]:
         return {}
 
+    async def details(self, media_type: str, tmdb_id: int, profile: Any) -> dict[str, Any]:
+        self.calls.append({"details": (media_type, tmdb_id), "regions": profile.regions})
+        return {"title": "Paddington 2", "media_type": media_type, "tmdb_id": tmdb_id}
+
 
 def client(**kwargs: Any) -> tuple[TestClient, FakeToolbox]:
     toolbox = kwargs.pop("toolbox", FakeToolbox())
@@ -583,3 +587,23 @@ def test_a_member_of_a_shared_family_must_leave_before_joining_another():
     assert c.post(f"/api/invites/{token}", headers=PARTNER).status_code == 409
     c.delete("/api/family/members/partner", headers=PARTNER)
     assert c.post(f"/api/invites/{token}", headers=PARTNER).json()["joined"] is True
+
+
+def test_title_details_open_a_saved_title_with_its_marks_and_no_quota():
+    c, toolbox = client()
+    assert c.get("/api/titles/movie/1").status_code == 409
+    c.put("/api/profile", json=PROFILE)
+    c.put("/api/titles/movie/1", json={"name": "Paddington 2", "liked_child": True})
+    result = c.get("/api/titles/movie/1").json()["result"]
+    assert result["tmdb_id"] == 1 and result["mark"]["liked_child"] is True
+    assert toolbox.calls[-1] == {"details": ("movie", 1), "regions": ["SE", "NO"]}
+    c.put("/api/watchlist/tv/2", json={"name": "Bluey"})
+    assert c.get("/api/titles/tv/2").json()["result"]["mark"] is None
+    assert c.get("/api/titles/book/2").status_code == 422
+
+
+def test_title_details_only_open_saved_or_marked_titles():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    assert c.get("/api/titles/movie/99").status_code == 404
+    assert not any("details" in call for call in toolbox.calls)

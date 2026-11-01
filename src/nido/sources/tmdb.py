@@ -145,10 +145,11 @@ def resolve_genres(requested: Iterable[str], available: dict[str, int]) -> dict[
     out: dict[str, int] = {}
     for wanted in requested:
         key = wanted.strip().lower()
-        key = _GENRE_ALIASES.get(key, key)
+        # Movies call it "Science Fiction", series "Sci-Fi & Fantasy": match either spelling.
+        keys = {key, _GENRE_ALIASES.get(key, key)}
         for name, genre_id in available.items():
             parts = {p.strip().lower() for p in name.split("&")}
-            if key == name.lower() or key in parts:
+            if name.lower() in keys or keys & parts:
                 out[name] = genre_id
     return out
 

@@ -6,6 +6,7 @@ import {
   categoryLabel,
   familyLine,
   formatVotes,
+  genresFor,
   parseAges,
   parseRegions,
   plural,
@@ -257,5 +258,15 @@ describe("type and length move together", () => {
     expect(withLength({ kind: "short" as const, runtime: 40 }, 60)).toEqual({ kind: "movie", runtime: 60 });
     expect(withLength({ kind: "short" as const, runtime: 40 }, null)).toEqual(movie);
     expect(withLength({ kind: "tv" as const, runtime: null }, 10)).toEqual({ kind: "tv", runtime: 10 });
+  });
+});
+
+describe("genresFor", () => {
+  it("offers each type only the genres TMDB has for it", () => {
+    expect(genresFor("movie")).toContain("Romance");
+    expect(genresFor("movie")).not.toContain("Kids");
+    expect(genresFor("tv")).toContain("Kids");
+    expect(genresFor("tv")).not.toContain("Music");
+    expect(genresFor("tv")).toContain("Western");
   });
 });

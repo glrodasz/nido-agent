@@ -70,6 +70,9 @@ export const api = {
   unsave: (mediaType: MediaType, tmdbId: number) =>
     call<{ ok: boolean }>("DELETE", `/watchlist/${mediaType}/${tmdbId}`),
   marks: () => call<{ items: TitleMark[] }>("GET", "/titles").then((r) => r.items),
+  /** One saved or marked title as a full result card, judged against the family profile. */
+  details: (mediaType: MediaType, tmdbId: number) =>
+    call<{ result: TitleResult }>("GET", `/titles/${mediaType}/${tmdbId}`).then((r) => r.result),
   mark: (t: TitleInfo, change: MarkChange) =>
     call<{ item: TitleMark }>("PUT", `/titles/${t.media_type}/${t.tmdb_id}`, {
       name: t.title,
