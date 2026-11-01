@@ -73,7 +73,13 @@ def test_profile_round_trip_normalizes_regions_and_services():
 
 @pytest.mark.parametrize(
     "patch",
-    [{"regions": ["Sweden"]}, {"children_ages": [21]}, {"children_ages": []}],
+    [
+        {"regions": ["Sweden"]},
+        {"children_ages": [19]},
+        {"children_ages": [-1]},
+        {"children_ages": []},
+        {"children_ages": list(range(11))},
+    ],
 )
 def test_profile_rejects_bad_values(patch):
     c, _ = client()
@@ -335,6 +341,60 @@ def test_family_description_has_no_identifying_fields():
     )
     assert "Netflix" in text and "frightening" in text and "SE" in text
     assert describe_family(None) == ""
+
+
+def test_profile_keeps_optional_nicknames_aligned_with_the_ages():
+    c, _ = client()
+    saved = c.put(
+        "/api/profile", json={**PROFILE, "children_names": ["  Leo  ", "", "extra"]}
+    ).json()["profile"]
+    assert saved["children_ages"] == [9, 6]
+    assert saved["children_names"] == ["Leo", ""]
+    no_names = c.put("/api/profile", json={**PROFILE, "children_names": ["", " "]}).json()
+    assert no_names["profile"]["children_names"] == []
+
+
+def test_an_adult_child_is_allowed_and_described_as_adult():
+    c, _ = client()
+    saved = c.put("/api/profile", json={**PROFILE, "children_ages": [18, 4]}).json()["profile"]
+    assert saved["children_ages"] == [18, 4]
+    text = describe_family(FamilyProfile(children_ages=[18, 4], children_names=["Ana", "Leo"]))
+    assert "Children's ages: 4, 18+ (adult)" in text
+
+
+def test_search_for_one_child_uses_only_that_childs_age():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    c.post("/api/search", json={"watching": [0]})
+    assert toolbox.calls[-1]["children_ages"] == [9]
+    c.post("/api/search", json={"watching": []})
+    assert toolbox.calls[-1]["children_ages"] == [9, 6]
+    before = len(toolbox.calls)
+    assert c.post("/api/search", json={"watching": [5]}).status_code == 422
+    assert len(toolbox.calls) == before
+
+
+def test_bans_follow_the_whole_family_even_when_one_child_watches():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    put_mark(c, 2, ban={"scope": "age", "until_age": 8})
+    c.post("/api/search", json={"watching": [0]})
+    assert toolbox.calls[-1]["hidden"] == ["movie:2"]
+
+
+def test_chat_for_one_child_narrows_the_guard_and_keeps_names_out():
+    runner = FakeRunner([event(tool_output=RESULT), event(text="ok")])
+    c, _ = client(runner=runner)
+    c.put("/api/profile", json={**PROFILE, "children_names": ["Leo", "Mia"]})
+    c.post("/api/chat", json={"message": "x", "watching": [1]})
+    state = runner.state_deltas[-1]
+    assert state["family_guard"]["children_ages"] == [6]
+    assert "Watching this time: only the child aged 6" in state["family"]
+    assert "Leo" not in state["family"] and "Mia" not in state["family"]
+    c.post("/api/chat", json={"message": "x"})
+    assert runner.state_deltas[-1]["family_guard"]["children_ages"] == [9, 6]
+    assert "Watching this time" not in runner.state_deltas[-1]["family"]
+    assert c.post("/api/chat", json={"message": "x", "watching": [2]}).status_code == 422
 
 
 def test_firebase_mode_without_token_is_401():
