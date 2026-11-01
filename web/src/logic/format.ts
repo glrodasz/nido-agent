@@ -275,6 +275,30 @@ export const LENGTH_STOPS: (number | null)[] = [10, 30, 40, 60, 120, null];
  * an IMDb score (common for shorts and specials) still show. */
 export const SCORE_STOPS = [4, 6, 7, 8, 9];
 
+/** The stop closest to a saved value (profiles saved before the sliders hold any number);
+ * null stays null, the "Any" end. On a tie the stricter stop wins: the lower one for a length
+ * limit, the higher one for a minimum score. */
+export function nearestStop(
+  stops: (number | null)[],
+  value: number | null,
+  stricter: "lower" | "higher" = "lower",
+): number | null {
+  if (value === null) return null;
+  let best: number | null = null;
+  for (const s of stops) {
+    if (s === null) continue;
+    const d = Math.abs(s - value);
+    const bestD = best === null ? Infinity : Math.abs(best - value);
+    const tieWins = d === bestD && best !== null && (stricter === "higher" ? s > best : s < best);
+    if (d < bestD || tieWins) best = s;
+  }
+  return best;
+}
+
+/** Score slider ticks: the first stop reads "Any" (the server still drops anything IMDb scores
+ * below 4, see ranking.IMDB_FLOOR). */
+export const scoreTick = (stop: number) => (stop === SCORE_STOPS[0] ? "Any" : String(stop));
+
 /** "10 min", "1h", "2h", "Any". */
 export function lengthLabel(min: number | null): string {
   if (min === null) return "Any";

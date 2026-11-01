@@ -1,4 +1,12 @@
-import { type FindKind, genresFor, SCORE_STOPS, withKind } from "./format";
+import {
+  type FindKind,
+  genresFor,
+  LENGTH_STOPS,
+  nearestStop,
+  SCORE_STOPS,
+  withKind,
+  withLength,
+} from "./format";
 import type { Profile, TitleMark } from "./types";
 
 export interface Filters {
@@ -25,12 +33,26 @@ export const DEFAULT_FILTERS: Filters = {
   since: DEFAULT_SINCE,
 };
 
-export const isDefault = (f: Filters) =>
-  f.kind === DEFAULT_FILTERS.kind &&
-  f.genres.length === 0 &&
-  f.runtime === DEFAULT_FILTERS.runtime &&
-  f.minImdb === DEFAULT_FILTERS.minImdb &&
-  f.since === DEFAULT_FILTERS.since;
+/** Where Find starts and what Clear filters goes back to: the profile's default length and
+ * score, snapped to the slider stops (a length of 40 min or less starts on Shorts). */
+export function profileFilters(profile: Profile): Filters {
+  const base = { ...DEFAULT_FILTERS, minImdb: profileScore(profile.min_imdb_rating) };
+  return withLength(base, profileLength(profile.max_runtime_min));
+}
+
+/** The profile's saved length as a slider stop; null is "Any". */
+export const profileLength = (min: number | null) => nearestStop(LENGTH_STOPS, min);
+/** The profile's saved score as a slider stop; the first stop is "Any". */
+export const profileScore = (score: number | null) =>
+  score === null ? SCORE_STOPS[0] : (nearestStop(SCORE_STOPS, score, "higher") ?? SCORE_STOPS[0]);
+
+export const isDefault = (f: Filters, base: Filters = DEFAULT_FILTERS) =>
+  f.kind === base.kind &&
+  f.genres.length === base.genres.length &&
+  f.genres.every((g) => base.genres.includes(g)) &&
+  f.runtime === base.runtime &&
+  f.minImdb === base.minImdb &&
+  f.since === base.since;
 
 const WELL_RATED = 7;
 const NEW_SINCE = "2";
@@ -58,20 +80,26 @@ const genreChip = (g: string): QuickChip => ({
   }),
 });
 
-const TYPE_CHIPS: QuickChip[] = [
+/** Back to Movies, keeping the profile's length when it is a movie length. */
+const toMovies = (f: Filters, base: Filters): Filters => ({
+  ...withKind(f, "movie"),
+  runtime: base.kind === "movie" ? base.runtime : null,
+});
+
+const typeChips = (base: Filters): QuickChip[] => [
   {
     id: "shorts",
     label: "Shorts",
     kind: "filter",
     on: (f) => f.kind === "short",
-    toggle: (f) => withKind(f, f.kind === "short" ? "movie" : "short"),
+    toggle: (f) => (f.kind === "short" ? toMovies(f, base) : withKind(f, "short")),
   },
   {
     id: "series",
     label: "Series",
     kind: "filter",
     on: (f) => f.kind === "tv",
-    toggle: (f) => withKind(f, f.kind === "tv" ? "movie" : "tv"),
+    toggle: (f) => (f.kind === "tv" ? toMovies(f, base) : withKind(f, "tv")),
   },
 ];
 
@@ -83,12 +111,16 @@ const NEW_CHIP: QuickChip = {
   toggle: (f) => ({ ...f, since: f.since === NEW_SINCE ? DEFAULT_SINCE : NEW_SINCE }),
 };
 
-const WELL_RATED_CHIP: QuickChip = {
-  id: "rated",
-  label: "Well rated",
-  kind: "filter",
-  on: (f) => f.minImdb === WELL_RATED,
-  toggle: (f) => ({ ...f, minImdb: f.minImdb === WELL_RATED ? SCORE_STOPS[0] : WELL_RATED }),
+/** Off goes back to the profile's score, or to "Any" when the profile already asks for 7. */
+const wellRatedChip = (base: Filters): QuickChip => {
+  const off = base.minImdb === WELL_RATED ? SCORE_STOPS[0] : base.minImdb;
+  return {
+    id: "rated",
+    label: "Well rated",
+    kind: "filter",
+    on: (f) => f.minImdb === WELL_RATED,
+    toggle: (f) => ({ ...f, minImdb: f.minImdb === WELL_RATED ? off : WELL_RATED }),
+  };
 };
 
 /** Titles the family keeps coming back to, newest mark first: On repeat, then "Our kid liked
@@ -108,8 +140,9 @@ export function quickChips(
   canAsk: boolean,
 ): QuickChip[] {
   const youngest = profile.children_ages.length ? Math.min(...profile.children_ages) : null;
-  const types =
-    youngest !== null && youngest <= SHORTS_FIRST_UP_TO_AGE ? TYPE_CHIPS : [...TYPE_CHIPS].reverse();
+  const base = profileFilters(profile);
+  const types = typeChips(base);
+  if (youngest === null || youngest > SHORTS_FIRST_UP_TO_AGE) types.reverse();
   const offered = genresFor(kind === "tv" ? "tv" : "movie");
   const favourites = profile.preferred_genres.length ? profile.preferred_genres : FALLBACK_GENRES;
   const genres = favourites.filter((g) => offered.includes(g)).slice(0, MAX_GENRE_CHIPS);
@@ -124,5 +157,5 @@ export function quickChips(
           question: `Suggest titles similar to ${m.name} that we haven't seen yet.`,
         }))
     : [];
-  return [...types, NEW_CHIP, WELL_RATED_CHIP, ...genres.map(genreChip), ...likes];
+  return [...types, NEW_CHIP, wellRatedChip(base), ...genres.map(genreChip), ...likes];
 }

@@ -2407,3 +2407,12 @@ a.imdb:hover {
     animation: none;
   }
 }
+
+/* Profile: the default length and score sliders, framed as starting values for Find. */
+.profile-defaults {
+  gap: 0.6rem;
+}
+
+.profile-defaults .filters-grid {
+  margin-top: 0.4rem;
+}

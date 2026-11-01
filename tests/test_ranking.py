@@ -14,6 +14,7 @@ from nido.models import (
     TitleRef,
 )
 from nido.ranking import (
+    IMDB_FLOOR,
     SHORTLIST_SIZE,
     Candidate,
     age_baseline,
@@ -247,3 +248,12 @@ def test_search_pool_gathers_enough_titles_to_fill_the_shortlist():
     from nido.agent.tools import ENOUGH_ELIGIBLE
 
     assert SHORTLIST_SIZE <= ENOUGH_ELIGIBLE
+
+
+def test_titles_below_the_imdb_floor_never_show():
+    # "Any" on the score slider still drops anything IMDb scores under 4, even as a near miss.
+    assert IMDB_FLOOR == 4
+    assert evaluate(make(1, rating=3.9), PROFILE) is None
+    assert near_misses([make(1, rating=3.9)], PROFILE) == []
+    assert evaluate(make(2, rating=4.0), PROFILE) is not None
+    assert evaluate(make(3, rating=None), PROFILE) is not None  # no score yet: stays in

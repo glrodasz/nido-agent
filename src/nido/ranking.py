@@ -33,6 +33,8 @@ PRIOR_SCORE = 6.5
 RECENCY_SPAN_YEARS = 20
 # A real choice on one evening; the chat shows them all as cards while the model comments on 5 at
 # most. Stays below tools.ENOUGH_ELIGIBLE, so the pool can fill it.
+# Titles IMDb scores below this never show, whatever the family's minimum ("Any" on the slider).
+IMDB_FLOOR = 4.0
 SHORTLIST_SIZE = 20
 NEAR_MISS_SIZE = 3
 
@@ -109,7 +111,12 @@ def evaluate(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
 
 def assess(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
     """Score every title that can be watched in the family's regions, listing the profile rules
-    it breaks in `misses`. None when there is nowhere to watch it at all."""
+    it breaks in `misses`. None when there is nowhere to watch it at all, or when IMDb rates it
+    below IMDB_FLOOR."""
+    # "Any" score still means at least IMDB_FLOOR: those titles never show, not even as near
+    # misses. A title IMDb has no score for stays in.
+    if candidate.rating is not None and candidate.rating.score < IMDB_FLOOR:
+        return None
     reasons: list[str] = []
     cautions: list[str] = []
     misses: list[str] = []
