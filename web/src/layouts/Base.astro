@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import { canonicalRedirect } from "../logic/canonical";
 
 interface Props {
   title: string;
@@ -9,6 +10,9 @@ interface Props {
 const { title, description, socialTitle = title } = Astro.props;
 const url = new URL(Astro.url.pathname, Astro.site);
 const ogImage = new URL("/og/nido-og.png", Astro.site);
+const canonicalScript = `try{var t=(${canonicalRedirect})(location.href,${JSON.stringify(
+  new URL(Astro.site ?? Astro.url).origin,
+)});if(t)location.replace(t)}catch(e){}`;
 const ogAlt = "Nido: what should we watch tonight? Family picks on the services you already pay for.";
 ---
 
@@ -16,6 +20,8 @@ const ogAlt = "Nido: what should we watch tonight? Family picks on the services 
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- First, before anything loads: move the default Firebase domains to the canonical one. -->
+    <script is:inline set:html={canonicalScript} />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <meta name="robots" content="noindex" />

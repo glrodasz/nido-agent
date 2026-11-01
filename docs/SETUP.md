@@ -100,6 +100,7 @@ bootstrap prints the `gh variable set` commands with the values filled in.
 | `FIREBASE_API_KEY` | from step 1.4 |
 | `FIREBASE_AUTH_DOMAIN` | `my-project.firebaseapp.com` |
 | `FIREBASE_APP_ID` | `1:123:web:abc` |
+| `SITE_URL` | optional custom domain, `https://nido.example.com` (see [Custom domain](#custom-domain)) |
 | `NIDO_MODEL`, `NIDO_FALLBACK_MODEL`, `NIDO_REGIONS`, `NIDO_MAX_CHAT_TURNS_PER_DAY`, `NIDO_MAX_SEARCHES_PER_DAY` | optional overrides of the defaults in `src/nido/config.py` (`NIDO_FALLBACK_MODEL=none` turns the fallback off) |
 
 Until they are all set, `deploy.yml` only leaves a notice.
@@ -110,6 +111,33 @@ Merge to `main` or run **Actions > deploy > Run workflow** on `main`. The summar
 Sign in with an allowed Google account and fill in the family profile. To share it, open the
 Family tab, press **Invite someone** and send the link: whoever opens it and signs in with Google
 joins your family and sees the same profile, watchlist and marks.
+
+## One address
+
+Firebase Hosting always serves the site on `<project>.web.app` and `<project>.firebaseapp.com`;
+neither can be switched off. Every page starts with a small script that sends a visitor on a
+default domain to the same path on the canonical address: `SITE_URL` when set, otherwise
+`https://<project>.web.app`. Firebase's own `/__/` paths (the Google sign-in handler) are left
+alone. It is a redirect for people, not an access control: the API answers on every Hosting
+domain, and sign-in tokens are what protect it.
+
+## Custom domain
+
+Do these in order; the app keeps working on `<project>.web.app` until the last step.
+
+1. Firebase console > **Hosting > Add custom domain**: enter the domain (for example
+   `nido.example.com`), leave "redirect" unchecked, and add the DNS records it shows at your DNS
+   provider. Wait until the domain shows **Connected** (certificate issued; minutes to hours).
+2. Firebase console > **Authentication > Settings > Authorized domains > Add domain**: the same
+   domain.
+3. Google Cloud console > **APIs & Services > Credentials** > OAuth client "Web client (auto
+   created by Google Service)" > **Authorized redirect URIs**: add
+   `https://nido.example.com/__/auth/handler`. Keep the existing ones.
+4. Set the repository variables `SITE_URL=https://nido.example.com` and
+   `FIREBASE_AUTH_DOMAIN=nido.example.com`, then run **Actions > deploy > Run workflow** on `main`.
+
+From then on both default domains redirect to the custom one. Sign-in is per address, so each
+person signs in once more on the new domain; profiles and watchlists are unchanged.
 
 ## Running it locally
 
