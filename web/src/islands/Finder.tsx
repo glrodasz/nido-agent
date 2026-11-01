@@ -31,7 +31,16 @@ import Markdown from "./Markdown";
 import Spinner from "./Spinner";
 import StopSlider from "./StopSlider";
 import TitleCard from "./TitleCard";
-import { type Filters, isDefault, profileFilters, type QuickChip, quickChips } from "../logic/quick";
+import {
+  cycleGenre,
+  type Filters,
+  type GenreState,
+  genreState,
+  isDefault,
+  profileFilters,
+  type QuickChip,
+  quickChips,
+} from "../logic/quick";
 
 interface Props {
   config: AppConfig;
@@ -91,9 +100,15 @@ function loadSeenLast(): boolean {
 
 /** The picked genres that exist for the chosen type: a genre picked for movies stays picked
  * when switching to series, but only filters the type that has it. */
-const applicable = (f: Filters) => {
+const applicable = (f: Filters, genres: string[] = f.genres) => {
   const offered = genresFor(f.kind === "tv" ? "tv" : "movie");
-  return f.genres.filter((g) => offered.includes(g));
+  return genres.filter((g) => offered.includes(g));
+};
+
+const GENRE_STATE_TEXT: Record<GenreState, string> = {
+  off: "any",
+  include: "included",
+  exclude: "excluded",
 };
 
 export default function Finder({
@@ -108,7 +123,7 @@ export default function Finder({
   const base = useMemo(() => profileFilters(profile), [profile]);
   const [filters, setFilters] = useState<Filters>(base);
   useEffect(() => setFilters(base), [base]);
-  const { kind, genres, runtime, minImdb, since } = filters;
+  const { kind, runtime, minImdb, since } = filters;
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -170,6 +185,8 @@ export default function Finder({
         media_type,
         max_runtime_min: max_runtime_min ?? null,
         genres: applicable(f).length ? applicable(f) : undefined,
+        exclude_genres: applicable(f, f.excludeGenres).length ? applicable(f, f.excludeGenres) : undefined,
+        match_all_genres: f.matchAll && applicable(f).length > 1 ? true : undefined,
         min_imdb_rating: f.minImdb > SCORE_STOPS[0] ? f.minImdb : null,
         released_since: releasedSince(f.since ? Number(f.since) : null),
       }),
@@ -233,8 +250,6 @@ export default function Finder({
   );
   // The lowest stop sends no minimum (unrated shorts stay in), so it reads as "Any".
   const scoreText = minImdb !== SCORE_STOPS[0] ? `${minImdb}+` : "Any";
-  const toggleGenre = (g: string) =>
-    set({ genres: genres.includes(g) ? genres.filter((x) => x !== g) : [...genres, g] });
   const serviceNames = Object.fromEntries(config.services.map((s) => [s.key, s.name]));
   const multiRegion = (results?.regions.length ?? 0) > 1;
   const nearMisses = results?.near_misses ?? [];
@@ -438,14 +453,49 @@ export default function Finder({
           </div>
           <fieldset class="filter-field filter-genres">
             <legend class="filter-label">Genres</legend>
+            <p class="filter-hint" id="genre-hint">
+              Tap once to include <span class="genre-key genre-key-include" aria-hidden="true">+</span>, twice
+              to exclude <span class="genre-key genre-key-exclude" aria-hidden="true">−</span>.
+            </p>
             <div class="chips chips-small">
-              {genresFor(kind === "tv" ? "tv" : "movie").map((g) => (
-                <label key={g} class="chip">
-                  <input type="checkbox" checked={genres.includes(g)} onChange={() => toggleGenre(g)} />
-                  {g}
-                </label>
-              ))}
+              {genresFor(kind === "tv" ? "tv" : "movie").map((g) => {
+                const state = genreState(filters, g);
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    class={`chip genre-chip genre-${state}`}
+                    aria-label={`${g}: ${GENRE_STATE_TEXT[state]}`}
+                    aria-describedby="genre-hint"
+                    onClick={() => setFilters(cycleGenre(filters, g))}
+                  >
+                    {state !== "off" && <Icon name={state === "include" ? "plus" : "minus"} />}
+                    {g}
+                  </button>
+                );
+              })}
             </div>
+            {applicable(filters).length > 1 && (
+              <div class="genre-match">
+                <span id="genre-match-label">Titles need</span>
+                <div class="segmented segmented-small segmented-blue" role="group" aria-labelledby="genre-match-label">
+                  {[
+                    { all: false, label: "Any of them" },
+                    { all: true, label: "All of them" },
+                  ].map((o) => (
+                    <button
+                      key={o.label}
+                      type="button"
+                      aria-pressed={filters.matchAll === o.all}
+                      class={filters.matchAll === o.all ? "active" : ""}
+                      onClick={() => set({ matchAll: o.all })}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </fieldset>
           <div class="filters-actions">
             {(!isDefault(filters, base) || quickBusy === "clear-more") && (

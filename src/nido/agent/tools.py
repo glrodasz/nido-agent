@@ -207,6 +207,8 @@ class Toolbox:
         regions: list[str] | None = None,
         prefer_genres: list[str] | None = None,
         released_since: int | None = None,
+        exclude_genres: list[str] | None = None,
+        match_all_genres: bool = False,
         tool_context: ToolContext | None = None,
     ) -> dict[str, Any]:
         """Find a short, ranked list of movies or series for the family.
@@ -229,6 +231,10 @@ class Toolbox:
                 favourites.
             released_since: only titles released in this year or later (series: that aired an
                 episode since then, so a series still running counts as recent).
+            exclude_genres: leave out every title with any of these genres, e.g. ["Comedy"] for
+                "animation but no comedy".
+            match_all_genres: true when a title needs every genre in `genres`, e.g. a romantic
+                comedy is genres ["Comedy", "Romance"] with match_all_genres true.
         """
         # Banned titles and the profile's limits come from session state the server writes each
         # turn, never from the model.
@@ -245,6 +251,8 @@ class Toolbox:
             regions=regions,
             prefer_genres=prefer_genres,
             released_since=released_since,
+            exclude_genres=exclude_genres,
+            match_all_genres=match_all_genres,
             hidden=hidden,
         )
 
@@ -260,26 +268,42 @@ class Toolbox:
         regions: list[str] | None = None,
         prefer_genres: list[str] | None = None,
         released_since: int | None = None,
+        exclude_genres: list[str] | None = None,
+        match_all_genres: bool = False,
         hidden: list[str] | None = None,
     ) -> dict[str, Any]:
         """find_titles without the model: `hidden` lists title keys ("movie:123") the family
         banned, which never reach details, ranking or near misses."""
         kind = MediaType(media_type)
         regions = clean_regions(regions) or clean_regions(list(self._settings.regions))
-        available = await self._genres(kind) if genres or prefer_genres else {}
-        required = tmdb_source.resolve_genres(genres or [], available)
+        wanted = genres or prefer_genres or exclude_genres
+        available = await self._genres(kind) if wanted else {}
+        excluded = tmdb_source.resolve_genres(exclude_genres or [], available)
+        # A genre both asked for and excluded is excluded: leaving it out is what was said last.
+        required = {
+            n: i
+            for n, i in tmdb_source.resolve_genres(genres or [], available).items()
+            if n not in excluded
+        }
         preferred = tmdb_source.resolve_genres(prefer_genres or [], available)
         profile = FamilyProfile(
             children_ages=children_ages,
             regions=regions,
             services=[s for s in services if s in SERVICES_BY_KEY],
-            preferred_genres=sorted({*required, *preferred}),
+            preferred_genres=sorted({*required, *preferred} - set(excluded)),
             avoid_categories=[GuidanceCategory(a) for a in avoid or [] if a in GuidanceCategory],
             max_runtime_min=max_runtime_min,
             min_imdb_rating=min_imdb_rating,
         )
         candidates = await self._pool(
-            kind, regions, profile, required, set(hidden or []), released_since
+            kind,
+            regions,
+            profile,
+            required,
+            set(hidden or []),
+            released_since,
+            excluded,
+            match_all_genres,
         )
         # OMDb's free key allows about 1,000 calls a day: only titles that pass the age and
         # availability rules are worth an IMDb lookup.
@@ -305,10 +329,13 @@ class Toolbox:
         genres: dict[str, int],
         hidden: set[str],
         released_since: int | None = None,
+        excluded: dict[str, int] | None = None,
+        all_genres: bool = False,
     ) -> list[Candidate]:
         """Candidates read one discover page at a time (every region's page interleaved), until
         ENOUGH_ELIGIBLE pass the age and availability rules or discover runs out. Banned titles
-        are skipped before their details are read."""
+        are skipped before their details are read; titles with an excluded genre never count."""
+        excluded = excluded or {}
         tmdb, _ = self._clients()
         unrated = profile.model_copy(update={"min_imdb_rating": None})
         seen: set[int] = set()
@@ -317,7 +344,15 @@ class Toolbox:
             pages = await asyncio.gather(
                 *(
                     self._discover(
-                        tmdb, kind, region, profile, list(genres.values()), page, released_since
+                        tmdb,
+                        kind,
+                        region,
+                        profile,
+                        list(genres.values()),
+                        page,
+                        released_since,
+                        list(excluded.values()),
+                        all_genres,
                     )
                     for region in regions
                 )
@@ -329,9 +364,17 @@ class Toolbox:
                 and TitleRef(media_type=kind, tmdb_id=tmdb_id).key not in hidden
             ]
             seen.update(ids)
-            candidates += await asyncio.gather(
+            fetched = await asyncio.gather(
                 *(self._candidate(kind, tmdb_id, regions) for tmdb_id in ids)
             )
+            # Discover already leaves them out; the details are checked too, so an excluded
+            # genre can never slip in, not even as a near miss.
+            candidates += [
+                c
+                for c in fetched
+                if not set(c.title.genres) & set(excluded)
+                and (not all_genres or set(genres) <= set(c.title.genres))
+            ]
             eligible = sum(1 for c in candidates if evaluate(c, unrated))
             if eligible >= ENOUGH_ELIGIBLE or all(len(p) < DISCOVER_PAGE_SIZE for p in pages):
                 break
@@ -346,6 +389,8 @@ class Toolbox:
         genre_ids: list[int],
         page: int,
         released_since: int | None = None,
+        without_genre_ids: list[int] | None = None,
+        all_genres: bool = False,
     ) -> list[int]:
         providers = await self._provider_ids(kind, region)
         provider_ids = [pid for key in profile.services for pid in providers.get(key, [])]
@@ -354,6 +399,8 @@ class Toolbox:
             region=region,
             provider_ids=provider_ids,
             genre_ids=genre_ids,
+            without_genre_ids=without_genre_ids or [],
+            all_genres=all_genres,
             max_certification=prefilter_certification(profile.youngest, kind),
             certification_country="US",
             max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,

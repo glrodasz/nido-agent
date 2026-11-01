@@ -93,6 +93,12 @@ def test_search_needs_a_profile_then_uses_it():
     assert call["max_runtime_min"] == 30  # request overrides the profile
     assert call["avoid"] == ["frightening"]  # profile fills what the request leaves out
     assert call["genres"] == [] and call["prefer_genres"] == ["Comedy"]  # favourites only boost
+    assert call["exclude_genres"] == []
+    c.post("/api/search", json={"genres": ["Animation"], "exclude_genres": ["Comedy"]})
+    assert toolbox.calls[-1]["exclude_genres"] == ["Comedy"]
+    assert toolbox.calls[-1]["match_all_genres"] is False
+    c.post("/api/search", json={"genres": ["Comedy", "Romance"], "match_all_genres": True})
+    assert toolbox.calls[-1]["match_all_genres"] is True
 
 
 def test_search_can_clear_profile_avoidances():

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { nearestStop, SCORE_STOPS, scoreTick } from "./format";
-import { DEFAULT_FILTERS, favouriteTitles, isDefault, profileFilters, quickChips } from "./quick";
+import {
+  cycleGenre,
+  DEFAULT_FILTERS,
+  favouriteTitles,
+  genreState,
+  isDefault,
+  profileFilters,
+  quickChips,
+} from "./quick";
 import type { Profile, TitleMark } from "./types";
 
 const profile = (patch: Partial<Profile> = {}): Profile => ({
@@ -143,6 +151,37 @@ describe("isDefault", () => {
     expect(isDefault(DEFAULT_FILTERS)).toBe(true);
     expect(isDefault({ ...DEFAULT_FILTERS, since: "" })).toBe(false);
     expect(isDefault({ ...DEFAULT_FILTERS, genres: ["Family"] })).toBe(false);
+    expect(isDefault({ ...DEFAULT_FILTERS, excludeGenres: ["Comedy"] })).toBe(false);
+    expect(isDefault({ ...DEFAULT_FILTERS, matchAll: true })).toBe(false);
+  });
+});
+
+describe("cycleGenre", () => {
+  it("steps a genre through include, exclude and off", () => {
+    const included = cycleGenre(DEFAULT_FILTERS, "Comedy");
+    expect([included.genres, included.excludeGenres]).toEqual([["Comedy"], []]);
+    const excluded = cycleGenre(included, "Comedy");
+    expect([excluded.genres, excluded.excludeGenres]).toEqual([[], ["Comedy"]]);
+    expect(genreState(excluded, "Comedy")).toBe("exclude");
+    const off = cycleGenre(excluded, "Comedy");
+    expect(isDefault(off)).toBe(true);
+  });
+
+  it("keeps the other genres as they are", () => {
+    const f = { ...DEFAULT_FILTERS, genres: ["Animation"], excludeGenres: ["Comedy"] };
+    expect(genreState(f, "Animation")).toBe("include");
+    expect(cycleGenre(f, "Family").genres).toEqual(["Animation", "Family"]);
+    expect(cycleGenre(f, "Family").excludeGenres).toEqual(["Comedy"]);
+  });
+
+  it("lets a quick genre chip include a genre that was ruled out", () => {
+    const f = { ...DEFAULT_FILTERS, excludeGenres: ["Family"] };
+    const chip = quickChips(profile({ preferred_genres: ["Family"] }), [], "movie", false).find(
+      (c) => c.id === "genre:Family",
+    );
+    if (chip?.kind !== "filter") throw new Error("no Family chip");
+    const on = chip.toggle(f);
+    expect([on.genres, on.excludeGenres]).toEqual([["Family"], []]);
   });
 });
 

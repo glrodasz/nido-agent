@@ -79,6 +79,8 @@ class TmdbClient:
         region: str,
         provider_ids: Iterable[int] = (),
         genre_ids: Iterable[int] = (),
+        without_genre_ids: Iterable[int] = (),
+        all_genres: bool = False,
         max_certification: str | None = None,
         certification_country: str | None = None,
         max_runtime_min: int | None = None,
@@ -93,7 +95,10 @@ class TmdbClient:
             "page": page,
             "with_watch_providers": "|".join(str(p) for p in provider_ids) or None,
             "with_watch_monetization_types": "flatrate|ads" if provider_ids else None,
-            "with_genres": "|".join(str(g) for g in genre_ids) or None,
+            # "|" asks for any of the genres, "," for all of them (a comedy that is a romance).
+            "with_genres": ("," if all_genres else "|").join(str(g) for g in genre_ids) or None,
+            # Excluding several genres drops a title that has any of them.
+            "without_genres": ",".join(str(g) for g in without_genre_ids) or None,
             "with_runtime.lte": max_runtime_min,
             # TMDB stores an unknown runtime as 0, which would pass any limit.
             "with_runtime.gte": 1 if max_runtime_min else None,

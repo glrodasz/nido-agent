@@ -132,6 +132,21 @@ def test_no_availability_outside_region():
 
 
 @respx.mock
+async def test_discover_leaves_out_excluded_genres():
+    route = respx.get(f"{BASE_URL}/discover/movie").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    client = TmdbClient("token")
+    await client.discover(MediaType.MOVIE, region="SE", genre_ids=[16], without_genre_ids=[35, 18])
+    params = route.calls.last.request.url.params
+    assert params["with_genres"] == "16"
+    assert params["without_genres"] == "35,18"
+    await client.discover(MediaType.MOVIE, region="SE", genre_ids=[35, 10749], all_genres=True)
+    await client.aclose()
+    assert route.calls.last.request.url.params["with_genres"] == "35,10749"
+
+
+@respx.mock
 async def test_discover_pairs_certification_with_its_own_country():
     route = respx.get(f"{BASE_URL}/discover/movie").mock(
         return_value=httpx.Response(200, json={"results": [MOVIE]})
@@ -150,6 +165,7 @@ async def test_discover_pairs_certification_with_its_own_country():
     assert params["certification_country"] == "US"
     assert params["certification.lte"] == "PG"
     assert params["with_watch_providers"] == "8|337"
+    assert "without_genres" not in params
     assert route.calls.last.request.headers["Authorization"] == "Bearer token"
     assert [t.name for t in titles] == ["Paddington 2"]
 

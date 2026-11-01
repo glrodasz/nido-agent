@@ -45,6 +45,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export interface SearchFilters {
   media_type: MediaType;
   genres?: string[];
+  exclude_genres?: string[];
+  match_all_genres?: boolean;
   max_runtime_min?: number | null;
   min_imdb_rating?: number | null;
   avoid?: string[];
