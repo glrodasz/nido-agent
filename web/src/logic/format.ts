@@ -232,11 +232,31 @@ export function searchKind(
   return { media_type: kind, max_runtime_min: maxLength ?? undefined };
 }
 
+/** Picking a type sets the slider: Shorts to 40 min, Movies to Any. Series keep their length,
+ * since for them it is the episode length. */
+export function withKind<F extends { kind: FindKind; runtime: number | null }>(
+  f: F,
+  kind: FindKind,
+): F {
+  if (kind === "tv") return { ...f, kind };
+  return { ...f, kind, runtime: kind === "short" ? SHORT_MAX_MIN : null };
+}
+
+/** Moving the slider sets the type: 40 min or less is a short, anything longer a movie. */
+export function withLength<F extends { kind: FindKind; runtime: number | null }>(
+  f: F,
+  runtime: number | null,
+): F {
+  if (f.kind === "tv") return { ...f, runtime };
+  const short = runtime !== null && runtime <= SHORT_MAX_MIN;
+  return { ...f, runtime, kind: short ? "short" : "movie" };
+}
+
 /** Max length slider stops in minutes; null is "Any" (the default, last stop). */
-export const LENGTH_STOPS: (number | null)[] = [10, 30, 60, 120, null];
+export const LENGTH_STOPS: (number | null)[] = [10, 30, 40, 60, 120, null];
 /** Min IMDb score slider stops. The first is the default and adds no minimum, so titles without
  * an IMDb score (common for shorts and specials) still show. */
-export const SCORE_STOPS = [4, 5, 6, 7, 8, 9, 9.5];
+export const SCORE_STOPS = [4, 6, 7, 8, 9];
 
 /** "10 min", "1h", "2h", "Any". */
 export function lengthLabel(min: number | null): string {

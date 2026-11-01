@@ -20,6 +20,8 @@ import {
   verifiedAgo,
   searchKind,
   lengthLabel,
+  withKind,
+  withLength,
 } from "./format";
 import type { Offer, Profile } from "./types";
 
@@ -237,6 +239,23 @@ describe("searchKind", () => {
 
 describe("lengthLabel", () => {
   it("names the slider stops", () => {
-    expect([10, 30, 60, 120, null].map(lengthLabel)).toEqual(["10 min", "30 min", "1h", "2h", "Any"]);
+    expect([10, 40, 60, 120, null].map(lengthLabel)).toEqual(["10 min", "40 min", "1h", "2h", "Any"]);
+  });
+});
+
+describe("type and length move together", () => {
+  const movie = { kind: "movie" as const, runtime: null };
+
+  it("sets the slider when the type changes", () => {
+    expect(withKind(movie, "short")).toEqual({ kind: "short", runtime: 40 });
+    expect(withKind({ kind: "short" as const, runtime: 10 }, "movie")).toEqual(movie);
+    expect(withKind({ kind: "short" as const, runtime: 30 }, "tv")).toEqual({ kind: "tv", runtime: 30 });
+  });
+
+  it("switches between Movies and Shorts at 40 minutes", () => {
+    expect(withLength(movie, 40)).toEqual({ kind: "short", runtime: 40 });
+    expect(withLength({ kind: "short" as const, runtime: 40 }, 60)).toEqual({ kind: "movie", runtime: 60 });
+    expect(withLength({ kind: "short" as const, runtime: 40 }, null)).toEqual(movie);
+    expect(withLength({ kind: "tv" as const, runtime: null }, 10)).toEqual({ kind: "tv", runtime: 10 });
   });
 });

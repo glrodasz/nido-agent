@@ -12,7 +12,8 @@ import {
   SCORE_STOPS,
   searchKind,
   seenLast,
-  SHORT_MAX_MIN,
+  withKind,
+  withLength,
 } from "../logic/format";
 import type {
   AppConfig,
@@ -94,12 +95,12 @@ const QUICK: { label: string; on: (f: Filters) => boolean; toggle: (f: Filters) 
   {
     label: "Series",
     on: (f) => f.kind === "tv",
-    toggle: (f) => ({ ...f, kind: f.kind === "tv" ? "movie" : "tv" }),
+    toggle: (f) => withKind(f, f.kind === "tv" ? "movie" : "tv"),
   },
   {
     label: "Shorts",
     on: (f) => f.kind === "short",
-    toggle: (f) => ({ ...f, kind: f.kind === "short" ? "movie" : "short" }),
+    toggle: (f) => withKind(f, f.kind === "short" ? "movie" : "short"),
   },
 ];
 
@@ -246,11 +247,9 @@ export default function Finder({
 
   // A limit in the family profile still applies when the sliders are left at their defaults.
   const lengthText =
-    kind === "short" && (runtime === null || runtime > SHORT_MAX_MIN)
-      ? `${SHORT_MAX_MIN} min · Shorts`
-      : runtime === null && profile.max_runtime_min
-        ? `Profile: ${profile.max_runtime_min} min`
-        : lengthLabel(runtime);
+    runtime === null && profile.max_runtime_min
+      ? `Profile: ${profile.max_runtime_min} min`
+      : lengthLabel(runtime);
   // The lowest stop sends no minimum (unrated shorts stay in), so it reads as "Any".
   const scoreText =
     minImdb !== SCORE_STOPS[0]
@@ -408,7 +407,7 @@ export default function Finder({
                     type="button"
                     aria-pressed={kind === k.value}
                     class={kind === k.value ? "active" : ""}
-                    onClick={() => set({ kind: k.value })}
+                    onClick={() => setFilters(withKind(filters, k.value))}
                   >
                     {k.label}
                   </button>
@@ -432,7 +431,7 @@ export default function Finder({
               value={runtime}
               valueText={lengthText}
               tick={(m) => (m === null ? "Any" : m >= 60 ? `${m / 60}h` : String(m))}
-              onChange={(m) => set({ runtime: m })}
+              onChange={(m) => setFilters(withLength(filters, m))}
             />
             <StopSlider
               id="filter-score"
