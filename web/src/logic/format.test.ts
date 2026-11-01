@@ -18,6 +18,8 @@ import {
   sortOffers,
   verdictFor,
   verifiedAgo,
+  searchKind,
+  lengthLabel,
 } from "./format";
 import type { Offer, Profile } from "./types";
 
@@ -217,5 +219,24 @@ describe("plural", () => {
     expect(plural(1, "search")).toBe("1 search");
     expect(plural(3, "search")).toBe("3 searches");
     expect(plural(0, "Ask Nido question")).toBe("0 Ask Nido questions");
+  });
+});
+
+describe("searchKind", () => {
+  it("turns Shorts into a movie search of 40 minutes or less", () => {
+    expect(searchKind("short", null)).toEqual({ media_type: "movie", max_runtime_min: 40 });
+    expect(searchKind("short", 25)).toEqual({ media_type: "movie", max_runtime_min: 25 });
+    expect(searchKind("short", 90)).toEqual({ media_type: "movie", max_runtime_min: 40 });
+  });
+
+  it("leaves movies and series to the family's max length", () => {
+    expect(searchKind("movie", null)).toEqual({ media_type: "movie", max_runtime_min: undefined });
+    expect(searchKind("tv", 30)).toEqual({ media_type: "tv", max_runtime_min: 30 });
+  });
+});
+
+describe("lengthLabel", () => {
+  it("names the slider stops", () => {
+    expect([10, 30, 60, 120, null].map(lengthLabel)).toEqual(["10 min", "30 min", "1h", "2h", "Any"]);
   });
 });

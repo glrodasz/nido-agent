@@ -213,6 +213,37 @@ export function releasedSince(years: number | null, today: Date = new Date()): n
   return years ? today.getFullYear() - years : null;
 }
 
+/** Shorts are movies of SHORT_MAX_MIN minutes or less. */
+export const SHORT_MAX_MIN = 40;
+export type FindKind = "movie" | "short" | "tv";
+
+/** What a filter search asks for: Shorts is a movie search with a 40-minute cap, and a shorter
+ * "Max length" the family typed still wins. */
+export function searchKind(
+  kind: FindKind,
+  maxLength: number | null,
+): { media_type: "movie" | "tv"; max_runtime_min: number | undefined } {
+  if (kind === "short") {
+    return {
+      media_type: "movie",
+      max_runtime_min: Math.min(maxLength ?? SHORT_MAX_MIN, SHORT_MAX_MIN),
+    };
+  }
+  return { media_type: kind, max_runtime_min: maxLength ?? undefined };
+}
+
+/** Max length slider stops in minutes; null is "Any" (the default, last stop). */
+export const LENGTH_STOPS: (number | null)[] = [10, 20, 30, 60, 120, null];
+/** Min IMDb score slider stops. The first is the default and adds no minimum, so titles without
+ * an IMDb score (common for shorts and specials) still show. */
+export const SCORE_STOPS = [4, 5, 6, 7, 8, 9, 9.5];
+
+/** "10 min", "1h", "2h", "Any". */
+export function lengthLabel(min: number | null): string {
+  if (min === null) return "Any";
+  return min >= 60 && min % 60 === 0 ? `${min / 60}h` : `${min} min`;
+}
+
 export function seenLast<T>(items: T[], isSeen: (item: T) => boolean): T[] {
   return [...items.filter((i) => !isSeen(i)), ...items.filter(isSeen)];
 }

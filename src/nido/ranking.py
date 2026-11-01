@@ -18,6 +18,7 @@ from nido.models import (
     EvidenceType,
     FamilyProfile,
     GuidanceObservation,
+    MediaType,
     Rating,
     Title,
 )
@@ -136,6 +137,12 @@ def assess(candidate: Candidate, profile: FamilyProfile) -> Ranked | None:
     runtime = candidate.title.runtime_min
     if profile.max_runtime_min and runtime and runtime > profile.max_runtime_min:
         misses.append(f"Runs {runtime} min, longer than your {profile.max_runtime_min} min limit.")
+    elif profile.max_runtime_min and not runtime and candidate.title.media_type is MediaType.MOVIE:
+        # An unknown length cannot meet an explicit limit: "Shorts" must not show a feature
+        # TMDB has no runtime for. Series often lack episode lengths, so they keep passing.
+        misses.append(
+            f"No runtime listed to check against your {profile.max_runtime_min} min limit."
+        )
 
     quality = weighted_quality(candidate.rating)
     if profile.min_imdb_rating is not None:

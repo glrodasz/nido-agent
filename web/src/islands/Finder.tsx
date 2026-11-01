@@ -1,10 +1,22 @@
 import { useMemo, useRef, useState } from "preact/hooks";
 import { ApiError, api } from "../logic/api";
-import { familyLine, GENRES, newestFirst, plural, releasedSince, seenLast } from "../logic/format";
+import {
+  familyLine,
+  type FindKind,
+  GENRES,
+  LENGTH_STOPS,
+  lengthLabel,
+  newestFirst,
+  plural,
+  releasedSince,
+  SCORE_STOPS,
+  searchKind,
+  seenLast,
+  SHORT_MAX_MIN,
+} from "../logic/format";
 import type {
   AppConfig,
   MarkChange,
-  MediaType,
   Profile,
   Quota,
   SearchResult,
@@ -15,6 +27,7 @@ import { Fragment } from "preact";
 import Icon from "./Icon";
 import Markdown from "./Markdown";
 import Spinner from "./Spinner";
+import StopSlider from "./StopSlider";
 import TitleCard from "./TitleCard";
 
 interface Props {
@@ -32,10 +45,14 @@ interface Turn {
 }
 
 interface Filters {
-  mediaType: MediaType;
+  // Shorts are movies of 40 minutes or less: a type of its own for the family, a movie search
+  // with a runtime cap for the API.
+  kind: FindKind;
   genres: string[];
-  runtime: string;
-  minImdb: string;
+  // Max length in minutes; null is any length.
+  runtime: number | null;
+  // The lowest stop is the default and asks for no minimum.
+  minImdb: number;
   // "Last N years" as a string for the select; "" is any time.
   since: string;
 }
@@ -60,14 +77,9 @@ const SINCE_OPTIONS: { value: string; label: string }[] = [
 // One-tap shortcuts into the filters below; each runs the filter search straight away.
 const QUICK: { label: string; on: (f: Filters) => boolean; toggle: (f: Filters) => Filters }[] = [
   {
-    label: "Under 90 min",
-    on: (f) => f.runtime === "90",
-    toggle: (f) => ({ ...f, runtime: f.runtime === "90" ? "" : "90" }),
-  },
-  {
     label: "Well rated",
-    on: (f) => f.minImdb === "7",
-    toggle: (f) => ({ ...f, minImdb: f.minImdb === "7" ? "" : "7" }),
+    on: (f) => f.minImdb === 7,
+    toggle: (f) => ({ ...f, minImdb: f.minImdb === 7 ? SCORE_STOPS[0] : 7 }),
   },
   {
     label: "Animated",
@@ -81,9 +93,20 @@ const QUICK: { label: string; on: (f: Filters) => boolean; toggle: (f: Filters) 
   },
   {
     label: "Series",
-    on: (f) => f.mediaType === "tv",
-    toggle: (f) => ({ ...f, mediaType: f.mediaType === "tv" ? "movie" : "tv" }),
+    on: (f) => f.kind === "tv",
+    toggle: (f) => ({ ...f, kind: f.kind === "tv" ? "movie" : "tv" }),
   },
+  {
+    label: "Shorts",
+    on: (f) => f.kind === "short",
+    toggle: (f) => ({ ...f, kind: f.kind === "short" ? "movie" : "short" }),
+  },
+];
+
+const KINDS: { value: FindKind; label: string }[] = [
+  { value: "movie", label: "Movies" },
+  { value: "short", label: "Shorts" },
+  { value: "tv", label: "Series" },
 ];
 
 // Seen titles sink to the end unless the family turned that off; remembered in this browser only.
@@ -117,13 +140,13 @@ export default function Finder({
   onMark,
 }: Props) {
   const [filters, setFilters] = useState<Filters>({
-    mediaType: "movie",
+    kind: "movie",
     genres: [],
-    runtime: "",
-    minImdb: "",
+    runtime: null,
+    minImdb: SCORE_STOPS[0],
     since: DEFAULT_SINCE,
   });
-  const { mediaType, genres, runtime, minImdb, since } = filters;
+  const { kind, genres, runtime, minImdb, since } = filters;
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -179,10 +202,9 @@ export default function Finder({
     e?.preventDefault();
     const found = await run("search", () =>
       api.search({
-        media_type: f.mediaType,
+        ...searchKind(f.kind, f.runtime),
         genres: f.genres.length ? f.genres : undefined,
-        max_runtime_min: f.runtime ? Number(f.runtime) : undefined,
-        min_imdb_rating: f.minImdb ? Number(f.minImdb) : undefined,
+        min_imdb_rating: f.minImdb > SCORE_STOPS[0] ? f.minImdb : undefined,
         released_since: releasedSince(f.since ? Number(f.since) : null),
       }),
     );
@@ -222,6 +244,17 @@ export default function Finder({
     }
   }
 
+  // A limit in the family profile still applies when the sliders are left at their defaults.
+  const lengthText =
+    kind === "short" && (runtime === null || runtime > SHORT_MAX_MIN)
+      ? `${SHORT_MAX_MIN} min · Shorts`
+      : runtime === null && profile.max_runtime_min
+        ? `Profile: ${profile.max_runtime_min} min`
+        : lengthLabel(runtime);
+  const scoreText =
+    minImdb === SCORE_STOPS[0] && profile.min_imdb_rating
+      ? `Profile: ${profile.min_imdb_rating}+`
+      : `${minImdb}+`;
   const toggleGenre = (g: string) =>
     set({ genres: genres.includes(g) ? genres.filter((x) => x !== g) : [...genres, g] });
   const serviceNames = Object.fromEntries(config.services.map((s) => [s.key, s.name]));
@@ -366,15 +399,15 @@ export default function Finder({
                 Type
               </span>
               <div class="segmented segmented-small" role="group" aria-labelledby="filter-type">
-                {(["movie", "tv"] as const).map((t) => (
+                {KINDS.map((k) => (
                   <button
-                    key={t}
+                    key={k.value}
                     type="button"
-                    aria-pressed={mediaType === t}
-                    class={mediaType === t ? "active" : ""}
-                    onClick={() => set({ mediaType: t })}
+                    aria-pressed={kind === k.value}
+                    class={kind === k.value ? "active" : ""}
+                    onClick={() => set({ kind: k.value })}
                   >
-                    {t === "movie" ? "Movies" : "Series"}
+                    {k.label}
                   </button>
                 ))}
               </div>
@@ -389,33 +422,24 @@ export default function Finder({
                 ))}
               </select>
             </label>
-            <label class="filter-field">
-              <span class="filter-label">Max length</span>
-              <span class="filter-unit">
-                <input
-                  type="number"
-                  min={1}
-                  inputMode="numeric"
-                  value={runtime}
-                  placeholder={profile.max_runtime_min?.toString() ?? "Any"}
-                  onInput={(e) => set({ runtime: e.currentTarget.value })}
-                />
-                <span aria-hidden="true">min</span>
-              </span>
-            </label>
-            <label class="filter-field">
-              <span class="filter-label">Min IMDb score</span>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                step={0.1}
-                inputMode="decimal"
-                value={minImdb}
-                placeholder={profile.min_imdb_rating?.toString() ?? "Any"}
-                onInput={(e) => set({ minImdb: e.currentTarget.value })}
-              />
-            </label>
+            <StopSlider
+              id="filter-length"
+              label="Max length"
+              stops={LENGTH_STOPS}
+              value={runtime}
+              valueText={lengthText}
+              tick={(m) => (m === null ? "Any" : m >= 60 ? `${m / 60}h` : String(m))}
+              onChange={(m) => set({ runtime: m })}
+            />
+            <StopSlider
+              id="filter-score"
+              label="Min IMDb score"
+              stops={SCORE_STOPS}
+              value={minImdb}
+              valueText={scoreText}
+              tick={String}
+              onChange={(v) => set({ minImdb: v })}
+            />
           </div>
           <fieldset class="filter-field filter-genres">
             <legend class="filter-label">Genres</legend>
