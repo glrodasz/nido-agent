@@ -184,3 +184,32 @@ def test_resolve_genres_matches_compound_series_genres():
     }
     assert resolve_genres(["Science Fiction", "Fantasy"], tv) == {"Sci-Fi & Fantasy": 10765}
     assert resolve_genres(["Music"], tv) == {}
+
+
+# TMDB's genre lists (/genre/movie/list, /genre/tv/list) and the genres the web app offers per
+# type (web/src/logic/format.ts GENRE_TYPES): every offered genre must filter its type.
+_TMDB_MOVIE_GENRES = {
+    "Action": 28, "Adventure": 12, "Animation": 16, "Comedy": 35, "Crime": 80,
+    "Documentary": 99, "Drama": 18, "Family": 10751, "Fantasy": 14, "History": 36,
+    "Horror": 27, "Music": 10402, "Mystery": 9648, "Romance": 10749, "Science Fiction": 878,
+    "TV Movie": 10770, "Thriller": 53, "War": 10752, "Western": 37,
+}  # fmt: skip
+_TMDB_TV_GENRES = {
+    "Action & Adventure": 10759, "Animation": 16, "Comedy": 35, "Crime": 80,
+    "Documentary": 99, "Drama": 18, "Family": 10751, "Kids": 10762, "Mystery": 9648,
+    "News": 10763, "Reality": 10764, "Sci-Fi & Fantasy": 10765, "Soap": 10766, "Talk": 10767,
+    "War & Politics": 10768, "Western": 37,
+}  # fmt: skip
+_BOTH = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama",
+         "Family", "Fantasy", "Mystery", "Science Fiction", "War", "Western"]  # fmt: skip
+
+
+def test_every_offered_genre_resolves_for_its_media_type():
+    from nido.sources.tmdb import resolve_genres
+
+    for genre in [*_BOTH, "History", "Music", "Romance"]:
+        assert resolve_genres([genre], _TMDB_MOVIE_GENRES), genre
+    for genre in [*_BOTH, "Kids", "Reality"]:
+        assert resolve_genres([genre], _TMDB_TV_GENRES), genre
+    assert resolve_genres(["War"], _TMDB_TV_GENRES) == {"War & Politics": 10768}
+    assert resolve_genres(["Action"], _TMDB_TV_GENRES) == {"Action & Adventure": 10759}
