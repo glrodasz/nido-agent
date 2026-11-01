@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { fmt, genreLabel, t } from "../i18n";
 import {
   ADULT_AGE,
   ageLabel,
@@ -8,6 +9,7 @@ import {
   lengthLabel,
   parseRegions,
   SCORE_STOPS,
+  lengthTick,
   scoreTick,
   SHORT_MAX_MIN,
 } from "../logic/format";
@@ -55,7 +57,7 @@ interface StepperProps {
 
 /** One child: an optional nickname and an age stepper that ends at "Adult · 18+". */
 function ChildRow({ child, index, onChange, onRemove }: StepperProps) {
-  const who = child.name.trim() || `Child ${index + 1}`;
+  const who = child.name.trim() || fmt(t.profile.childN, { n: index + 1 });
   const step = (by: number) =>
     onChange({ ...child, age: Math.min(ADULT_AGE, Math.max(0, child.age + by)) });
   return (
@@ -64,15 +66,15 @@ function ChildRow({ child, index, onChange, onRemove }: StepperProps) {
         class="child-name"
         value={child.name}
         maxLength={MAX_NICKNAME}
-        placeholder="Nickname (optional)"
-        aria-label={`Child ${index + 1} nickname`}
+        placeholder={t.profile.nickname}
+        aria-label={fmt(t.profile.nicknameLabel, { n: index + 1 })}
         onInput={(e) => onChange({ ...child, name: e.currentTarget.value })}
       />
-      <div class="stepper" role="group" aria-label={`${who}'s age`}>
+      <div class="stepper" role="group" aria-label={fmt(t.profile.ageOf, { who })}>
         <button
           type="button"
           class="stepper-btn"
-          aria-label={`${who}: one year younger`}
+          aria-label={fmt(t.profile.younger, { who })}
           disabled={child.age <= 0}
           onClick={() => step(-1)}
         >
@@ -84,7 +86,7 @@ function ChildRow({ child, index, onChange, onRemove }: StepperProps) {
         <button
           type="button"
           class="stepper-btn"
-          aria-label={`${who}: one year older`}
+          aria-label={fmt(t.profile.older, { who })}
           disabled={child.age >= ADULT_AGE}
           onClick={() => step(1)}
         >
@@ -92,7 +94,7 @@ function ChildRow({ child, index, onChange, onRemove }: StepperProps) {
         </button>
       </div>
       {onRemove && (
-        <button type="button" class="child-remove" aria-label={`Remove ${who}`} onClick={onRemove}>
+        <button type="button" class="child-remove" aria-label={fmt(t.profile.removeChild, { who })} onClick={onRemove}>
           <Icon name="x" />
         </button>
       )}
@@ -116,8 +118,8 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
   async function submit(e: Event) {
     e.preventDefault();
     const parsedRegions = parseRegions(regions);
-    if (!parsedRegions) return setError("Enter catalog regions as two-letter codes, such as SE.");
-    if (services.length === 0) return setError("Pick at least one streaming service.");
+    if (!parsedRegions) return setError(t.profile.regionsInvalid);
+    if (services.length === 0) return setError(t.profile.servicesMissing);
     setError(null);
     setSaving(true);
     try {
@@ -134,7 +136,7 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
       });
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the profile.");
+      setError(err instanceof Error ? err.message : t.profile.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -142,14 +144,11 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
 
   return (
     <form class="panel profile" onSubmit={submit}>
-      <h2>{firstRun ? "Tell Nido about your family" : "Family profile"}</h2>
-      <p class="muted">
-        Nido stores ages, never birthdates. These become the default for every search, and you
-        can change them per search.
-      </p>
+      <h2>{firstRun ? t.profile.firstTitle : t.profile.title}</h2>
+      <p class="muted">{t.profile.intro}</p>
 
       <fieldset class="field children">
-        <legend>Children</legend>
+        <legend>{t.profile.children}</legend>
         <ol class="child-list">
           {children.map((c, i) => (
             <ChildRow
@@ -170,18 +169,14 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
             onClick={() => setChildren([...children, { age: NEW_CHILD_AGE, name: "" }])}
           >
             <Icon name="plus" />
-            Add a child
+            {t.profile.addChild}
           </button>
         )}
-        <small class="muted">
-          Nicknames are optional and only help you pick who is watching; Nido's assistant only
-          sees ages. At {ADULT_AGE}+ a child counts as an adult: no age limits when only they watch.
-          With everyone watching, the youngest sets the limits.
-        </small>
+        <small class="muted">{fmt(t.profile.childrenHint, { adult: ADULT_AGE })}</small>
       </fieldset>
 
       <fieldset class="field">
-        <legend>Streaming services you pay for</legend>
+        <legend>{t.profile.services}</legend>
         <div class="chips">
           {config.services.map((s) => (
             <label key={s.key} class="chip">
@@ -197,16 +192,13 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
       </fieldset>
 
       <label class="field">
-        <span>Catalog regions</span>
+        <span>{t.profile.regions}</span>
         <input value={regions} onInput={(e) => setRegions(e.currentTarget.value)} placeholder="SE" />
-        <small class="muted">
-          Where you watch from. Add more (for example SE, NO) if you use another country's catalog.
-          Age ratings always come from nine reference countries, whatever you pick here.
-        </small>
+        <small class="muted">{t.profile.regionsHint}</small>
       </label>
 
       <fieldset class="field">
-        <legend>Content to avoid</legend>
+        <legend>{t.profile.avoid}</legend>
         <div class="chips">
           {config.categories.map((c) => (
             <label key={c} class="chip">
@@ -219,14 +211,11 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
             </label>
           ))}
         </div>
-        <small class="muted">
-          Used once guidance sources are connected. Until then each result links to Common Sense
-          Media and the IMDb Parents Guide.
-        </small>
+        <small class="muted">{t.profile.avoidHint}</small>
       </fieldset>
 
       <fieldset class="field">
-        <legend>Favourite genres</legend>
+        <legend>{t.profile.genres}</legend>
         <div class="chips">
           {GENRES.map((g) => (
             <label key={g} class="chip">
@@ -235,34 +224,35 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
                 checked={genres.includes(g)}
                 onChange={() => setGenres(toggle(genres, g))}
               />
-              {g}
+              {genreLabel(g)}
             </label>
           ))}
         </div>
       </fieldset>
 
       <fieldset class="field profile-defaults">
-        <legend>Default filters</legend>
-        <small class="muted">
-          Where Find's filters start, and what Clear filters goes back to. They are not fixed
-          rules: change them for any search.
-        </small>
+        <legend>{t.profile.defaults}</legend>
+        <small class="muted">{t.profile.defaultsHint}</small>
         <div class="filters-grid">
           <StopSlider
             id="profile-length"
-            label="Max length"
+            label={t.finder.maxLength}
             stops={LENGTH_STOPS}
             value={runtime}
-            valueText={runtime !== null && runtime <= SHORT_MAX_MIN ? `${lengthLabel(runtime)} · Shorts` : lengthLabel(runtime)}
-            tick={(m) => (m === null ? "Any" : m >= 60 ? `${m / 60}h` : String(m))}
+            valueText={
+              runtime !== null && runtime <= SHORT_MAX_MIN
+                ? fmt(t.profile.lengthShorts, { length: lengthLabel(runtime) })
+                : lengthLabel(runtime)
+            }
+            tick={lengthTick}
             onChange={setRuntime}
           />
           <StopSlider
             id="profile-score"
-            label="Min IMDb score"
+            label={t.finder.minScore}
             stops={SCORE_STOPS}
             value={minImdb}
-            valueText={minImdb > SCORE_STOPS[0] ? `${minImdb}+` : "Any"}
+            valueText={minImdb > SCORE_STOPS[0] ? `${minImdb}+` : t.finder.any}
             tick={scoreTick}
             onChange={setMinImdb}
           />
@@ -279,15 +269,15 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
           {saving ? (
             <>
               <Spinner />
-              Saving…
+              {t.profile.saving}
             </>
           ) : firstRun ? (
-            "Start finding"
+            t.profile.start
           ) : (
-            "Save profile"
+            t.profile.save
           )}
         </button>
-        {saved && !firstRun && <span class="muted">Saved.</span>}
+        {saved && !firstRun && <span class="muted">{t.profile.saved}</span>}
       </div>
     </form>
   );

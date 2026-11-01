@@ -1,4 +1,5 @@
 import { useId, useState } from "preact/hooks";
+import { fmt, formatNumber, genreLabel, t } from "../i18n";
 import {
   accessLabel,
   formatVotes,
@@ -41,7 +42,7 @@ function guidanceLinks(result: TitleResult): { name: string; url: string }[] {
   ];
   if (result.imdb_id) {
     links.push({
-      name: "IMDb Parents Guide",
+      name: t.card.imdbParents,
       url: `https://www.imdb.com/title/${result.imdb_id}/parentalguide`,
     });
   }
@@ -70,9 +71,11 @@ export default function TitleCard({
   const others = included.length > 0 ? alsoIncluded : sorted.slice(0, 2);
   const meta = [
     yearSpan(result),
-    result.media_type === "tv" ? "Series" : "Movie",
-    result.runtime_min ? `${result.runtime_min} min${result.media_type === "tv" ? " / ep" : ""}` : null,
-    result.genres.slice(0, 3).join(", ") || null,
+    result.media_type === "tv" ? t.card.series : t.card.movie,
+    result.runtime_min
+      ? fmt(result.media_type === "tv" ? t.card.perEpisode : t.card.minutes, { n: result.runtime_min })
+      : null,
+    result.genres.slice(0, 3).map(genreLabel).join(", ") || null,
   ].filter(Boolean);
   const nearMiss = result.misses.length > 0;
   const verdict = verdictFor(result.misses, result.age_baseline_min, watchingYoungest);
@@ -119,7 +122,7 @@ export default function TitleCard({
             }}
           >
             {saving ? <Spinner /> : <Icon name="bookmark" filled={saved} />}
-            {saved ? "Saved" : "Save"}
+            {saved ? t.card.saved : t.card.save}
           </button>
         </header>
 
@@ -145,15 +148,15 @@ export default function TitleCard({
               </span>
             );
           })}
-          {sorted.length === 0 && <span class="watch-alt">No streaming offers found</span>}
+          {sorted.length === 0 && <span class="watch-alt">{t.card.noOffers}</span>}
           {result.imdb ? (
             <a class="imdb" href={result.imdb.url ?? undefined} target="_blank" rel="noopener">
               <Icon name="star" filled />
-              IMDb <strong>{result.imdb.score.toFixed(1)}</strong>
+              IMDb <strong>{formatNumber(result.imdb.score, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong>
               {result.imdb.votes !== null && <span> · {formatVotes(result.imdb.votes)}</span>}
             </a>
           ) : (
-            <span class="imdb">No IMDb rating</span>
+            <span class="imdb">{t.card.noImdb}</span>
           )}
         </div>
 
@@ -175,16 +178,16 @@ export default function TitleCard({
         <details class="more">
           <summary>
             <Icon name="chevron-down" />
-            Age ratings, all offers and guidance
+            {t.card.more}
           </summary>
           <div class="more-body">
           <section class="facts">
-            <h4>Age</h4>
+            <h4>{t.card.age}</h4>
             <p>
               {result.age_baseline ? (
-                <>Official ratings: {result.age_baseline}</>
+                <>{fmt(t.card.officialRatings, { baseline: result.age_baseline })}</>
               ) : (
-                <span class="muted">No official age rating found.</span>
+                <span class="muted">{t.card.noAgeRating}</span>
               )}
             </p>
             {result.official_classifications.length > 0 && (
@@ -193,22 +196,21 @@ export default function TitleCard({
                   <li key={`${c.country}-${c.value}`}>
                     <strong>{c.country}</strong> {c.value}{" "}
                     <span class="muted">
-                      ({c.issuer}, via {c.source})
+                      {fmt(t.card.via, { issuer: c.issuer, source: c.source })}
                     </span>
                   </li>
                 ))}
               </ul>
             )}
             <p class="hint">
-              The baseline is the median across countries, not advice for your child. Check the
-              guidance below for what is in it.
+              {t.card.baselineHint}
             </p>
           </section>
 
           <section class="facts">
-            <h4>Where to watch</h4>
+            <h4>{t.card.whereToWatch}</h4>
             {sorted.length === 0 ? (
-              <p class="muted">No offers found.</p>
+              <p class="muted">{t.card.noOffersFound}</p>
             ) : (
               <ul class="offers">
                 {sorted.map((o) => (
@@ -223,7 +225,7 @@ export default function TitleCard({
                     )}{" "}
                     <span class="muted">
                       {accessLabel(o.access)}
-                      {showRegion ? ` · ${o.region}` : ""} · checked {verifiedAgo(o.verified_at)}
+                      {showRegion ? ` · ${o.region}` : ""} · {fmt(t.card.checked, { when: verifiedAgo(o.verified_at) })}
                     </span>
                   </li>
                 ))}
@@ -233,7 +235,7 @@ export default function TitleCard({
 
           {(result.why.length > 0 || (nearMiss && result.cautions.length > 0)) && (
             <section class="facts">
-              <h4>Why it is here</h4>
+              <h4>{t.card.whyHere}</h4>
               <ul class="reasons">
                 {result.why.map((w) => (
                   <li key={w}>{w}</li>
@@ -249,7 +251,7 @@ export default function TitleCard({
           )}
 
           <section class="facts">
-            <h4>Parental guidance</h4>
+            <h4>{t.card.guidance}</h4>
             <p>
               {guidanceLinks(result).map((l, i) => (
                 <>
@@ -278,7 +280,7 @@ function ServiceButton({ offer, title, region }: { offer: Offer; title: string; 
       {offer.provider}
       {region}
       <Icon name="play" filled />
-      <span class="sr-only"> — watch {title}</span>
+      <span class="sr-only">{fmt(t.card.watchTitle, { title })}</span>
     </>
   );
   return offer.link ? (

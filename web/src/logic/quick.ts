@@ -7,6 +7,7 @@ import {
   withKind,
   withLength,
 } from "./format";
+import { fmt, genreLabel, t } from "../i18n";
 import type { Profile, TitleMark } from "./types";
 
 export interface Filters {
@@ -102,7 +103,7 @@ export type QuickChip =
 
 const genreChip = (g: string): QuickChip => ({
   id: `genre:${g}`,
-  label: g === "Science Fiction" ? "Sci-fi" : g,
+  label: genreLabel(g === "Science Fiction" ? "Sci-fi" : g),
   kind: "filter",
   on: (f) => f.genres.includes(g),
   toggle: (f) => withGenre(f, g, f.genres.includes(g) ? "off" : "include"),
@@ -117,34 +118,34 @@ const toMovies = (f: Filters, base: Filters): Filters => ({
 const typeChips = (base: Filters): QuickChip[] => [
   {
     id: "shorts",
-    label: "Shorts",
+    label: t.quick.shorts,
     kind: "filter",
     on: (f) => f.kind === "short",
     toggle: (f) => (f.kind === "short" ? toMovies(f, base) : withKind(f, "short")),
   },
   {
     id: "series",
-    label: "Series",
+    label: t.quick.series,
     kind: "filter",
     on: (f) => f.kind === "tv",
     toggle: (f) => (f.kind === "tv" ? toMovies(f, base) : withKind(f, "tv")),
   },
 ];
 
-const NEW_CHIP: QuickChip = {
+const newChip = (): QuickChip => ({
   id: "new",
-  label: "New",
+  label: t.quick.new,
   kind: "filter",
   on: (f) => f.since === NEW_SINCE,
   toggle: (f) => ({ ...f, since: f.since === NEW_SINCE ? DEFAULT_SINCE : NEW_SINCE }),
-};
+});
 
 /** Off goes back to the profile's score, or to "Any" when the profile already asks for 7. */
 const wellRatedChip = (base: Filters): QuickChip => {
   const off = base.minImdb === WELL_RATED ? SCORE_STOPS[0] : base.minImdb;
   return {
     id: "rated",
-    label: "Well rated",
+    label: t.quick.wellRated,
     kind: "filter",
     on: (f) => f.minImdb === WELL_RATED,
     toggle: (f) => ({ ...f, minImdb: f.minImdb === WELL_RATED ? off : WELL_RATED }),
@@ -181,11 +182,11 @@ export function quickChips(
         .slice(0, MAX_LIKE_CHIPS)
         .map((m) => ({
           id: `like:${m.key}`,
-          label: `Like ${m.name}`,
+          label: fmt(t.quick.like, { title: m.name }),
           kind: "ask",
           icon: m.rewatch ? "repeat" : "smile",
-          question: `Suggest titles similar to ${m.name} that we haven't seen yet.`,
+          question: fmt(t.quick.likeQuestion, { title: m.name }),
         }))
     : [];
-  return [...types, NEW_CHIP, wellRatedChip(base), ...genres.map(genreChip), ...likes];
+  return [...types, newChip(), wellRatedChip(base), ...genres.map(genreChip), ...likes];
 }

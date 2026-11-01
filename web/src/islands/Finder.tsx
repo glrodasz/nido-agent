@@ -8,7 +8,7 @@ import {
   LENGTH_STOPS,
   lengthLabel,
   newestFirst,
-  plural,
+  lengthTick,
   releasedSince,
   SCORE_STOPS,
   scoreTick,
@@ -29,6 +29,7 @@ import type {
   TitleResult,
 } from "../logic/types";
 import { Fragment } from "preact";
+import { fmt, genreLabel, plural, t } from "../i18n";
 import Icon from "./Icon";
 import Markdown from "./Markdown";
 import Spinner from "./Spinner";
@@ -61,22 +62,21 @@ interface Turn {
 
 // Below these, the ask panel says how much of today's quota the family has left.
 const LOW_QUOTA = { chat: 5, search: 10 };
-const QUOTA_NOUN = { chat: "Ask Nido question", search: "search" };
 const QUOTA_KINDS = ["chat", "search"] as const;
 type QuotaKind = (typeof QUOTA_KINDS)[number];
 
-const SINCE_OPTIONS: { value: string; label: string }[] = [
-  { value: "2", label: "Last 2 years" },
-  { value: "5", label: "Last 5 years" },
-  { value: "10", label: "Last 10 years" },
-  { value: "20", label: "Last 20 years" },
-  { value: "", label: "Any time" },
+const SINCE_OPTIONS = (): { value: string; label: string }[] => [
+  { value: "2", label: t.finder.last2 },
+  { value: "5", label: t.finder.last5 },
+  { value: "10", label: t.finder.last10 },
+  { value: "20", label: t.finder.last20 },
+  { value: "", label: t.finder.anyTime },
 ];
 
-const KINDS: { value: FindKind; label: string }[] = [
-  { value: "movie", label: "Movies" },
-  { value: "short", label: "Shorts" },
-  { value: "tv", label: "Series" },
+const KINDS = (): { value: FindKind; label: string }[] => [
+  { value: "movie", label: t.finder.movies },
+  { value: "short", label: t.finder.shorts },
+  { value: "tv", label: t.finder.series },
 ];
 
 // Seen titles sink to the end unless the family turned that off; remembered in this browser only.
@@ -108,11 +108,8 @@ const applicable = (f: Filters, genres: string[] = f.genres) => {
   return genres.filter((g) => offered.includes(g));
 };
 
-const GENRE_STATE_TEXT: Record<GenreState, string> = {
-  off: "any",
-  include: "included",
-  exclude: "excluded",
-};
+const genreStateText = (state: GenreState) =>
+  ({ off: t.finder.genreAny, include: t.finder.genreIncluded, exclude: t.finder.genreExcluded })[state];
 
 export default function Finder({
   config,
@@ -181,7 +178,7 @@ export default function Finder({
       if (err instanceof ApiError && err.status === 429) {
         setQuota((q) => ({ ...q, [kind]: { used: q[kind]?.limit ?? 0, limit: q[kind]?.limit ?? 0 } }));
       }
-      else setError(err instanceof Error ? err.message : "Something went wrong.");
+      else setError(err instanceof Error ? err.message : t.app.somethingWrong);
     } finally {
       setBusy(null);
     }
@@ -279,7 +276,7 @@ export default function Finder({
     [profile, marks, kind, config.chat_enabled, watching],
   );
   // The lowest stop sends no minimum (unrated shorts stay in), so it reads as "Any".
-  const scoreText = minImdb !== SCORE_STOPS[0] ? `${minImdb}+` : "Any";
+  const scoreText = minImdb !== SCORE_STOPS[0] ? `${minImdb}+` : t.finder.any;
   const serviceNames = Object.fromEntries(config.services.map((s) => [s.key, s.name]));
   const multiRegion = (results?.regions.length ?? 0) > 1;
   const nearMisses = results?.near_misses ?? [];
@@ -308,15 +305,15 @@ export default function Finder({
 
   return (
     <div class="finder">
-      <section class="ask-panel" aria-label={config.chat_enabled ? "Ask Nido" : "Find"}>
+      <section class="ask-panel" aria-label={config.chat_enabled ? t.finder.askLabel : t.finder.findLabel}>
         <div>
-          <h1 class="ask-title">What shall we watch tonight?</h1>
+          <h1 class="ask-title">{t.finder.title}</h1>
           <p class="ask-for muted">{familyLine(profile, serviceNames, watching)}</p>
         </div>
         {profile.children_ages.length > 1 && (
           <div class="watching">
             <span class="filter-label" id="watching-label">
-              Who's watching
+              {t.finder.watching}
             </span>
             <div class="segmented segmented-small" role="group" aria-labelledby="watching-label">
               {[null, ...profile.children_ages.map((_, i) => i)].map((who) => {
@@ -332,7 +329,7 @@ export default function Finder({
                     onClick={() => chooseWatching(who)}
                   >
                     {quickBusy === id && <Spinner />}
-                    {who === null ? "Whole family" : childLabel(profile, who)}
+                    {who === null ? t.finder.wholeFamily : childLabel(profile, who)}
                   </button>
                 );
               })}
@@ -346,17 +343,17 @@ export default function Finder({
               value={message}
               onInput={(e) => setMessage(e.currentTarget.value)}
               placeholder={
-                turns.length ? "Ask a follow-up…" : "Something cosy we can all watch, under 2 hours"
+                turns.length ? t.finder.followUp : t.finder.placeholder
               }
               maxLength={2000}
-              aria-label="Message"
+              aria-label={t.finder.message}
             />
             <button
               class="btn btn-primary"
               type="submit"
               disabled={busy !== null || !message.trim()}
             >
-              Ask Nido
+              {t.finder.ask}
             </button>
           </form>
         )}
@@ -376,22 +373,22 @@ export default function Finder({
                 <Icon name={k === "chat" ? "bot" : "search"} />
                 {left(k) === null ? (
                   <span>
-                    <strong>{plural(quota[k]!.used, QUOTA_NOUN[k])}</strong> today
+                    <strong>{fmt(t.quota.usedToday, { count: plural(quota[k]!.used, t.quota[k]) })}</strong>
                   </span>
                 ) : left(k) === 0 ? (
                   <span>
-                    <strong>{plural(0, QUOTA_NOUN[k]).replace(/^0/, "No")} left today.</strong> They come back tomorrow.
+                    <strong>{k === "chat" ? t.quota.noneLeftChat : t.quota.noneLeftSearch}</strong> {t.quota.comeBack}
                   </span>
                 ) : (
                   <span>
-                    <strong>{plural(left(k)!, QUOTA_NOUN[k])} left</strong> today for your family
+                    <strong>{fmt(t.quota.left, { count: plural(left(k)!, t.quota[k]) })}</strong> {t.quota.leftAfter}
                   </span>
                 )}
               </span>
             ))}
           </div>
         )}
-        <div class="quick" role="group" aria-label="Quick filters">
+        <div class="quick" role="group" aria-label={t.finder.quickFilters}>
           {chips.map((c) => {
             const on = c.kind === "filter" && c.on(filters);
             return (
@@ -402,7 +399,7 @@ export default function Finder({
                 aria-pressed={c.kind === "filter" ? on : undefined}
                 disabled={busy !== null}
                 aria-busy={quickBusy === c.id}
-                title={c.kind === "ask" ? `Ask Nido: ${c.question}` : undefined}
+                title={c.kind === "ask" ? fmt(t.finder.askChipTitle, { question: c.question }) : undefined}
                 onClick={() => pressChip(c)}
               >
                 {quickBusy === c.id ? <Spinner /> : c.kind === "ask" && <Icon name={c.icon} />}
@@ -420,23 +417,23 @@ export default function Finder({
               onClick={() => clear("clear")}
             >
               {quickBusy === "clear" ? <Spinner /> : <Icon name="x" />}
-              Clear filters
+              {t.finder.clearFilters}
             </button>
           )}
         </div>
         {turns.length > 0 && (
           <ol class="turns" aria-live="polite">
-            {turns.map((t, i) => (
-              <li key={i} class={`turn turn-${t.role}`}>
-                <span class="sr-only">{t.role === "you" ? "You:" : "Nido:"}</span>
-                {t.role === "you" ? (
-                  <p>{t.text}</p>
+            {turns.map((turn, i) => (
+              <li key={i} class={`turn turn-${turn.role}`}>
+                <span class="sr-only">{turn.role === "you" ? t.finder.you : t.finder.nido}</span>
+                {turn.role === "you" ? (
+                  <p>{turn.text}</p>
                 ) : (
                   <>
                     <span class="turn-who" aria-hidden="true">
                       Nido
                     </span>
-                    <Markdown text={t.text} />
+                    <Markdown text={turn.text} />
                   </>
                 )}
               </li>
@@ -445,7 +442,7 @@ export default function Finder({
               <li class="turn turn-nido">
                 <p class="loading loading-inline">
                   <Spinner />
-                  Looking through your services…
+                  {t.finder.thinking}
                 </p>
               </li>
             )}
@@ -456,16 +453,16 @@ export default function Finder({
       <details class="more-filters" open={!config.chat_enabled}>
         <summary>
           <Icon name="chevron-down" />
-          More filters
+          {t.finder.moreFilters}
         </summary>
-        <form class="filters" onSubmit={search} aria-label="Filters">
+        <form class="filters" onSubmit={search} aria-label={t.finder.filters}>
           <div class="filters-grid">
             <div class="filter-field">
               <span class="filter-label" id="filter-type">
-                Type
+                {t.finder.type}
               </span>
               <div class="segmented segmented-small" role="group" aria-labelledby="filter-type">
-                {KINDS.map((k) => (
+                {KINDS().map((k) => (
                   <button
                     key={k.value}
                     type="button"
@@ -479,9 +476,9 @@ export default function Finder({
               </div>
             </div>
             <label class="filter-field">
-              <span class="filter-label">Released</span>
+              <span class="filter-label">{t.finder.released}</span>
               <select value={since} onChange={(e) => set({ since: e.currentTarget.value })}>
-                {SINCE_OPTIONS.map((o) => (
+                {SINCE_OPTIONS().map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
@@ -490,16 +487,16 @@ export default function Finder({
             </label>
             <StopSlider
               id="filter-length"
-              label="Max length"
+              label={t.finder.maxLength}
               stops={LENGTH_STOPS}
               value={runtime}
               valueText={lengthLabel(runtime)}
-              tick={(m) => (m === null ? "Any" : m >= 60 ? `${m / 60}h` : String(m))}
+              tick={lengthTick}
               onChange={(m) => setFilters(withLength(filters, m))}
             />
             <StopSlider
               id="filter-score"
-              label="Min IMDb score"
+              label={t.finder.minScore}
               stops={SCORE_STOPS}
               value={minImdb}
               valueText={scoreText}
@@ -508,10 +505,13 @@ export default function Finder({
             />
           </div>
           <fieldset class="filter-field filter-genres">
-            <legend class="filter-label">Genres</legend>
+            <legend class="filter-label">{t.finder.genres}</legend>
             <p class="filter-hint" id="genre-hint">
-              Tap once to include <span class="genre-key genre-key-include" aria-hidden="true">+</span>, twice
-              to exclude <span class="genre-key genre-key-exclude" aria-hidden="true">−</span>.
+              {t.finder.genreHintBefore}{" "}
+              <span class="genre-key genre-key-include" aria-hidden="true">+</span>
+              {t.finder.genreHintMiddle}{" "}
+              <span class="genre-key genre-key-exclude" aria-hidden="true">−</span>
+              {t.finder.genreHintAfter}
             </p>
             <div class="chips chips-small">
               {genresFor(kind === "tv" ? "tv" : "movie").map((g) => {
@@ -521,23 +521,23 @@ export default function Finder({
                     key={g}
                     type="button"
                     class={`chip genre-chip genre-${state}`}
-                    aria-label={`${g}: ${GENRE_STATE_TEXT[state]}`}
+                    aria-label={`${genreLabel(g)}: ${genreStateText(state)}`}
                     aria-describedby="genre-hint"
                     onClick={() => setFilters(cycleGenre(filters, g))}
                   >
                     {state !== "off" && <Icon name={state === "include" ? "plus" : "minus"} />}
-                    {g}
+                    {genreLabel(g)}
                   </button>
                 );
               })}
             </div>
             {applicable(filters).length > 1 && (
               <div class="genre-match">
-                <span id="genre-match-label">Titles need</span>
+                <span id="genre-match-label">{t.finder.titlesNeed}</span>
                 <div class="segmented segmented-small segmented-blue" role="group" aria-labelledby="genre-match-label">
                   {[
-                    { all: false, label: "Any of them" },
-                    { all: true, label: "All of them" },
+                    { all: false, label: t.finder.anyOfThem },
+                    { all: true, label: t.finder.allOfThem },
                   ].map((o) => (
                     <button
                       key={o.label}
@@ -563,7 +563,7 @@ export default function Finder({
                 onClick={() => clear("clear-more")}
               >
                 {quickBusy === "clear-more" && <Spinner />}
-                Clear filters
+                {t.finder.clearFilters}
               </button>
             )}
             <button
@@ -575,10 +575,10 @@ export default function Finder({
               {busy === "search" && quickBusy === null ? (
                 <>
                   <Spinner />
-                  Searching…
+                  {t.finder.searching}
                 </>
               ) : (
-                "Show picks"
+                t.finder.showPicks
               )}
             </button>
           </div>
@@ -595,11 +595,11 @@ export default function Finder({
         <section class="results" aria-labelledby="picks-title" aria-busy={busy !== null}>
           <header class="results-head">
             <h2 id="picks-title">
-              {results.results.length > 0 ? "Picks for your family" : "Closest picks"}
+              {results.results.length > 0 ? t.finder.picks : t.finder.closest}
             </h2>
             <div class="results-tools">
               {picks.length > 1 && (
-                <div class="segmented segmented-small" role="group" aria-label="Order">
+                <div class="segmented segmented-small" role="group" aria-label={t.finder.order}>
                   {(["newest", "rated"] as const).map((o) => (
                     <button
                       key={o}
@@ -608,7 +608,7 @@ export default function Finder({
                       class={order === o ? "active" : ""}
                       onClick={() => chooseOrder(o)}
                     >
-                      {o === "newest" ? "Newest" : "Best match"}
+                      {o === "newest" ? t.finder.newest : t.finder.bestMatch}
                     </button>
                   ))}
                 </div>
@@ -621,33 +621,31 @@ export default function Finder({
                   onClick={toggleSinkSeen}
                 >
                   <Icon name="eye" />
-                  Seen last
+                  {t.finder.seenLast}
                 </button>
               )}
               {picks.length > 0 && (
-                <span class="muted">
-                  {picks.length} {picks.length === 1 ? "title" : "titles"}
-                </span>
+                <span class="muted">{plural(picks.length, t.finder.titles)}</span>
               )}
             </div>
           </header>
           {answering && (
             <p class="results-for muted">
               <Icon name="search" />
-              Answering “{answering}”
+              {fmt(t.finder.answering, { question: answering })}
             </p>
           )}
           {results.results.length === 0 && (
             <p class="notice">
               {nearMisses.length > 0
-                ? "Nothing fits every rule in your profile, so these are the closest. Each one says what it misses."
-                : "Nothing passed the filters. Try fewer genres, a longer runtime or another type."}
+                ? t.finder.nearMissNotice
+                : t.finder.emptyNotice}
             </p>
           )}
           {picks.map((r, i) => (
             <Fragment key={`${r.media_type}:${r.tmdb_id}`}>
               {sunk > 0 && i === firstSunk && (
-                <p class="eyebrow seen-divider">Already seen · {sunk}</p>
+                <p class="eyebrow seen-divider">{fmt(t.finder.alreadySeen, { n: sunk })}</p>
               )}
               <TitleCard
                 result={r}

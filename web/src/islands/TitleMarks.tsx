@@ -1,4 +1,5 @@
 import { useId, useState } from "preact/hooks";
+import { fmt, t } from "../i18n";
 import { MAX_CHILD_AGE, banLabel, defaultBanUntil } from "../logic/format";
 import type { MarkChange, TitleMark } from "../logic/types";
 import Icon from "./Icon";
@@ -11,16 +12,15 @@ interface Props {
   onMark: (change: MarkChange) => Promise<void>;
 }
 
-const VOTES = [
-  ["seen", "Seen", "eye"],
-  ["liked_adults", "We liked it", "heart"],
-  ["liked_child", "Our kid liked it", "smile"],
-  ["rewatch", "On repeat", "repeat"],
-] as const;
+const VOTES = () =>
+  [
+    ["seen", t.marks.seen, "eye"],
+    ["liked_adults", t.marks.likedAdults, "heart"],
+    ["liked_child", t.marks.likedChild, "smile"],
+    ["rewatch", t.marks.rewatch, "repeat"],
+  ] as const;
 
-const HINTS: Partial<Record<(typeof VOTES)[number][0], string>> = {
-  rewatch: "On repeat: the kids love to watch it again and again",
-};
+const hint = (field: string) => (field === "rewatch" ? t.marks.rewatchHint : undefined);
 
 /** Seen, the two independent likes, "on repeat" and "don't suggest this" for one title. */
 export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Props) {
@@ -45,7 +45,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
       <div class="marks">
         <p class="notice notice-warn hidden-note">
           <Icon name="eye-off" />
-          {banLabel(mark.ban, true)}. Nido won't suggest it.{" "}
+          {fmt(t.marks.hiddenNote, { label: banLabel(mark.ban, true) })}{" "}
           <button
             type="button"
             class="link"
@@ -54,7 +54,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
             onClick={() => change("undo", { ban: null })}
           >
             {pending === "undo" && <Spinner />}
-            Undo
+            {t.marks.undo}
           </button>
         </p>
       </div>
@@ -64,8 +64,8 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
   const ages = Array.from({ length: MAX_CHILD_AGE - youngest }, (_, i) => youngest + 1 + i);
   return (
     <div class="marks">
-      <div class="mark-row" role="group" aria-label="Your marks">
-        {VOTES.map(([field, label, icon]) => {
+      <div class="mark-row" role="group" aria-label={t.marks.group}>
+        {VOTES().map(([field, label, icon]) => {
           const on = Boolean(mark?.[field]);
           return (
             <button
@@ -74,7 +74,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
               class={on ? "key mark key-on" : "key mark"}
               aria-pressed={on}
               aria-label={label}
-              title={HINTS[field] ?? label}
+              title={hint(field) ?? label}
               disabled={busy}
               aria-busy={pending === field}
               // A favourite to rewatch has been seen, so turning it on marks it seen too.
@@ -94,18 +94,18 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
           type="button"
           class={choosing ? "key mark key-on" : "key mark"}
           aria-expanded={choosing}
-          aria-label="Don't suggest…"
-          title="Don't suggest…"
+          aria-label={t.marks.dontSuggest}
+          title={t.marks.dontSuggest}
           disabled={busy}
           onClick={() => setChoosing(!choosing)}
         >
           <Icon name="eye-off" />
-          <span class="mark-label">Don't suggest…</span>
+          <span class="mark-label">{t.marks.dontSuggest}</span>
         </button>
       </div>
       {choosing && (
         <fieldset class="ban-choice">
-          <legend class="sr-only">How long to hide it</legend>
+          <legend class="sr-only">{t.marks.howLong}</legend>
           {canAgeBan && (
             <label>
               <input
@@ -114,10 +114,10 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
                 checked={scope === "age"}
                 onChange={() => setScope("age")}
               />
-              Until our youngest is{" "}
+              {t.marks.untilYoungest}{" "}
               <select
                 value={untilAge}
-                aria-label="Age"
+                aria-label={t.marks.age}
                 onChange={(e) => {
                   setScope("age");
                   setUntilAge(Number(e.currentTarget.value));
@@ -138,7 +138,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
               checked={scope === "always"}
               onChange={() => setScope("always")}
             />
-            At any age
+            {t.marks.anyAge}
           </label>
           <div class="actions">
             <button
@@ -153,10 +153,10 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
               }
             >
               {pending === "ban" && <Spinner />}
-              Hide it
+              {t.marks.hide}
             </button>
             <button type="button" class="link" disabled={busy} onClick={() => setChoosing(false)}>
-              Cancel
+              {t.marks.cancel}
             </button>
           </div>
         </fieldset>

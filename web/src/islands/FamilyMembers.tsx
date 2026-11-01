@@ -1,4 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
+import { fmt, intlLocale, locale, t } from "../i18n";
+import { localizePath } from "../i18n/locale";
 import { api } from "../logic/api";
 import type { Family, FamilyMember } from "../logic/types";
 import Spinner from "./Spinner";
@@ -28,8 +30,9 @@ export default function FamilyMembers({ onLeft }: Props) {
     try {
       const invite = await api.createInvite();
       setLink({
-        url: `${location.origin}/?invite=${encodeURIComponent(invite.token)}`,
-        expires: new Date(invite.expires_at).toLocaleDateString(undefined, {
+        // The invitee lands in this page's language, unless they saved another one.
+        url: `${location.origin}${localizePath("/", locale)}?invite=${encodeURIComponent(invite.token)}`,
+        expires: new Date(invite.expires_at).toLocaleDateString(intlLocale(), {
           day: "numeric",
           month: "long",
         }),
@@ -47,7 +50,7 @@ export default function FamilyMembers({ onLeft }: Props) {
       await navigator.clipboard.writeText(link.url);
       setCopied(true);
     } catch {
-      setError("Could not copy. Select the link and copy it by hand.");
+      setError(t.members.copyFailed);
     }
   }
 
@@ -69,12 +72,12 @@ export default function FamilyMembers({ onLeft }: Props) {
   const owner = family?.role === "owner";
   return (
     <section class="panel family-members">
-      <h2 class="section-title">Who shares this family</h2>
-      <p class="muted">Everyone here sees and edits the same profile, watchlist and marks.</p>
+      <h2 class="section-title">{t.members.title}</h2>
+      <p class="muted">{t.members.intro}</p>
       {!family && !error && (
         <p class="loading loading-inline" role="status">
           <Spinner />
-          Loading who's here…
+          {t.members.loading}
         </p>
       )}
       {family && (
@@ -85,9 +88,9 @@ export default function FamilyMembers({ onLeft }: Props) {
                 {(m.email ?? "?").charAt(0).toUpperCase()}
               </span>
               <span class="member-text">
-                <strong>{m.email ?? "Unknown account"}</strong>
+                <strong>{m.email ?? t.members.unknown}</strong>
                 <span class="muted">
-                  {[m.role === "owner" ? "Owner" : "Member", m.you ? "you" : null]
+                  {[m.role === "owner" ? t.members.owner : t.members.member, m.you ? t.members.you : null]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
@@ -101,7 +104,7 @@ export default function FamilyMembers({ onLeft }: Props) {
                   onClick={() => remove(m)}
                 >
                   {removing === m.uid && <Spinner />}
-                  {m.you ? "Leave" : "Remove"}
+                  {m.you ? t.members.leave : t.members.remove}
                 </button>
               )}
             </li>
@@ -111,7 +114,7 @@ export default function FamilyMembers({ onLeft }: Props) {
       {link ? (
         <div class="invite">
           <label class="invite-label" for="invite-link">
-            Send this link to someone you want to add. It works once, until {link.expires}.
+            {fmt(t.members.inviteLabel, { date: link.expires })}
           </label>
           <div class="invite-row">
             <input
@@ -122,7 +125,7 @@ export default function FamilyMembers({ onLeft }: Props) {
               onFocus={(e) => e.currentTarget.select()}
             />
             <button type="button" class="btn btn-primary" onClick={copy}>
-              {copied ? "Copied" : "Copy link"}
+              {copied ? t.members.copied : t.members.copy}
             </button>
           </div>
         </div>
@@ -131,10 +134,10 @@ export default function FamilyMembers({ onLeft }: Props) {
           {busy ? (
             <>
               <Spinner />
-              Creating link…
+              {t.members.creating}
             </>
           ) : (
-            "Invite someone"
+            t.members.invite
           )}
         </button>
       )}
@@ -147,4 +150,4 @@ export default function FamilyMembers({ onLeft }: Props) {
   );
 }
 
-const message = (err: unknown) => (err instanceof Error ? err.message : "Something went wrong.");
+const message = (err: unknown) => (err instanceof Error ? err.message : t.app.somethingWrong);

@@ -2,104 +2,13 @@ import { useEffect, useState } from "preact/hooks";
 import Icon from "./Icon";
 import Spinner from "./Spinner";
 
-// The page signed-out visitors see: what Nido does, then "Entrar con Google".
-// Copy is neutral Latin American Spanish; the demo picks are examples, not live data.
+// The page signed-out visitors see: what Nido does, then "Sign in with Google", in the page's
+// language (copy in src/i18n/landing.ts). The demo picks are examples, not live data.
+import { formatNumber, locale } from "../i18n";
+import { LANDING, type Scene } from "../i18n/landing";
+import { LanguageLinks } from "./LanguageMenu";
 
-type Pick = {
-  title: string;
-  meta: string;
-  service: [name: string, brand: string];
-  imdb: string;
-  fit: boolean;
-  call: string;
-  why?: string;
-  poster: string;
-};
-
-type Scene = { chip: string; question: string; reply: string; picks: Pick[] };
-
-const SCENES: Scene[] = [
-  {
-    chip: "Ciencia ficción divertida",
-    question: "Una película divertida de ciencia ficción",
-    reply:
-      "Dos que les van a gustar a todos. **WALL·E** es perfecta para tu hijo de 4; **Los Mitchell** es más alocada y conviene verla juntos.",
-    picks: [
-      {
-        title: "WALL·E",
-        meta: "2008 · Película · 98 min · Animación, Ciencia ficción",
-        service: ["Disney+", "#113ccf"],
-        imdb: "8,4",
-        fit: true,
-        call: "Buena para todos",
-        poster: "#c9a46a, #6b4a2b",
-      },
-      {
-        title: "Los Mitchell vs. las máquinas",
-        meta: "2021 · Película · 114 min · Animación, Comedia",
-        service: ["Netflix", "#e50914"],
-        imdb: "7,6",
-        fit: false,
-        call: "Mejor con un adulto",
-        why: "Clasificada 7+ y tu hijo tiene 4",
-        poster: "#b18be0, #4b2a86",
-      },
-    ],
-  },
-  {
-    chip: "Animada y bien valorada",
-    question: "Algo animado y bien valorado, menos de 90 minutos",
-    reply:
-      "**Mi vecino Totoro** es tranquila y hermosa para los más chiquitos. **Shaun, el cordero** no tiene diálogos y hace reír a cualquier edad.",
-    picks: [
-      {
-        title: "Mi vecino Totoro",
-        meta: "1988 · Película · 86 min · Animación, Fantasía",
-        service: ["HBO Max", "#5b2bd6"],
-        imdb: "8,1",
-        fit: true,
-        call: "Buena para todos",
-        poster: "#9cc79a, #3b6e47",
-      },
-      {
-        title: "Shaun, el cordero: La película",
-        meta: "2015 · Película · 85 min · Animación, Comedia",
-        service: ["Netflix", "#e50914"],
-        imdb: "7,3",
-        fit: true,
-        call: "Buena para todos",
-        why: "Algún momento de tensión leve",
-        poster: "#d8c79a, #7b6a3a",
-      },
-    ],
-  },
-  {
-    chip: "Una serie que no dé miedo",
-    question: "Una serie con capítulos cortos que no dé miedo",
-    reply:
-      "**Bluey** es la favorita de muchos padres: capítulos de 7 minutos y mucho humor. **Puffin Rock** es más calmada, ideal antes de dormir.",
-    picks: [
-      {
-        title: "Bluey",
-        meta: "2018– · Serie · 7 min · Animación, Familia",
-        service: ["Disney+", "#113ccf"],
-        imdb: "9,3",
-        fit: true,
-        call: "Buena para todos",
-        poster: "#8fb6c9, #2f6280",
-      },
-      {
-        title: "Puffin Rock",
-        meta: "2015–2022 · Serie · 7 min · Animación, Infantil",
-        service: ["Netflix", "#e50914"],
-        imdb: "8,0",
-        fit: true,
-        call: "Buena para todos",
-        poster: "#a6c9b8, #3f6f63",
-      },
-    ],
-  },
-];
+const copy = () => LANDING[locale];
 
 const RATINGS: [country: string, rating: string][] = [
   ["US", "PG"],
@@ -113,9 +22,15 @@ const RATINGS: [country: string, rating: string][] = [
   ["FI", "7"],
 ];
 
-/** Renders the demo reply's **bold** titles; the text is ours, so no markdown parser is needed. */
-function bold(text: string) {
-  return text.split("**").map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : part));
+/** Renders our own copy's **bold** and *emphasis*; the text is ours, so no markdown parser is needed. */
+function rich(text: string) {
+  return text.split("**").map((part, i) =>
+    i % 2 ? (
+      <strong key={i}>{part}</strong>
+    ) : (
+      part.split("*").map((bit, j) => (j % 2 ? <em key={`${i}-${j}`}>{bit}</em> : bit))
+    ),
+  );
 }
 
 function GoogleMark() {
@@ -133,6 +48,7 @@ function GoogleMark() {
 
 function Demo() {
   const [scene, setScene] = useState(0);
+  const SCENES = copy().scenes;
   const [typed, setTyped] = useState(SCENES[0].question);
   // The previous answer stays until the new question finishes "typing".
   const [answered, setAnswered] = useState(0);
@@ -157,10 +73,10 @@ function Demo() {
   }, [scene]);
 
   return (
-    <div class="lp-demo" aria-label="Ejemplo de búsqueda en Nido">
+    <div class="lp-demo" aria-label={copy().demoLabel}>
       <div class="lp-demo-label">
-        <span>Pregunta como hablas</span>
-        <span>Ejemplo</span>
+        <span>{copy().askLikeYouTalk}</span>
+        <span>{copy().example}</span>
       </div>
       <div class="lp-ask">
         <Icon name="search" />
@@ -169,10 +85,10 @@ function Demo() {
           <span class="lp-caret" aria-hidden="true" />
         </span>
         <span class="btn btn-primary btn-small" aria-hidden="true">
-          Preguntar
+          {copy().askButton}
         </span>
       </div>
-      <div class="chips lp-chips" role="group" aria-label="Otros ejemplos">
+      <div class="chips lp-chips" role="group" aria-label={copy().otherExamples}>
         {SCENES.map((s, i) => (
           <button
             key={s.chip}
@@ -195,7 +111,7 @@ function DemoAnswer({ scene }: { scene: Scene }) {
     <>
       <div class="lp-reply" aria-live="polite">
         <b>Nido</b>
-        <span>{bold(scene.reply)}</span>
+        <span>{rich(scene.reply)}</span>
       </div>
       <div class="lp-picks">
         {scene.picks.map((p) => (
@@ -205,7 +121,9 @@ function DemoAnswer({ scene }: { scene: Scene }) {
             </span>
             <div class="lp-pick-body">
               <h3>{p.title}</h3>
-              <p class="muted">{p.meta}</p>
+              <p class="muted">
+                {[p.year, p.kind === "series" ? copy().series : copy().movie, `${p.minutes} min`, p.genres].join(" · ")}
+              </p>
               <div class="watch">
                 <span class="svc-btn" style={{ "--brand": p.service[1], "--brand-text": "#ffffff" }}>
                   {p.service[0]}
@@ -213,31 +131,27 @@ function DemoAnswer({ scene }: { scene: Scene }) {
                 </span>
                 <span class="imdb">
                   <Icon name="star" filled />
-                  IMDb <strong>{p.imdb}</strong>
+                  IMDb <strong>{formatNumber(p.imdb, { minimumFractionDigits: 1 })}</strong>
                 </span>
               </div>
               <p class={`verdict ${p.fit ? "verdict-fit" : "verdict-grown-up"}`}>
                 <span class="verdict-dot" />
-                <strong>{p.call}</strong>
+                <strong>{p.fit ? copy().fit : copy().grownUp}</strong>
                 {p.why && <span> · {p.why}</span>}
               </p>
             </div>
           </article>
         ))}
       </div>
-      <p class="lp-note">Ejemplo para una familia con un niño de 4 años.</p>
+      <p class="lp-note">{copy().demoNote}</p>
     </>
   );
 }
 
 function MarksSample() {
   const [on, setOn] = useState([true, true, true, true]);
-  const marks = [
-    ["eye", "Vista"],
-    ["heart", "Nos gustó"],
-    ["smile", "Le gustó a mi hijo"],
-    ["repeat", "Para repetir"],
-  ] as const;
+  const icons = ["eye", "heart", "smile", "repeat"] as const;
+  const marks = icons.map((icon, i) => [icon, copy().marks[i]] as const);
   return (
     <div class="lp-marks">
       {marks.map(([icon, label], i) => (
@@ -290,8 +204,9 @@ export default function Landing({
     </button>
   );
 
+  const c = copy();
   return (
-    <main class="landing" lang="es">
+    <main class="landing">
       <section class="lp-hero">
         <div class="lp-wrap">
           <div class="lp-hero-text">
@@ -300,22 +215,16 @@ export default function Landing({
                 {error}
               </p>
             )}
-            <span class="lp-kicker">Para ver en familia</span>
-            <h1>
-              ¿Cansado de no saber qué ver, ni qué es <em>adecuado</em> para tus hijos?
-            </h1>
-            <p class="lp-lede">
-              Nido busca en los servicios de streaming que ya pagas y te propone películas y series{" "}
-              <strong>aptas para tus hijos y que también vas a disfrutar tú</strong>. Le dices la
-              edad de tu hijo y lo que prefieres evitar, y Nido hace el resto.
-            </p>
+            <span class="lp-kicker">{c.kicker}</span>
+            <h1>{rich(c.heroTitle)}</h1>
+            <p class="lp-lede">{rich(c.heroLede)}</p>
             <div class="lp-cta">
-              {signInButton("hero", "Entrar con Google")}
+              {signInButton("hero", c.signIn)}
               <a class="lp-quiet" href="#que-hace">
-                Ver qué hace Nido
+                {c.seeWhat}
               </a>
             </div>
-            <p class="lp-fine">Gratis, con un límite diario de búsquedas por familia.</p>
+            <p class="lp-fine">{c.fine}</p>
           </div>
           <Demo />
         </div>
@@ -323,24 +232,14 @@ export default function Landing({
 
       <section class="lp-band">
         <div class="lp-wrap">
-          <h2>Que sea apta no basta. Tiene que gustarles a todos.</h2>
+          <h2>{c.bandTitle}</h2>
           <div>
-            <p>
-              La mayoría de buscadores para niños solo filtran. Nido parte de tu familia:{" "}
-              <strong>
-                la edad de tu hijo, los servicios que ya tienen y lo que prefieres evitar
-              </strong>
-              , como sustos, violencia o malos ejemplos.
-            </p>
-            <p>
-              Con eso busca títulos de calidad, bien valorados y que un adulto también vea con
-              gusto, y te dice en una línea si encajan con ustedes y por qué.
-            </p>
+            <p>{rich(c.bandP1)}</p>
+            <p>{rich(c.bandP2)}</p>
             <div class="lp-triad">
-              <span>Apta para su edad</span>
-              <span>Bien valorada</span>
-              <span>En tus servicios</span>
-              <span>Divertida para todos</span>
+              {c.triad.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
             </div>
           </div>
         </div>
@@ -349,24 +248,20 @@ export default function Landing({
       <section class="lp-features" id="que-hace">
         <div class="lp-wrap">
           <div class="lp-head">
-            <h2>Todo lo que necesitas para decidir en un minuto</h2>
-            <p>Cada dato viene de una fuente oficial y te dice de dónde sale.</p>
+            <h2>{c.featuresTitle}</h2>
+            <p>{c.featuresLede}</p>
           </div>
 
           <article class="lp-feature">
             <div class="lp-feature-text">
-              <span class="eyebrow">Edad</span>
-              <h3>Las clasificaciones de edad del mundo, en una sola cifra</h3>
-              <p>
-                Nido junta las clasificaciones oficiales de nueve países, incluida la de tu país, y
-                calcula una edad recomendada. Si quieres el detalle, lo tienes país por país, junto
-                a enlaces a Common Sense Media y la guía para padres de IMDb.
-              </p>
+              <span class="eyebrow">{c.ageEyebrow}</span>
+              <h3>{c.ageTitle}</h3>
+              <p>{c.ageBody}</p>
             </div>
             <div class="lp-vignette">
               <div class="lp-vignette-head">
-                <b>Los Mitchell vs. las máquinas</b>
-                <span>Ejemplo</span>
+                <b>{c.ageExample}</b>
+                <span>{c.example}</span>
               </div>
               <div class="lp-ratings-scroll">
                 <div class="lp-ratings">
@@ -380,23 +275,16 @@ export default function Landing({
               </div>
               <div class="lp-median">
                 <span class="lp-age">7+</span>
-                <span>
-                  Edad recomendada por Nido. Tu hijo tiene 4, así que te avisa:{" "}
-                  <strong>mejor verla con un adulto</strong>.
-                </span>
+                <span>{rich(c.ageVerdict)}</span>
               </div>
             </div>
           </article>
 
           <article class="lp-feature">
             <div class="lp-feature-text">
-              <span class="eyebrow">Dónde verla</span>
-              <h3>Solo lo que puedes ver hoy, en lo que ya pagas</h3>
-              <p>
-                Marca tus servicios una vez. Nido te pone primero lo que está incluido en tu
-                suscripción, con un botón para abrirlo directamente, y separa lo que solo se puede
-                alquilar o comprar.
-              </p>
+              <span class="eyebrow">{c.whereEyebrow}</span>
+              <h3>{c.whereTitle}</h3>
+              <p>{c.whereBody}</p>
             </div>
             <div class="lp-vignette lp-services">
               {(
@@ -410,31 +298,28 @@ export default function Landing({
                     {name}
                     <Icon name="play" filled />
                   </span>
-                  <span class="muted">Incluida</span>
+                  <span class="muted">{c.included}</span>
                 </div>
               ))}
               <div class="lp-service lp-service-off">
-                <span>Apple TV · Alquiler</span>
-                <span>No está en tus servicios</span>
+                <span>{c.rental}</span>
+                <span>{c.notYours}</span>
               </div>
             </div>
           </article>
 
           <article class="lp-feature">
             <div class="lp-feature-text">
-              <span class="eyebrow">Recuerdos de familia</span>
-              <h3>Anota lo que les gustó y lo que quieren repetir</h3>
-              <p>
-                Marca si ya la vieron, si les gustó a ustedes o a tu hijo, y las que pide una y otra
-                vez. Las de repetir quedan a la mano para esas noches en que solo sirve su favorita.
-              </p>
+              <span class="eyebrow">{c.memoriesEyebrow}</span>
+              <h3>{c.memoriesTitle}</h3>
+              <p>{c.memoriesBody}</p>
             </div>
             <div class="lp-vignette">
               <div class="lp-mini">
                 <span class="lp-poster lp-poster-sm" style={{ background: "linear-gradient(160deg, #8fb6c9, #2f6280)" }} />
                 <div>
                   <b>Bluey</b>
-                  <span class="muted">2018– · Serie · Animación, Familia</span>
+                  <span class="muted">{c.bluey}</span>
                 </div>
               </div>
               <MarksSample />
@@ -443,33 +328,31 @@ export default function Landing({
 
           <article class="lp-feature">
             <div class="lp-feature-text">
-              <span class="eyebrow">Para más adelante</span>
-              <h3>Escóndela hasta que tenga edad</h3>
-              <p>
-                ¿Una película que todavía no es para su edad? Pídele a Nido que no la sugiera hasta
-                que tu hijo cumpla la edad que elijas, o nunca. Vuelve sola cuando actualizas su
-                edad, y siempre puedes deshacerlo.
-              </p>
+              <span class="eyebrow">{c.laterEyebrow}</span>
+              <h3>{c.laterTitle}</h3>
+              <p>{c.laterBody}</p>
             </div>
             <div class="lp-vignette" aria-hidden="true">
               <div class="lp-mini">
                 <span class="lp-poster lp-poster-sm" style={{ background: "linear-gradient(160deg, #7fa7b8, #2c5466)" }} />
                 <div>
-                  <b>El viaje de Chihiro</b>
-                  <span class="muted">2001 · Película · 125 min</span>
+                  <b>{c.spirited}</b>
+                  <span class="muted">{c.spiritedMeta}</span>
                 </div>
               </div>
               <div class="lp-hide">
                 <span class="lp-radio lp-radio-on">
                   <i />
-                  Hasta que tenga <span class="lp-select">12</span> años
+                  {c.untilBefore} <span class="lp-select">12</span>
+                  {c.untilAfter && ` ${c.untilAfter}`}
                 </span>
                 <span class="lp-radio">
-                  <i />A cualquier edad
+                  <i />
+                  {c.anyAge}
                 </span>
                 <span class="lp-hide-actions">
-                  <span class="btn btn-primary btn-small">Ocultar</span>
-                  <span class="btn btn-small">Cancelar</span>
+                  <span class="btn btn-primary btn-small">{c.hide}</span>
+                  <span class="btn btn-small">{c.cancel}</span>
                 </span>
               </div>
             </div>
@@ -477,40 +360,19 @@ export default function Landing({
 
           <article class="lp-feature">
             <div class="lp-feature-text">
-              <span class="eyebrow">Un agente de IA</span>
-              <h3>La IA propone, los datos deciden</h3>
-              <p>
-                Nido es un agente: entiende lo que pides, busca en el catálogo, consulta edades,
-                notas y disponibilidad, y te explica su elección. Las reglas de tu familia se
-                aplican con datos, no con suposiciones, así que lo que ocultas nunca vuelve a
-                aparecer.
-              </p>
+              <span class="eyebrow">{c.agentEyebrow}</span>
+              <h3>{c.agentTitle}</h3>
+              <p>{c.agentBody}</p>
             </div>
             <ol class="lp-vignette lp-trace">
-              <li>
-                <i>1</i>
-                <span>
-                  <b>Entiende</b> "algo divertido de ciencia ficción, para esta noche"
-                </span>
-              </li>
-              <li>
-                <i>2</i>
-                <span>
-                  <b>Busca</b> en el catálogo de tu país y en tus servicios
-                </span>
-              </li>
-              <li class="lp-trace-check">
-                <i>✓</i>
-                <span>
-                  <b>Comprueba</b> edad, lo que evitas y lo que ocultaste
-                </span>
-              </li>
-              <li>
-                <i>3</i>
-                <span>
-                  <b>Explica</b> en una línea por qué encaja con ustedes
-                </span>
-              </li>
+              {c.trace.map(([verb, rest], i) => (
+                <li key={verb} class={i === 2 ? "lp-trace-check" : undefined}>
+                  <i>{i === 2 ? "✓" : i < 2 ? i + 1 : i}</i>
+                  <span>
+                    <b>{verb}</b> {rest}
+                  </span>
+                </li>
+              ))}
             </ol>
           </article>
         </div>
@@ -519,24 +381,15 @@ export default function Landing({
       <section class="lp-how" id="como-funciona">
         <div class="lp-wrap">
           <div class="lp-head">
-            <h2>Cómo funciona</h2>
+            <h2>{c.howTitle}</h2>
           </div>
           <ol class="lp-steps">
-            <li>
-              <h3>Cuéntale de tu familia</h3>
-              <p>
-                La edad de tu hijo, tus servicios y lo que prefieres evitar. Puedes invitar a tu
-                pareja para compartirlo todo.
-              </p>
-            </li>
-            <li>
-              <h3>Pregunta o explora</h3>
-              <p>Escribe lo que se te antoje o usa atajos como "menos de 90 minutos" o "animada".</p>
-            </li>
-            <li>
-              <h3>Elige y dale play</h3>
-              <p>Cada tarjeta te dice si encaja, la nota y dónde verla. Un toque y empieza.</p>
-            </li>
+            {c.steps.map(([title, body]) => (
+              <li key={title}>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </li>
+            ))}
           </ol>
         </div>
       </section>
@@ -545,18 +398,19 @@ export default function Landing({
         <div class="lp-wrap">
           <div class="lp-closing-box">
             <div>
-              <h2>Menos tiempo eligiendo, más tiempo juntos.</h2>
-              <p>Entra con tu cuenta de Google y arma el perfil de tu familia en un minuto.</p>
+              <h2>{c.closingTitle}</h2>
+              <p>{c.closingBody}</p>
             </div>
-            {signInButton("closing", "Entrar con Google")}
+            {signInButton("closing", c.signIn)}
           </div>
         </div>
       </section>
 
       <footer class="lp-footer">
         <div class="lp-wrap">
-          <span>Disponibilidad de JustWatch vía TMDB. Valoraciones de OMDb.</span>
-          <span>Nido · hecho en casa para ver en familia</span>
+          <span>{c.footerSources}</span>
+          <LanguageLinks />
+          <span>{c.footerTag}</span>
         </div>
       </footer>
     </main>
