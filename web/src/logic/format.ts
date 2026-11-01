@@ -105,16 +105,16 @@ export const EMPTY_PROFILE: Profile = {
 };
 
 // TMDB genre names the profile and filters offer (discover uses TMDB's own names). Series
-// genres are compound ("Action & Adventure", "Sci-Fi & Fantasy", "War & Politics"); the server
+// genres are compound ("Action & Adventure", "Sci-Fi & Fantasy"); the server
 // matches each name to either half. A few exist for one type only, so Find shows only those
-// that can filter the chosen type. Left out: Horror, Thriller, News, Soap, Talk, TV Movie.
+// that can filter the chosen type. Left out as too violent or off-topic for a family
+// app: Crime, Horror, Thriller, War, News, Soap, Talk, TV Movie.
 const BOTH: MediaType[] = ["movie", "tv"];
 export const GENRE_TYPES: Record<string, MediaType[]> = {
   Action: BOTH,
   Adventure: BOTH,
   Animation: BOTH,
   Comedy: BOTH,
-  Crime: BOTH,
   Documentary: BOTH,
   Drama: BOTH,
   Family: BOTH,
@@ -126,7 +126,6 @@ export const GENRE_TYPES: Record<string, MediaType[]> = {
   Reality: ["tv"],
   Romance: ["movie"],
   "Science Fiction": BOTH,
-  War: BOTH,
   Western: BOTH,
 };
 export const GENRES = Object.keys(GENRE_TYPES);

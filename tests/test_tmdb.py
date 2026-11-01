@@ -200,8 +200,8 @@ _TMDB_TV_GENRES = {
     "News": 10763, "Reality": 10764, "Sci-Fi & Fantasy": 10765, "Soap": 10766, "Talk": 10767,
     "War & Politics": 10768, "Western": 37,
 }  # fmt: skip
-_BOTH = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama",
-         "Family", "Fantasy", "Mystery", "Science Fiction", "War", "Western"]  # fmt: skip
+_BOTH = ["Action", "Adventure", "Animation", "Comedy", "Documentary", "Drama", "Family",
+         "Fantasy", "Mystery", "Science Fiction", "Western"]  # fmt: skip
 
 
 def test_every_offered_genre_resolves_for_its_media_type():
@@ -211,5 +211,4 @@ def test_every_offered_genre_resolves_for_its_media_type():
         assert resolve_genres([genre], _TMDB_MOVIE_GENRES), genre
     for genre in [*_BOTH, "Kids", "Reality"]:
         assert resolve_genres([genre], _TMDB_TV_GENRES), genre
-    assert resolve_genres(["War"], _TMDB_TV_GENRES) == {"War & Politics": 10768}
     assert resolve_genres(["Action"], _TMDB_TV_GENRES) == {"Action & Adventure": 10759}
