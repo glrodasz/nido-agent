@@ -1,4 +1,4 @@
-import type { Access, Ban, Offer, Profile } from "./types";
+import type { Access, Ban, MediaType, Offer, Profile } from "./types";
 
 const DAY_MS = 86_400_000;
 
@@ -104,19 +104,36 @@ export const EMPTY_PROFILE: Profile = {
   min_imdb_rating: null,
 };
 
-// TMDB genre names the filters offer (discover uses TMDB's own names).
-export const GENRES = [
-  "Adventure",
-  "Animation",
-  "Comedy",
-  "Drama",
-  "Family",
-  "Fantasy",
-  "Mystery",
-  "Science Fiction",
-  "Documentary",
-  "Music",
-];
+// TMDB genre names the profile and filters offer (discover uses TMDB's own names). Series
+// genres are compound ("Action & Adventure", "Sci-Fi & Fantasy"); the server
+// matches each name to either half. A few exist for one type only, so Find shows only those
+// that can filter the chosen type. Left out as too violent or off-topic for a family
+// app: Crime, Horror, Thriller, War, News, Soap, Talk, TV Movie.
+const BOTH: MediaType[] = ["movie", "tv"];
+export const GENRE_TYPES: Record<string, MediaType[]> = {
+  Action: BOTH,
+  Adventure: BOTH,
+  Animation: BOTH,
+  Comedy: BOTH,
+  Documentary: BOTH,
+  Drama: BOTH,
+  Family: BOTH,
+  Fantasy: BOTH,
+  History: ["movie"],
+  Kids: ["tv"],
+  Music: ["movie"],
+  Mystery: BOTH,
+  Reality: ["tv"],
+  Romance: ["movie"],
+  "Science Fiction": BOTH,
+  Western: BOTH,
+};
+export const GENRES = Object.keys(GENRE_TYPES);
+
+/** The genres that can filter one media type. */
+export function genresFor(mediaType: MediaType): string[] {
+  return GENRES.filter((g) => GENRE_TYPES[g].includes(mediaType));
+}
 
 // Where an age range starts: 0-6, 7-9, 10-12, 13-15, 16-17 (server.AGE_RANGE_STARTS). Profiles
 // stop at 17, so an age ban lifts at 17 at the latest.

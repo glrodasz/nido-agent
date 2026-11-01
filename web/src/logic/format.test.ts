@@ -6,6 +6,7 @@ import {
   categoryLabel,
   familyLine,
   formatVotes,
+  genresFor,
   parseAges,
   parseRegions,
   plural,
@@ -217,5 +218,15 @@ describe("plural", () => {
     expect(plural(1, "search")).toBe("1 search");
     expect(plural(3, "search")).toBe("3 searches");
     expect(plural(0, "Ask Nido question")).toBe("0 Ask Nido questions");
+  });
+});
+
+describe("genresFor", () => {
+  it("offers each type only the genres TMDB has for it", () => {
+    expect(genresFor("movie")).toContain("Romance");
+    expect(genresFor("movie")).not.toContain("Kids");
+    expect(genresFor("tv")).toContain("Kids");
+    expect(genresFor("tv")).not.toContain("Music");
+    expect(genresFor("tv")).toContain("Western");
   });
 });
