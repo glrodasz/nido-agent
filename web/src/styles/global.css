@@ -789,7 +789,7 @@ input:not([type="checkbox"]) {
 .filters {
   display: grid;
   gap: 1.1rem;
-  margin-top: 0.5rem;
+  margin: 0.5rem 0 0.4rem;
   padding: 1.1rem;
   background: var(--surface-2);
   border-radius: 12px;
@@ -2428,7 +2428,7 @@ a.imdb:hover {
 }
 
 .lp-closing-box p {
-  margin-top: 0.5rem;
+  margin: 0.5rem 0 0.4rem;
   color: var(--muted);
 }
 
@@ -2610,6 +2610,7 @@ a.imdb:hover {
 
 .child-add {
   justify-self: start;
+  margin: 0.5rem 0 0.4rem;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
