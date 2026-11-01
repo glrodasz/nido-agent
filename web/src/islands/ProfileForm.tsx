@@ -1,7 +1,18 @@
 import { useState } from "preact/hooks";
-import { categoryLabel, GENRES, parseAges, parseRegions } from "../logic/format";
+import {
+  categoryLabel,
+  GENRES,
+  LENGTH_STOPS,
+  lengthLabel,
+  parseAges,
+  parseRegions,
+  SCORE_STOPS,
+  SHORT_MAX_MIN,
+} from "../logic/format";
+import { profileLength, profileScore } from "../logic/quick";
 import type { AppConfig, Profile } from "../logic/types";
 import Spinner from "./Spinner";
+import StopSlider from "./StopSlider";
 
 interface Props {
   config: AppConfig;
@@ -20,8 +31,9 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
   const [services, setServices] = useState(initial.services);
   const [avoid, setAvoid] = useState(initial.avoid_categories);
   const [genres, setGenres] = useState(initial.preferred_genres);
-  const [runtime, setRuntime] = useState(initial.max_runtime_min?.toString() ?? "");
-  const [minImdb, setMinImdb] = useState(initial.min_imdb_rating?.toString() ?? "");
+  // Saved as slider stops; an older profile's in-between value lands on the nearest one.
+  const [runtime, setRuntime] = useState(profileLength(initial.max_runtime_min));
+  const [minImdb, setMinImdb] = useState(profileScore(initial.min_imdb_rating));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -42,8 +54,9 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
         services,
         avoid_categories: avoid,
         preferred_genres: genres,
-        max_runtime_min: runtime ? Number(runtime) : null,
-        min_imdb_rating: minImdb ? Number(minImdb) : null,
+        max_runtime_min: runtime,
+        // The lowest stop is "Any": no minimum.
+        min_imdb_rating: minImdb > SCORE_STOPS[0] ? minImdb : null,
       });
       setSaved(true);
     } catch (err) {
@@ -133,31 +146,33 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
         </div>
       </fieldset>
 
-      <div class="row">
-        <label class="field">
-          <span>Longest runtime (min)</span>
-          <input
-            type="number"
-            min={1}
-            max={600}
+      <fieldset class="field profile-defaults">
+        <legend>Default filters</legend>
+        <small class="muted">
+          Where Find's filters start, and what Clear filters goes back to. They are not fixed
+          rules: change them for any search.
+        </small>
+        <div class="filters-grid">
+          <StopSlider
+            id="profile-length"
+            label="Max length"
+            stops={LENGTH_STOPS}
             value={runtime}
-            onInput={(e) => setRuntime(e.currentTarget.value)}
-            placeholder="Any"
+            valueText={runtime !== null && runtime <= SHORT_MAX_MIN ? `${lengthLabel(runtime)} · Shorts` : lengthLabel(runtime)}
+            tick={(m) => (m === null ? "Any" : m >= 60 ? `${m / 60}h` : String(m))}
+            onChange={setRuntime}
           />
-        </label>
-        <label class="field">
-          <span>Lowest IMDb score</span>
-          <input
-            type="number"
-            min={0}
-            max={10}
-            step={0.1}
+          <StopSlider
+            id="profile-score"
+            label="Min IMDb score"
+            stops={SCORE_STOPS}
             value={minImdb}
-            onInput={(e) => setMinImdb(e.currentTarget.value)}
-            placeholder="Any"
+            valueText={minImdb > SCORE_STOPS[0] ? `${minImdb}+` : "Any"}
+            tick={String}
+            onChange={setMinImdb}
           />
-        </label>
-      </div>
+        </div>
+      </fieldset>
 
       {error && (
         <p class="error" role="alert">

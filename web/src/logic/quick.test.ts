@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_FILTERS, favouriteTitles, isDefault, quickChips } from "./quick";
+import { nearestStop, SCORE_STOPS } from "./format";
+import { DEFAULT_FILTERS, favouriteTitles, isDefault, profileFilters, quickChips } from "./quick";
 import type { Profile, TitleMark } from "./types";
 
 const profile = (patch: Partial<Profile> = {}): Profile => ({
@@ -82,6 +83,45 @@ describe("quickChips", () => {
       expect(c.on(on)).toBe(true);
       expect(isDefault(c.toggle(on))).toBe(true);
     }
+  });
+});
+
+describe("profile defaults", () => {
+  it("start Find at the profile's length and score, snapped to the stops", () => {
+    expect(profileFilters(profile())).toEqual(DEFAULT_FILTERS);
+    expect(profileFilters(profile({ max_runtime_min: 90, min_imdb_rating: 6.5 }))).toMatchObject({
+      kind: "movie",
+      runtime: 60,
+      minImdb: 6,
+    });
+    expect(profileFilters(profile({ max_runtime_min: 30 }))).toMatchObject({ kind: "short", runtime: 30 });
+  });
+
+  it("make chips switch off back to the profile's values", () => {
+    const p = profile({ max_runtime_min: 120, min_imdb_rating: 6 });
+    const base = profileFilters(p);
+    for (const c of quickChips(p, [], "movie", true)) {
+      if (c.kind !== "filter") continue;
+      const on = c.toggle(base);
+      expect(c.on(on)).toBe(true);
+      expect(isDefault(c.toggle(on), base)).toBe(true);
+    }
+    expect(isDefault(DEFAULT_FILTERS, base)).toBe(false);
+  });
+
+  it("turn Well rated off to Any when the profile already asks for 7", () => {
+    const p = profile({ min_imdb_rating: 7 });
+    const rated = quickChips(p, [], "movie", true).find((c) => c.id === "rated")!;
+    expect(rated.kind === "filter" && rated.toggle(profileFilters(p)).minImdb).toBe(SCORE_STOPS[0]);
+  });
+});
+
+describe("nearestStop", () => {
+  it("snaps to the closest stop, the stricter one on a tie", () => {
+    expect(nearestStop([10, 30, 40, 60, 120, null], 90)).toBe(60);
+    expect(nearestStop([10, 30, 40, 60, 120, null], 100)).toBe(120);
+    expect(nearestStop([4, 6, 7, 8, 9], 6.5)).toBe(6);
+    expect(nearestStop([4, 6, 7, 8, 9], null)).toBe(null);
   });
 });
 

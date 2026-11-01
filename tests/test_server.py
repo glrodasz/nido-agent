@@ -102,6 +102,18 @@ def test_search_can_clear_profile_avoidances():
     assert toolbox.calls[-1]["avoid"] == []
 
 
+def test_search_can_lift_the_profile_limits():
+    # The profile's length and score are Find's defaults: an explicit null means "any".
+    c, toolbox = client()
+    c.put("/api/profile", json={**PROFILE, "max_runtime_min": 60, "min_imdb_rating": 7})
+    c.post("/api/search", json={})
+    assert toolbox.calls[-1]["max_runtime_min"] == 60
+    assert toolbox.calls[-1]["min_imdb_rating"] == 7
+    c.post("/api/search", json={"max_runtime_min": None, "min_imdb_rating": None})
+    assert toolbox.calls[-1]["max_runtime_min"] is None
+    assert toolbox.calls[-1]["min_imdb_rating"] is None
+
+
 def test_search_passes_the_release_filter():
     c, toolbox = client()
     c.put("/api/profile", json=PROFILE)

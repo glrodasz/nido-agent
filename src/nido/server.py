@@ -443,10 +443,16 @@ def create_app(
                 services=profile.services,
                 genres=request.genres,
                 prefer_genres=profile.preferred_genres,
-                max_runtime_min=request.max_runtime_min or profile.max_runtime_min,
+                # The profile's limits are defaults: a field the request sends, even null for
+                # "any", wins; one it leaves out falls back to the profile.
+                max_runtime_min=(
+                    request.max_runtime_min
+                    if "max_runtime_min" in request.model_fields_set
+                    else profile.max_runtime_min
+                ),
                 min_imdb_rating=(
                     request.min_imdb_rating
-                    if request.min_imdb_rating is not None
+                    if "min_imdb_rating" in request.model_fields_set
                     else profile.min_imdb_rating
                 ),
                 avoid=[

@@ -275,6 +275,18 @@ export const LENGTH_STOPS: (number | null)[] = [10, 30, 40, 60, 120, null];
  * an IMDb score (common for shorts and specials) still show. */
 export const SCORE_STOPS = [4, 6, 7, 8, 9];
 
+/** The stop closest to a saved value (profiles saved before the sliders hold any number);
+ * null stays null, the "Any" end. On a tie the stricter, lower stop wins. */
+export function nearestStop(stops: (number | null)[], value: number | null): number | null {
+  if (value === null) return null;
+  let best: number | null = null;
+  for (const s of stops) {
+    if (s === null) continue;
+    if (best === null || Math.abs(s - value) < Math.abs(best - value)) best = s;
+  }
+  return best;
+}
+
 /** "10 min", "1h", "2h", "Any". */
 export function lengthLabel(min: number | null): string {
   if (min === null) return "Any";

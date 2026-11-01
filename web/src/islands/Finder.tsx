@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { ApiError, api } from "../logic/api";
 import {
   familyLine,
@@ -30,7 +30,7 @@ import Markdown from "./Markdown";
 import Spinner from "./Spinner";
 import StopSlider from "./StopSlider";
 import TitleCard from "./TitleCard";
-import { DEFAULT_FILTERS, type Filters, isDefault, type QuickChip, quickChips } from "../logic/quick";
+import { type Filters, isDefault, profileFilters, type QuickChip, quickChips } from "../logic/quick";
 
 interface Props {
   config: AppConfig;
@@ -103,7 +103,10 @@ export default function Finder({
   marks,
   onMark,
 }: Props) {
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  // The profile's default length and score: where the filters start and what Clear goes back to.
+  const base = useMemo(() => profileFilters(profile), [profile]);
+  const [filters, setFilters] = useState<Filters>(base);
+  useEffect(() => setFilters(base), [base]);
   const { kind, genres, runtime, minImdb, since } = filters;
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const [message, setMessage] = useState("");
@@ -158,11 +161,15 @@ export default function Finder({
 
   async function search(e?: Event, f: Filters = filters) {
     e?.preventDefault();
+    const { media_type, max_runtime_min } = searchKind(f.kind, f.runtime);
     const found = await run("search", () =>
       api.search({
-        ...searchKind(f.kind, f.runtime),
+        // Both limits are always sent, null for "any", so the sliders win over the profile's
+        // defaults they started from.
+        media_type,
+        max_runtime_min: max_runtime_min ?? null,
         genres: applicable(f).length ? applicable(f) : undefined,
-        min_imdb_rating: f.minImdb > SCORE_STOPS[0] ? f.minImdb : undefined,
+        min_imdb_rating: f.minImdb > SCORE_STOPS[0] ? f.minImdb : null,
         released_since: releasedSince(f.since ? Number(f.since) : null),
       }),
     );
@@ -186,11 +193,11 @@ export default function Finder({
 
   // Back to the defaults. Picks the filters found are redone with them; Ask Nido's cards stay.
   async function clear(control: string) {
-    setFilters(DEFAULT_FILTERS);
+    setFilters(base);
     if (!results || answering !== null) return;
     setQuickBusy(control);
     try {
-      await search(undefined, DEFAULT_FILTERS);
+      await search(undefined, base);
     } finally {
       setQuickBusy(null);
     }
@@ -223,18 +230,8 @@ export default function Finder({
     () => quickChips(profile, marks.values(), kind, config.chat_enabled),
     [profile, marks, kind, config.chat_enabled],
   );
-  // A limit in the family profile still applies when the sliders are left at their defaults.
-  const lengthText =
-    runtime === null && profile.max_runtime_min
-      ? `Profile: ${profile.max_runtime_min} min`
-      : lengthLabel(runtime);
   // The lowest stop sends no minimum (unrated shorts stay in), so it reads as "Any".
-  const scoreText =
-    minImdb !== SCORE_STOPS[0]
-      ? `${minImdb}+`
-      : profile.min_imdb_rating
-        ? `Profile: ${profile.min_imdb_rating}+`
-        : "Any";
+  const scoreText = minImdb !== SCORE_STOPS[0] ? `${minImdb}+` : "Any";
   const toggleGenre = (g: string) =>
     set({ genres: genres.includes(g) ? genres.filter((x) => x !== g) : [...genres, g] });
   const serviceNames = Object.fromEntries(config.services.map((s) => [s.key, s.name]));
@@ -342,7 +339,7 @@ export default function Finder({
             );
           })}
           {/* Stays while its search runs, so the spinner has somewhere to be. */}
-          {(!isDefault(filters) || quickBusy === "clear") && (
+          {(!isDefault(filters, base) || quickBusy === "clear") && (
             <button
               type="button"
               class="chip-clear"
@@ -424,7 +421,7 @@ export default function Finder({
               label="Max length"
               stops={LENGTH_STOPS}
               value={runtime}
-              valueText={lengthText}
+              valueText={lengthLabel(runtime)}
               tick={(m) => (m === null ? "Any" : m >= 60 ? `${m / 60}h` : String(m))}
               onChange={(m) => setFilters(withLength(filters, m))}
             />
@@ -450,7 +447,7 @@ export default function Finder({
             </div>
           </fieldset>
           <div class="filters-actions">
-            {(!isDefault(filters) || quickBusy === "clear-more") && (
+            {(!isDefault(filters, base) || quickBusy === "clear-more") && (
               <button
                 class="btn"
                 type="button"
