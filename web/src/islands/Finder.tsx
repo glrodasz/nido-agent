@@ -30,6 +30,7 @@ import Markdown from "./Markdown";
 import Spinner from "./Spinner";
 import StopSlider from "./StopSlider";
 import TitleCard from "./TitleCard";
+import { DEFAULT_FILTERS, type Filters, isDefault, type QuickChip, quickChips } from "../logic/quick";
 
 interface Props {
   config: AppConfig;
@@ -45,63 +46,18 @@ interface Turn {
   text: string;
 }
 
-interface Filters {
-  // Shorts are movies of 40 minutes or less: a type of its own for the family, a movie search
-  // with a runtime cap for the API.
-  kind: FindKind;
-  genres: string[];
-  // Max length in minutes; null is any length.
-  runtime: number | null;
-  // The lowest stop is the default and asks for no minimum.
-  minImdb: number;
-  // "Last N years" as a string for the select; "" is any time.
-  since: string;
-}
-
 // Below these, the ask panel says how much of today's quota the family has left.
 const LOW_QUOTA = { chat: 5, search: 10 };
 const QUOTA_NOUN = { chat: "Ask Nido question", search: "search" };
 const QUOTA_KINDS = ["chat", "search"] as const;
 type QuotaKind = (typeof QUOTA_KINDS)[number];
 
-// Families want what is new: the filters start at five years back. A series counts while it
-// still airs, so Bluey stays in even though it started in 2018.
-const DEFAULT_SINCE = "5";
 const SINCE_OPTIONS: { value: string; label: string }[] = [
   { value: "2", label: "Last 2 years" },
   { value: "5", label: "Last 5 years" },
   { value: "10", label: "Last 10 years" },
   { value: "20", label: "Last 20 years" },
   { value: "", label: "Any time" },
-];
-
-// One-tap shortcuts into the filters below; each runs the filter search straight away.
-const QUICK: { label: string; on: (f: Filters) => boolean; toggle: (f: Filters) => Filters }[] = [
-  {
-    label: "Well rated",
-    on: (f) => f.minImdb === 7,
-    toggle: (f) => ({ ...f, minImdb: f.minImdb === 7 ? SCORE_STOPS[0] : 7 }),
-  },
-  {
-    label: "Animated",
-    on: (f) => f.genres.includes("Animation"),
-    toggle: (f) => ({
-      ...f,
-      genres: f.genres.includes("Animation")
-        ? f.genres.filter((g) => g !== "Animation")
-        : [...f.genres, "Animation"],
-    }),
-  },
-  {
-    label: "Series",
-    on: (f) => f.kind === "tv",
-    toggle: (f) => withKind(f, f.kind === "tv" ? "movie" : "tv"),
-  },
-  {
-    label: "Shorts",
-    on: (f) => f.kind === "short",
-    toggle: (f) => withKind(f, f.kind === "short" ? "movie" : "short"),
-  },
 ];
 
 const KINDS: { value: FindKind; label: string }[] = [
@@ -147,13 +103,7 @@ export default function Finder({
   marks,
   onMark,
 }: Props) {
-  const [filters, setFilters] = useState<Filters>({
-    kind: "movie",
-    genres: [],
-    runtime: null,
-    minImdb: SCORE_STOPS[0],
-    since: DEFAULT_SINCE,
-  });
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const { kind, genres, runtime, minImdb, since } = filters;
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const [message, setMessage] = useState("");
@@ -234,8 +184,25 @@ export default function Finder({
     }
   }
 
-  async function chat(e: Event, text = message) {
-    e.preventDefault();
+  // Back to the defaults. Picks the filters found are redone with them; Ask Nido's cards stay.
+  async function clear(control: string) {
+    setFilters(DEFAULT_FILTERS);
+    if (!results || answering !== null) return;
+    setQuickBusy(control);
+    try {
+      await search(undefined, DEFAULT_FILTERS);
+    } finally {
+      setQuickBusy(null);
+    }
+  }
+
+  function pressChip(chip: QuickChip) {
+    if (chip.kind === "ask") void chat(undefined, chip.question);
+    else void quick(chip.id, chip.toggle);
+  }
+
+  async function chat(e?: Event, text = message) {
+    e?.preventDefault();
     const ask = text.trim();
     if (!ask) return;
     setTurns((t) => [...t, { role: "you", text: ask }]);
@@ -252,6 +219,10 @@ export default function Finder({
     }
   }
 
+  const chips = useMemo(
+    () => quickChips(profile, marks.values(), kind, config.chat_enabled),
+    [profile, marks, kind, config.chat_enabled],
+  );
   // A limit in the family profile still applies when the sliders are left at their defaults.
   const lengthText =
     runtime === null && profile.max_runtime_min
@@ -352,20 +323,37 @@ export default function Finder({
           </div>
         )}
         <div class="quick" role="group" aria-label="Quick filters">
-          {QUICK.map((q) => (
+          {chips.map((c) => {
+            const on = c.kind === "filter" && c.on(filters);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                class={on ? "chip-btn chip-on" : c.kind === "ask" ? "chip-btn chip-ask" : "chip-btn"}
+                aria-pressed={c.kind === "filter" ? on : undefined}
+                disabled={busy !== null}
+                aria-busy={quickBusy === c.id}
+                title={c.kind === "ask" ? `Ask Nido: ${c.question}` : undefined}
+                onClick={() => pressChip(c)}
+              >
+                {quickBusy === c.id ? <Spinner /> : c.kind === "ask" && <Icon name={c.icon} />}
+                {c.label}
+              </button>
+            );
+          })}
+          {/* Stays while its search runs, so the spinner has somewhere to be. */}
+          {(!isDefault(filters) || quickBusy === "clear") && (
             <button
-              key={q.label}
               type="button"
-              class={q.on(filters) ? "chip-btn chip-on" : "chip-btn"}
-              aria-pressed={q.on(filters)}
+              class="chip-clear"
               disabled={busy !== null}
-              aria-busy={quickBusy === q.label}
-              onClick={() => quick(q.label, q.toggle)}
+              aria-busy={quickBusy === "clear"}
+              onClick={() => clear("clear")}
             >
-              {quickBusy === q.label && <Spinner />}
-              {q.label}
+              {quickBusy === "clear" ? <Spinner /> : <Icon name="x" />}
+              Clear filters
             </button>
-          ))}
+          )}
         </div>
         {turns.length > 0 && (
           <ol class="turns" aria-live="polite">
@@ -462,6 +450,18 @@ export default function Finder({
             </div>
           </fieldset>
           <div class="filters-actions">
+            {(!isDefault(filters) || quickBusy === "clear-more") && (
+              <button
+                class="btn"
+                type="button"
+                disabled={busy !== null}
+                aria-busy={quickBusy === "clear-more"}
+                onClick={() => clear("clear-more")}
+              >
+                {quickBusy === "clear-more" && <Spinner />}
+                Clear filters
+              </button>
+            )}
             <button
               class="btn btn-primary"
               type="submit"

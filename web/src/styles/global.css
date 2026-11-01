@@ -627,6 +627,33 @@ input:not([type="checkbox"]) {
   background: var(--accent-soft);
 }
 
+/* "Like …" chips ask Nido instead of filtering: a dashed edge sets them apart. */
+.quick .chip-ask {
+  border-style: dashed;
+  max-width: 100%;
+}
+
+.chip-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.25rem;
+  padding: 0 0.4rem;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.chip-clear:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .turns {
   list-style: none;
   margin: 0;
@@ -876,6 +903,7 @@ fieldset.filter-field {
 .filters-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.6rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--border);
 }
