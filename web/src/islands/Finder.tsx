@@ -186,6 +186,7 @@ export default function Finder({
         max_runtime_min: max_runtime_min ?? null,
         genres: applicable(f).length ? applicable(f) : undefined,
         exclude_genres: applicable(f, f.excludeGenres).length ? applicable(f, f.excludeGenres) : undefined,
+        match_all_genres: f.matchAll && applicable(f).length > 1 ? true : undefined,
         min_imdb_rating: f.minImdb > SCORE_STOPS[0] ? f.minImdb : null,
         released_since: releasedSince(f.since ? Number(f.since) : null),
       }),
@@ -474,6 +475,27 @@ export default function Finder({
                 );
               })}
             </div>
+            {applicable(filters).length > 1 && (
+              <div class="genre-match">
+                <span id="genre-match-label">Titles need</span>
+                <div class="segmented segmented-small segmented-blue" role="group" aria-labelledby="genre-match-label">
+                  {[
+                    { all: false, label: "Any of the + genres" },
+                    { all: true, label: "All of them" },
+                  ].map((o) => (
+                    <button
+                      key={o.label}
+                      type="button"
+                      aria-pressed={filters.matchAll === o.all}
+                      class={filters.matchAll === o.all ? "active" : ""}
+                      onClick={() => set({ matchAll: o.all })}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </fieldset>
           <div class="filters-actions">
             {(!isDefault(filters, base) || quickBusy === "clear-more") && (

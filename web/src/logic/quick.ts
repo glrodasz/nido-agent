@@ -16,6 +16,8 @@ export interface Filters {
   // Genres a title needs one of, and genres that rule a title out.
   genres: string[];
   excludeGenres: string[];
+  // A title needs every included genre (a romantic comedy) instead of any one of them.
+  matchAll: boolean;
   // Max length in minutes; null is any length.
   runtime: number | null;
   // The lowest stop is the default and asks for no minimum.
@@ -31,6 +33,7 @@ export const DEFAULT_FILTERS: Filters = {
   kind: "movie",
   genres: [],
   excludeGenres: [],
+  matchAll: false,
   runtime: null,
   minImdb: SCORE_STOPS[0],
   since: DEFAULT_SINCE,
@@ -55,6 +58,7 @@ export const isDefault = (f: Filters, base: Filters = DEFAULT_FILTERS) =>
   f.kind === base.kind &&
   sameSet(f.genres, base.genres) &&
   sameSet(f.excludeGenres, base.excludeGenres) &&
+  f.matchAll === base.matchAll &&
   f.runtime === base.runtime &&
   f.minImdb === base.minImdb &&
   f.since === base.since;

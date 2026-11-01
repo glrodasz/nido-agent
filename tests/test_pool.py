@@ -20,8 +20,18 @@ def toolbox(
     box = Toolbox(Settings(tmdb_token="t"))
 
     async def discover(
-        tmdb, kind, region, profile, genre_ids, page, released_since=None, without_genre_ids=None
+        tmdb,
+        kind,
+        region,
+        profile,
+        genre_ids,
+        page,
+        released_since=None,
+        without_genre_ids=None,
+        all_genres=False,
     ):
+        if all_genres:
+            calls.append("all")
         calls.append(page)
         if released_since:
             calls.append(("since", released_since))
@@ -105,6 +115,24 @@ async def test_excluded_genres_reach_discover_and_never_show():
     assert ("genres", [16], [35]) in calls
     assert {r["tmdb_id"] for r in result["results"]} == {2, 3}
     assert result["near_misses"] == []
+
+
+async def test_match_all_genres_needs_every_genre():
+    calls: list = []
+    genres = {1: ["Comedy"], 2: ["Comedy", "Family"], 3: ["Family"]}
+    box = toolbox({1: [1, 2, 3]}, too_old=set(), calls=calls, genres=genres)
+
+    result = await box.search(
+        "movie",
+        [4],
+        ["netflix"],
+        regions=["SE"],
+        genres=["Comedy", "Family"],
+        match_all_genres=True,
+    )
+
+    assert "all" in calls
+    assert [r["tmdb_id"] for r in result["results"]] == [2]
 
 
 async def test_a_genre_both_wanted_and_excluded_is_excluded():

@@ -96,6 +96,9 @@ def test_search_needs_a_profile_then_uses_it():
     assert call["exclude_genres"] == []
     c.post("/api/search", json={"genres": ["Animation"], "exclude_genres": ["Comedy"]})
     assert toolbox.calls[-1]["exclude_genres"] == ["Comedy"]
+    assert toolbox.calls[-1]["match_all_genres"] is False
+    c.post("/api/search", json={"genres": ["Comedy", "Romance"], "match_all_genres": True})
+    assert toolbox.calls[-1]["match_all_genres"] is True
 
 
 def test_search_can_clear_profile_avoidances():

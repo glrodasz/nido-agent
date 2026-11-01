@@ -208,6 +208,7 @@ class Toolbox:
         prefer_genres: list[str] | None = None,
         released_since: int | None = None,
         exclude_genres: list[str] | None = None,
+        match_all_genres: bool = False,
         tool_context: ToolContext | None = None,
     ) -> dict[str, Any]:
         """Find a short, ranked list of movies or series for the family.
@@ -232,6 +233,8 @@ class Toolbox:
                 episode since then, so a series still running counts as recent).
             exclude_genres: leave out every title with any of these genres, e.g. ["Comedy"] for
                 "animation but no comedy".
+            match_all_genres: true when a title needs every genre in `genres`, e.g. a romantic
+                comedy is genres ["Comedy", "Romance"] with match_all_genres true.
         """
         # Banned titles and the profile's limits come from session state the server writes each
         # turn, never from the model.
@@ -249,6 +252,7 @@ class Toolbox:
             prefer_genres=prefer_genres,
             released_since=released_since,
             exclude_genres=exclude_genres,
+            match_all_genres=match_all_genres,
             hidden=hidden,
         )
 
@@ -265,6 +269,7 @@ class Toolbox:
         prefer_genres: list[str] | None = None,
         released_since: int | None = None,
         exclude_genres: list[str] | None = None,
+        match_all_genres: bool = False,
         hidden: list[str] | None = None,
     ) -> dict[str, Any]:
         """find_titles without the model: `hidden` lists title keys ("movie:123") the family
@@ -291,7 +296,14 @@ class Toolbox:
             min_imdb_rating=min_imdb_rating,
         )
         candidates = await self._pool(
-            kind, regions, profile, required, set(hidden or []), released_since, excluded
+            kind,
+            regions,
+            profile,
+            required,
+            set(hidden or []),
+            released_since,
+            excluded,
+            match_all_genres,
         )
         # OMDb's free key allows about 1,000 calls a day: only titles that pass the age and
         # availability rules are worth an IMDb lookup.
@@ -318,6 +330,7 @@ class Toolbox:
         hidden: set[str],
         released_since: int | None = None,
         excluded: dict[str, int] | None = None,
+        all_genres: bool = False,
     ) -> list[Candidate]:
         """Candidates read one discover page at a time (every region's page interleaved), until
         ENOUGH_ELIGIBLE pass the age and availability rules or discover runs out. Banned titles
@@ -339,6 +352,7 @@ class Toolbox:
                         page,
                         released_since,
                         list(excluded.values()),
+                        all_genres,
                     )
                     for region in regions
                 )
@@ -355,7 +369,12 @@ class Toolbox:
             )
             # Discover already leaves them out; the details are checked too, so an excluded
             # genre can never slip in, not even as a near miss.
-            candidates += [c for c in fetched if not set(c.title.genres) & set(excluded)]
+            candidates += [
+                c
+                for c in fetched
+                if not set(c.title.genres) & set(excluded)
+                and (not all_genres or set(genres) <= set(c.title.genres))
+            ]
             eligible = sum(1 for c in candidates if evaluate(c, unrated))
             if eligible >= ENOUGH_ELIGIBLE or all(len(p) < DISCOVER_PAGE_SIZE for p in pages):
                 break
@@ -371,6 +390,7 @@ class Toolbox:
         page: int,
         released_since: int | None = None,
         without_genre_ids: list[int] | None = None,
+        all_genres: bool = False,
     ) -> list[int]:
         providers = await self._provider_ids(kind, region)
         provider_ids = [pid for key in profile.services for pid in providers.get(key, [])]
@@ -380,6 +400,7 @@ class Toolbox:
             provider_ids=provider_ids,
             genre_ids=genre_ids,
             without_genre_ids=without_genre_ids or [],
+            all_genres=all_genres,
             max_certification=prefilter_certification(profile.youngest, kind),
             certification_country="US",
             max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,

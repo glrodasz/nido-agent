@@ -138,10 +138,12 @@ async def test_discover_leaves_out_excluded_genres():
     )
     client = TmdbClient("token")
     await client.discover(MediaType.MOVIE, region="SE", genre_ids=[16], without_genre_ids=[35, 18])
-    await client.aclose()
     params = route.calls.last.request.url.params
     assert params["with_genres"] == "16"
     assert params["without_genres"] == "35,18"
+    await client.discover(MediaType.MOVIE, region="SE", genre_ids=[35, 10749], all_genres=True)
+    await client.aclose()
+    assert route.calls.last.request.url.params["with_genres"] == "35,10749"
 
 
 @respx.mock

@@ -152,6 +152,7 @@ describe("isDefault", () => {
     expect(isDefault({ ...DEFAULT_FILTERS, since: "" })).toBe(false);
     expect(isDefault({ ...DEFAULT_FILTERS, genres: ["Family"] })).toBe(false);
     expect(isDefault({ ...DEFAULT_FILTERS, excludeGenres: ["Comedy"] })).toBe(false);
+    expect(isDefault({ ...DEFAULT_FILTERS, matchAll: true })).toBe(false);
   });
 });
 
