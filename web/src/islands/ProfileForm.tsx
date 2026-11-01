@@ -7,6 +7,7 @@ import {
   parseAges,
   parseRegions,
   SCORE_STOPS,
+  scoreTick,
   SHORT_MAX_MIN,
 } from "../logic/format";
 import { profileLength, profileScore } from "../logic/quick";
@@ -168,7 +169,7 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
             stops={SCORE_STOPS}
             value={minImdb}
             valueText={minImdb > SCORE_STOPS[0] ? `${minImdb}+` : "Any"}
-            tick={String}
+            tick={scoreTick}
             onChange={setMinImdb}
           />
         </div>

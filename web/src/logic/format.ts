@@ -295,6 +295,10 @@ export function nearestStop(
   return best;
 }
 
+/** Score slider ticks: the first stop reads "Any" (the server still drops anything IMDb scores
+ * below 4, see ranking.IMDB_FLOOR). */
+export const scoreTick = (stop: number) => (stop === SCORE_STOPS[0] ? "Any" : String(stop));
+
 /** "10 min", "1h", "2h", "Any". */
 export function lengthLabel(min: number | null): string {
   if (min === null) return "Any";

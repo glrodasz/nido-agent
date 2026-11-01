@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nearestStop, SCORE_STOPS } from "./format";
+import { nearestStop, SCORE_STOPS, scoreTick } from "./format";
 import { DEFAULT_FILTERS, favouriteTitles, isDefault, profileFilters, quickChips } from "./quick";
 import type { Profile, TitleMark } from "./types";
 
@@ -143,5 +143,11 @@ describe("isDefault", () => {
     expect(isDefault(DEFAULT_FILTERS)).toBe(true);
     expect(isDefault({ ...DEFAULT_FILTERS, since: "" })).toBe(false);
     expect(isDefault({ ...DEFAULT_FILTERS, genres: ["Family"] })).toBe(false);
+  });
+});
+
+describe("scoreTick", () => {
+  it("shows the lowest stop as Any", () => {
+    expect(SCORE_STOPS.map(scoreTick)).toEqual(["Any", "6", "7", "8", "9"]);
   });
 });

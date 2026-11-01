@@ -10,6 +10,7 @@ import {
   plural,
   releasedSince,
   SCORE_STOPS,
+  scoreTick,
   searchKind,
   seenLast,
   withKind,
@@ -431,7 +432,7 @@ export default function Finder({
               stops={SCORE_STOPS}
               value={minImdb}
               valueText={scoreText}
-              tick={String}
+              tick={scoreTick}
               onChange={(v) => set({ minImdb: v })}
             />
           </div>
