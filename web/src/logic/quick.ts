@@ -13,7 +13,9 @@ export interface Filters {
   // Shorts are movies of 40 minutes or less: a type of its own for the family, a movie search
   // with a runtime cap for the API.
   kind: FindKind;
+  // Genres a title needs one of, and genres that rule a title out.
   genres: string[];
+  excludeGenres: string[];
   // Max length in minutes; null is any length.
   runtime: number | null;
   // The lowest stop is the default and asks for no minimum.
@@ -28,6 +30,7 @@ export const DEFAULT_SINCE = "5";
 export const DEFAULT_FILTERS: Filters = {
   kind: "movie",
   genres: [],
+  excludeGenres: [],
   runtime: null,
   minImdb: SCORE_STOPS[0],
   since: DEFAULT_SINCE,
@@ -46,13 +49,37 @@ export const profileLength = (min: number | null) => nearestStop(LENGTH_STOPS, m
 export const profileScore = (score: number | null) =>
   score === null ? SCORE_STOPS[0] : (nearestStop(SCORE_STOPS, score, "higher") ?? SCORE_STOPS[0]);
 
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
 export const isDefault = (f: Filters, base: Filters = DEFAULT_FILTERS) =>
   f.kind === base.kind &&
-  f.genres.length === base.genres.length &&
-  f.genres.every((g) => base.genres.includes(g)) &&
+  sameSet(f.genres, base.genres) &&
+  sameSet(f.excludeGenres, base.excludeGenres) &&
   f.runtime === base.runtime &&
   f.minImdb === base.minImdb &&
   f.since === base.since;
+
+export type GenreState = "off" | "include" | "exclude";
+
+export const genreState = (f: Filters, g: string): GenreState =>
+  f.genres.includes(g) ? "include" : f.excludeGenres.includes(g) ? "exclude" : "off";
+
+/** Sets one genre's state; a genre is never both wanted and ruled out. */
+export function withGenre(f: Filters, g: string, state: GenreState): Filters {
+  return {
+    ...f,
+    genres: state === "include" ? [...f.genres.filter((x) => x !== g), g] : f.genres.filter((x) => x !== g),
+    excludeGenres:
+      state === "exclude"
+        ? [...f.excludeGenres.filter((x) => x !== g), g]
+        : f.excludeGenres.filter((x) => x !== g),
+  };
+}
+
+const NEXT_GENRE_STATE: Record<GenreState, GenreState> = { off: "include", include: "exclude", exclude: "off" };
+
+/** A genre chip in More filters steps through off → include (+) → exclude (−) → off. */
+export const cycleGenre = (f: Filters, g: string): Filters => withGenre(f, g, NEXT_GENRE_STATE[genreState(f, g)]);
 
 const WELL_RATED = 7;
 const NEW_SINCE = "2";
@@ -74,10 +101,7 @@ const genreChip = (g: string): QuickChip => ({
   label: g === "Science Fiction" ? "Sci-fi" : g,
   kind: "filter",
   on: (f) => f.genres.includes(g),
-  toggle: (f) => ({
-    ...f,
-    genres: f.genres.includes(g) ? f.genres.filter((x) => x !== g) : [...f.genres, g],
-  }),
+  toggle: (f) => withGenre(f, g, f.genres.includes(g) ? "off" : "include"),
 });
 
 /** Back to Movies, keeping the profile's length when it is a movie length. */

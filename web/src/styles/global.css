@@ -27,6 +27,7 @@
   --warn-soft: #fbeed6;
   --warn-text: #7a4f0b;
   --error: #a3352b;
+  --danger-soft: #f8e1dd;
   --radius: 16px;
   --font-display: "Fraunces", ui-serif, Georgia, serif;
   --shadow: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 1px 2px rgb(60 45 20 / 0.06),
@@ -64,6 +65,7 @@
   --warn-soft: #2e2617;
   --warn-text: #f0c879;
   --error: #ff8a7e;
+  --danger-soft: #3a2220;
   --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -14px rgb(0 0 0 / 0.6);
   --shadow-key: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-pressed: inset 0 1px 3px rgb(0 0 0 / 0.5);
@@ -947,6 +949,69 @@ fieldset.filter-field {
 .chips-small .chip:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Genre filter chips step through off, include (+, green) and exclude (−, red, struck out). */
+.filter-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.genre-key {
+  display: inline-grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.genre-key-include {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.genre-key-exclude {
+  background: var(--danger-soft);
+  color: var(--error);
+}
+
+.chips-small .genre-chip {
+  font: inherit;
+  font-size: 0.8rem;
+  gap: 0.25rem;
+}
+
+.chips-small .genre-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chips-small .genre-chip .icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.6;
+}
+
+.chips-small .genre-include {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 55%, var(--border));
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.chips-small .genre-exclude {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--error) 55%, var(--border));
+  color: var(--error);
+  font-weight: 600;
+}
+
+.genre-name-excluded {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
 }
 
 /* Results */

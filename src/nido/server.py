@@ -94,6 +94,8 @@ MAX_FAMILY_MEMBERS = 8
 class SearchRequest(BaseModel):
     media_type: MediaType = MediaType.MOVIE
     genres: list[str] = Field(default_factory=list)
+    # Genres to leave out: a title with any of them is dropped, e.g. Animation but not Comedy.
+    exclude_genres: list[str] = Field(default_factory=list, max_length=20)
     max_runtime_min: int | None = Field(default=None, ge=1, le=600)
     min_imdb_rating: float | None = Field(default=None, ge=0, le=10)
     avoid: list[GuidanceCategory] | None = None
@@ -442,6 +444,7 @@ def create_app(
                 children_ages=profile.children_ages,
                 services=profile.services,
                 genres=request.genres,
+                exclude_genres=request.exclude_genres,
                 prefer_genres=profile.preferred_genres,
                 # The profile's limits are defaults: a field the request sends, even null for
                 # "any", wins; one it leaves out falls back to the profile.

@@ -9,18 +9,33 @@ from test_ranking import make
 PROFILE = FamilyProfile(children_ages=[4], services=["netflix"])
 
 
-def toolbox(pages: dict[int, list[int]], too_old: set[int], calls: list) -> Toolbox:
-    """Discover serves `pages`; titles in `too_old` are rated 15+."""
+def toolbox(
+    pages: dict[int, list[int]],
+    too_old: set[int],
+    calls: list,
+    genres: dict[int, list[str]] | None = None,
+) -> Toolbox:
+    """Discover serves `pages`; titles in `too_old` are rated 15+; `genres` by title id."""
+    genres = genres or {}
     box = Toolbox(Settings(tmdb_token="t"))
 
-    async def discover(tmdb, kind, region, profile, genre_ids, page, released_since=None):
+    async def discover(
+        tmdb, kind, region, profile, genre_ids, page, released_since=None, without_genre_ids=None
+    ):
         calls.append(page)
         if released_since:
             calls.append(("since", released_since))
+        if genre_ids or without_genre_ids:
+            calls.append(("genres", genre_ids, without_genre_ids))
         return pages.get(page, [])
 
     async def candidate(kind, tmdb_id, regions):
-        return make(tmdb_id, min_age=15 if tmdb_id in too_old else 0)
+        c = make(tmdb_id, min_age=15 if tmdb_id in too_old else 0)
+        c.title.genres = genres.get(tmdb_id, [])
+        return c
+
+    async def genre_list(kind):
+        return {"Animation": 16, "Comedy": 35, "Family": 10751}
 
     async def rate(candidate):
         calls.append(("rate", candidate.title.tmdb_id))
@@ -28,6 +43,7 @@ def toolbox(pages: dict[int, list[int]], too_old: set[int], calls: list) -> Tool
     box._discover = discover
     box._candidate = candidate
     box._rate = rate
+    box._genres = genre_list
     box._clients = lambda: (None, None)
     return box
 
@@ -75,6 +91,38 @@ async def test_pool_skips_banned_titles():
     candidates = await box._pool(MediaType.TV, ["SE"], PROFILE, {}, {"tv:1"})
 
     assert [c.title.tmdb_id for c in candidates] == [2]
+
+
+async def test_excluded_genres_reach_discover_and_never_show():
+    calls: list = []
+    genres = {1: ["Animation", "Comedy"], 2: ["Animation", "Family"], 3: ["Animation"]}
+    box = toolbox({1: [1, 2, 3]}, too_old=set(), calls=calls, genres=genres)
+
+    result = await box.search(
+        "movie", [4], ["netflix"], regions=["SE"], genres=["Animation"], exclude_genres=["Comedy"]
+    )
+
+    assert ("genres", [16], [35]) in calls
+    assert {r["tmdb_id"] for r in result["results"]} == {2, 3}
+    assert result["near_misses"] == []
+
+
+async def test_a_genre_both_wanted_and_excluded_is_excluded():
+    calls: list = []
+    box = toolbox({1: [1]}, too_old=set(), calls=calls, genres={1: ["Comedy"]})
+
+    result = await box.search(
+        "movie",
+        [4],
+        ["netflix"],
+        regions=["SE"],
+        genres=["Comedy"],
+        exclude_genres=["Comedy"],
+        prefer_genres=["Comedy", "Family"],
+    )
+
+    assert ("genres", [], [35]) in calls
+    assert result["results"] == []
 
 
 def lookup_box(found: list[int], too_old: set[int]) -> Toolbox:
