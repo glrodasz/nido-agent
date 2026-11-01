@@ -251,10 +251,13 @@ export default function Finder({
       : runtime === null && profile.max_runtime_min
         ? `Profile: ${profile.max_runtime_min} min`
         : lengthLabel(runtime);
+  // The lowest stop sends no minimum (unrated shorts stay in), so it reads as "Any".
   const scoreText =
-    minImdb === SCORE_STOPS[0] && profile.min_imdb_rating
-      ? `Profile: ${profile.min_imdb_rating}+`
-      : `${minImdb}+`;
+    minImdb !== SCORE_STOPS[0]
+      ? `${minImdb}+`
+      : profile.min_imdb_rating
+        ? `Profile: ${profile.min_imdb_rating}+`
+        : "Any";
   const toggleGenre = (g: string) =>
     set({ genres: genres.includes(g) ? genres.filter((x) => x !== g) : [...genres, g] });
   const serviceNames = Object.fromEntries(config.services.map((s) => [s.key, s.name]));
