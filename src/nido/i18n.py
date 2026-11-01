@@ -76,7 +76,7 @@ def _fixed(es: str, pt: str) -> Callable[[re.Match[str], str], str]:
     return lambda m, locale: {"es": es, "pt": pt}[locale].format(*m.groups())
 
 
-# The sentences ranking.assess writes, and their translations.
+# The sentences ranking.assess and Toolbox.details write, and their translations.
 RULES: list[Rule] = [
     (
         re.compile(r"No official age rating found in any reference country\."),
@@ -154,6 +154,14 @@ RULES: list[Rule] = [
             "es": "Las fuentes reportan contenido que pediste evitar: {0}.",
             "pt": "As fontes apontam conteúdo que você pediu para evitar: {0}.",
         }[locale].format(CATEGORIES[locale].get(m.group(1), m.group(1).replace("_", " "))),
+    ),
+    # Written by Toolbox.details for a saved title nobody streams in the family's regions.
+    (
+        re.compile(r"Not streaming in your regions right now\."),
+        _fixed(
+            "Por ahora no está en streaming en tus regiones.",
+            "No momento não está em streaming nas suas regiões.",
+        ),
     ),
     (
         re.compile(r"Matches your preferred genres\."),

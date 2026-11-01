@@ -13,7 +13,8 @@ def test_request_locale(header: str | None, locale: str) -> None:
     assert request_locale(header) == locale
 
 
-# Every sentence ranking.assess writes must have a translation, or it would show in English.
+# Every sentence ranking.assess and Toolbox.details write needs a translation, or it shows in
+# English.
 RANKING_SENTENCES = [
     "No official age rating found in any reference country.",
     "Rated 7+, and your youngest is 4.",
@@ -28,6 +29,7 @@ RANKING_SENTENCES = [
     "No IMDb rating available.",
     "Sources report content you asked to avoid: frightening.",
     "Matches your preferred genres.",
+    "Not streaming in your regions right now.",
 ]
 
 

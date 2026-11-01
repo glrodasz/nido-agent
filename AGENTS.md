@@ -27,6 +27,7 @@ the browser's languages, for an unprefixed first visit).
   (the type source) and to `es.ts` and `pt.ts`; the landing page's copy lives in
   `web/src/i18n/landing.ts`. `npm test` fails when a language misses a key.
 - Spanish is neutral Latin American Spanish ("ustedes", "tu hijo"); Portuguese is Brazilian.
-- Sentences the server writes for cards (`ranking.assess` reasons, cautions and misses) need a
-  translation rule in `src/nido/i18n.py`; `tests/test_i18n.py` lists them, so add new ones there.
+- Sentences the server writes for cards (reasons, cautions and misses from `ranking.assess` and
+  `Toolbox.details`) need a translation rule in `src/nido/i18n.py`; `tests/test_i18n.py` lists
+  them, so add new ones there.
 - The web app sends its language in `X-Nido-Locale`; Ask Nido answers in it.
