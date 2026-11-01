@@ -8,7 +8,7 @@
     PUT    /api/watchlist/{media_type}/{tmdb_id}  save or update one
     DELETE /api/watchlist/{media_type}/{tmdb_id}
     GET    /api/titles                            the family's marks: seen, liked, rewatch, banned
-    GET    /api/titles/{media_type}/{tmdb_id}     one title's full card, for the watchlist
+    GET    /api/titles/{media_type}/{tmdb_id}     a saved or marked title's full card
     PUT    /api/titles/{media_type}/{tmdb_id}     change some marks on one title
     GET    /api/family                            members of the caller's family
     POST   /api/family/invites                    a new single-use invite link token
@@ -618,9 +618,16 @@ def create_app(
     @app.get("/api/titles/{media_type}/{tmdb_id}")
     async def title_details(media_type: MediaType, tmdb_id: int, family: Family) -> dict[str, Any]:
         # Opening a title the family saved is not a search: TMDB and OMDb answers are cached,
-        # so it does not count against the daily quota.
+        # so it does not count against the daily quota. Only saved or marked titles open, so
+        # the route cannot be used to look up any title without spending searches.
         profile = await require_profile(family)
         marks = await store.list_marks(family)
+        key = TitleRef(media_type=media_type, tmdb_id=tmdb_id).key
+        known = {m.title.key for m in marks} | {
+            i.title.key for i in await store.list_watchlist(family)
+        }
+        if key not in known:
+            raise HTTPException(404, "only saved or marked titles open here")
         try:
             result = await toolbox.details(media_type.value, tmdb_id, profile)
         except RuntimeError as exc:  # missing TMDB token
