@@ -556,13 +556,13 @@ async def test_find_titles_reads_bans_from_state_not_from_the_model():
 
 
 class HeaderAuthenticator:
-    """Signs in whoever the Authorization header names; "guillermo" and "grandma" are allowed."""
+    """Signs in whoever the Authorization header names; "parent" and "grandma" are allowed."""
 
     mode = "firebase"
 
     async def __call__(self, authorization: str | None) -> User:
-        uid = authorization or "guillermo"
-        return User(uid=uid, email=f"{uid}@example.com", allowed=uid in {"guillermo", "grandma"})
+        uid = authorization or "parent"
+        return User(uid=uid, email=f"{uid}@example.com", allowed=uid in {"parent", "grandma"})
 
 
 def family_client(store: MemoryStore | None = None) -> TestClient:
@@ -576,7 +576,7 @@ def family_client(store: MemoryStore | None = None) -> TestClient:
 
 
 ME, PARTNER, STRANGER = (
-    {"Authorization": "guillermo"},
+    {"Authorization": "parent"},
     {"Authorization": "partner"},
     {"Authorization": "stranger"},
 )
@@ -588,12 +588,12 @@ def invite(c: TestClient, headers: dict[str, str] = ME) -> str:
 
 def test_every_account_starts_its_own_family_and_existing_data_stays():
     store = MemoryStore()
-    asyncio.run(store.put_profile("guillermo", FamilyProfile(children_ages=[4])))
+    asyncio.run(store.put_profile("parent", FamilyProfile(children_ages=[4])))
     c = family_client(store)
     assert c.get("/api/profile", headers=ME).json()["profile"]["children_ages"] == [4]
     family = c.get("/api/family", headers=ME).json()
     assert family["role"] == "owner"
-    assert [(m["email"], m["you"]) for m in family["members"]] == [("guillermo@example.com", True)]
+    assert [(m["email"], m["you"]) for m in family["members"]] == [("parent@example.com", True)]
     # Anyone else signing in gets an empty family of their own, never someone else's data.
     assert c.get("/api/profile", headers=PARTNER).json()["profile"] is None
     assert c.get("/api/family", headers=PARTNER).json()["role"] == "owner"
@@ -609,7 +609,7 @@ def test_an_invite_shares_profile_watchlist_and_marks_and_works_once():
     assert c.post(f"/api/invites/{token}", headers=STRANGER).status_code == 410
 
     assert c.get("/api/profile", headers=PARTNER).json()["profile"]["children_ages"] == [9, 6]
-    put_mark(c, 7, seen=True)  # as guillermo
+    put_mark(c, 7, seen=True)  # as parent
     c.put("/api/watchlist/movie/8", json={"name": "Up"}, headers=PARTNER)
     assert [
         i["title"]["tmdb_id"] for i in c.get("/api/titles", headers=PARTNER).json()["items"]
@@ -618,7 +618,7 @@ def test_an_invite_shares_profile_watchlist_and_marks_and_works_once():
         8
     ]
     roles = {m["email"]: m["role"] for m in c.get("/api/family", headers=PARTNER).json()["members"]}
-    assert roles == {"guillermo@example.com": "owner", "partner@example.com": "member"}
+    assert roles == {"parent@example.com": "owner", "partner@example.com": "member"}
 
 
 def test_unknown_and_expired_invites_are_gone():
@@ -637,7 +637,7 @@ def test_only_the_owner_removes_members_and_the_owner_cannot_leave():
     c.post(f"/api/invites/{invite(c)}", headers=PARTNER)
     c.post(f"/api/invites/{invite(c)}", headers=STRANGER)
     assert c.delete("/api/family/members/stranger", headers=PARTNER).status_code == 403
-    assert c.delete("/api/family/members/guillermo", headers=ME).status_code == 409
+    assert c.delete("/api/family/members/parent", headers=ME).status_code == 409
     assert c.delete("/api/family/members/stranger", headers=ME).json() == {"ok": True}
     # Removed, they are back in a family of their own.
     assert c.get("/api/profile", headers=STRANGER).json()["profile"] is None
