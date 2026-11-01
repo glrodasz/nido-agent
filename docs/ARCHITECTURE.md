@@ -5,8 +5,7 @@ what runs where, what happens in one Ask Nido turn, and how a request becomes a 
 
 **Reading the diagrams:** purple is Google Cloud, teal is Firebase and the web app, gray is
 people, external APIs and storage. **Dashed coral arrows are Gemini calls**; everything else is
-deterministic code. Sources live in [`diagrams/src/`](diagrams/src) and are baked to light and
-dark SVGs.
+deterministic code.
 
 ## Containers: what runs where
 
