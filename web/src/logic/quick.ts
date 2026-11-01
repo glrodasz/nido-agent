@@ -44,7 +44,7 @@ export function profileFilters(profile: Profile): Filters {
 export const profileLength = (min: number | null) => nearestStop(LENGTH_STOPS, min);
 /** The profile's saved score as a slider stop; the first stop is "Any". */
 export const profileScore = (score: number | null) =>
-  score === null ? SCORE_STOPS[0] : (nearestStop(SCORE_STOPS, score) ?? SCORE_STOPS[0]);
+  score === null ? SCORE_STOPS[0] : (nearestStop(SCORE_STOPS, score, "higher") ?? SCORE_STOPS[0]);
 
 export const isDefault = (f: Filters, base: Filters = DEFAULT_FILTERS) =>
   f.kind === base.kind &&

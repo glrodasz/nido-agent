@@ -92,7 +92,7 @@ describe("profile defaults", () => {
     expect(profileFilters(profile({ max_runtime_min: 90, min_imdb_rating: 6.5 }))).toMatchObject({
       kind: "movie",
       runtime: 60,
-      minImdb: 6,
+      minImdb: 7,
     });
     expect(profileFilters(profile({ max_runtime_min: 30 }))).toMatchObject({ kind: "short", runtime: 30 });
   });
@@ -121,6 +121,8 @@ describe("nearestStop", () => {
     expect(nearestStop([10, 30, 40, 60, 120, null], 90)).toBe(60);
     expect(nearestStop([10, 30, 40, 60, 120, null], 100)).toBe(120);
     expect(nearestStop([4, 6, 7, 8, 9], 6.5)).toBe(6);
+    expect(nearestStop([4, 6, 7, 8, 9], 6.5, "higher")).toBe(7);
+    expect(nearestStop([4, 6, 7, 8, 9], 6.4, "higher")).toBe(6);
     expect(nearestStop([4, 6, 7, 8, 9], null)).toBe(null);
   });
 });
