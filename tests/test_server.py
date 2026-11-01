@@ -371,6 +371,7 @@ def test_search_for_one_child_uses_only_that_childs_age():
     assert toolbox.calls[-1]["children_ages"] == [9, 6]
     before = len(toolbox.calls)
     assert c.post("/api/search", json={"watching": [5]}).status_code == 422
+    assert c.post("/api/search", json={"watching": [-1]}).status_code == 422
     assert len(toolbox.calls) == before
 
 

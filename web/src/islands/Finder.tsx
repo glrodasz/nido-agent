@@ -143,7 +143,12 @@ export default function Finder({
   const [sinkSeen, setSinkSeen] = useState(loadSeenLast);
   // Who is watching: one child by position in the profile, or the whole family (null).
   const [watching, setWatching] = useState<number | null>(null);
-  useEffect(() => setWatching(null), [profile]);
+  // Whoever the shown cards were judged for: their misses are that viewer's, so the verdict is too.
+  const [judgedFor, setJudgedFor] = useState<number | null>(null);
+  useEffect(() => {
+    setWatching(null);
+    setJudgedFor(null);
+  }, [profile]);
   const viewerAges = watchingAges(profile, watching);
   const [order, setOrder] = useState<Order>(loadOrder);
 
@@ -202,6 +207,7 @@ export default function Finder({
     if (found) {
       setQuota((q) => ({ ...q, search: found.quota }));
       setResults(found);
+      setJudgedFor(who);
       setAnswering(null);
     }
   }
@@ -254,7 +260,8 @@ export default function Finder({
     if (!ask) return;
     setTurns((t) => [...t, { role: "you", text: ask }]);
     setMessage("");
-    const reply = await run("chat", () => api.chat(ask, session.current, watching === null ? undefined : [watching]));
+    const asked = watching;
+    const reply = await run("chat", () => api.chat(ask, session.current, asked === null ? undefined : [asked]));
     if (!reply) return;
     session.current = reply.session_id;
     setQuota((q) => ({ ...q, chat: reply.quota }));
@@ -262,6 +269,7 @@ export default function Finder({
     if (text2) setTurns((t) => [...t, { role: "nido", text: text2 }]);
     if (reply.results) {
       setResults(reply.results);
+      setJudgedFor(asked);
       setAnswering(ask);
     }
   }
@@ -649,7 +657,7 @@ export default function Finder({
                 onToggleSave={onToggleSave}
                 mark={marks.get(`${r.media_type}:${r.tmdb_id}`) ?? null}
                 youngest={Math.min(...profile.children_ages)}
-                watchingYoungest={youngestOf(viewerAges)}
+                watchingYoungest={youngestOf(watchingAges(profile, judgedFor))}
                 onMark={(change) => onMark(r, change)}
               />
             </Fragment>

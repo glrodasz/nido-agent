@@ -187,9 +187,9 @@ class FamilyProfile(BaseModel):
         picked means the whole family. Raises IndexError for a position the profile lacks."""
         if not children:
             return list(self.children_ages)
-        return [self.children_ages[i] for i in dict.fromkeys(children) if i >= 0] or (
-            list(self.children_ages)
-        )
+        if any(i < 0 for i in children):
+            raise IndexError("child positions start at 0")
+        return [self.children_ages[i] for i in dict.fromkeys(children)]
 
 
 class Feedback(BaseModel):
