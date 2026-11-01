@@ -233,7 +233,7 @@ export function searchKind(
 }
 
 /** Max length slider stops in minutes; null is "Any" (the default, last stop). */
-export const LENGTH_STOPS: (number | null)[] = [10, 20, 30, 60, 120, null];
+export const LENGTH_STOPS: (number | null)[] = [10, 30, 60, 120, null];
 /** Min IMDb score slider stops. The first is the default and adds no minimum, so titles without
  * an IMDb score (common for shorts and specials) still show. */
 export const SCORE_STOPS = [4, 5, 6, 7, 8, 9, 9.5];
