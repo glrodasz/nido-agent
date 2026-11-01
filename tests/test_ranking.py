@@ -37,7 +37,7 @@ def make(
     min_age: int | None = 0,
     access: AccessType = AccessType.SUBSCRIPTION,
     service: str | None = "netflix",
-    runtime: int = 95,
+    runtime: int | None = 95,
     guidance: list[GuidanceCategory] = (),
 ) -> Candidate:
     ref = TitleRef(media_type=MediaType.MOVIE, tmdb_id=tmdb_id)
@@ -109,6 +109,14 @@ def test_runtime_and_rating_thresholds_exclude():
     assert evaluate(make(1, runtime=130), PROFILE) is None
     strict = PROFILE.model_copy(update={"min_imdb_rating": 8.0})
     assert evaluate(make(1, rating=7.5), strict) is None
+
+
+def test_unknown_movie_runtime_cannot_meet_a_limit():
+    # "Shorts" asks for 40 min or less; a movie with no listed length must not slip in.
+    shorts = PROFILE.model_copy(update={"max_runtime_min": 40})
+    assert evaluate(make(1, runtime=30), shorts) is not None
+    assert evaluate(make(2, runtime=None), shorts) is None
+    assert evaluate(make(3, runtime=None), PROFILE.model_copy(update={"max_runtime_min": None}))
 
 
 def test_avoided_category_lowers_score_and_is_explained():

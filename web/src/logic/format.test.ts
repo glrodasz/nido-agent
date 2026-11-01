@@ -19,6 +19,10 @@ import {
   sortOffers,
   verdictFor,
   verifiedAgo,
+  searchKind,
+  lengthLabel,
+  withKind,
+  withLength,
 } from "./format";
 import type { Offer, Profile } from "./types";
 
@@ -218,6 +222,42 @@ describe("plural", () => {
     expect(plural(1, "search")).toBe("1 search");
     expect(plural(3, "search")).toBe("3 searches");
     expect(plural(0, "Ask Nido question")).toBe("0 Ask Nido questions");
+  });
+});
+
+describe("searchKind", () => {
+  it("turns Shorts into a movie search of 40 minutes or less", () => {
+    expect(searchKind("short", null)).toEqual({ media_type: "movie", max_runtime_min: 40 });
+    expect(searchKind("short", 25)).toEqual({ media_type: "movie", max_runtime_min: 25 });
+    expect(searchKind("short", 90)).toEqual({ media_type: "movie", max_runtime_min: 40 });
+  });
+
+  it("leaves movies and series to the family's max length", () => {
+    expect(searchKind("movie", null)).toEqual({ media_type: "movie", max_runtime_min: undefined });
+    expect(searchKind("tv", 30)).toEqual({ media_type: "tv", max_runtime_min: 30 });
+  });
+});
+
+describe("lengthLabel", () => {
+  it("names the slider stops", () => {
+    expect([10, 40, 60, 120, null].map(lengthLabel)).toEqual(["10 min", "40 min", "1h", "2h", "Any"]);
+  });
+});
+
+describe("type and length move together", () => {
+  const movie = { kind: "movie" as const, runtime: null };
+
+  it("sets the slider when the type changes", () => {
+    expect(withKind(movie, "short")).toEqual({ kind: "short", runtime: 40 });
+    expect(withKind({ kind: "short" as const, runtime: 10 }, "movie")).toEqual(movie);
+    expect(withKind({ kind: "short" as const, runtime: 30 }, "tv")).toEqual({ kind: "tv", runtime: 30 });
+  });
+
+  it("switches between Movies and Shorts at 40 minutes", () => {
+    expect(withLength(movie, 40)).toEqual({ kind: "short", runtime: 40 });
+    expect(withLength({ kind: "short" as const, runtime: 40 }, 60)).toEqual({ kind: "movie", runtime: 60 });
+    expect(withLength({ kind: "short" as const, runtime: 40 }, null)).toEqual(movie);
+    expect(withLength({ kind: "tv" as const, runtime: null }, 10)).toEqual({ kind: "tv", runtime: 10 });
   });
 });
 

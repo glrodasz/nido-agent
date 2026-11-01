@@ -218,6 +218,7 @@ class Toolbox:
                 apple_tv_plus.
             genres: only titles with at least one of these genres, e.g. ["Adventure", "Comedy"].
             max_runtime_min: longest acceptable runtime in minutes (episode length for series).
+                For short films ("shorts", "something quick for the little one") use 40.
             min_imdb_rating: lowest acceptable IMDb score, 0-10.
             avoid: content categories to avoid, any of: violence, frightening, language,
                 sex_nudity, romance, substances, bullying_discrimination, death_grief,
@@ -383,6 +384,7 @@ class Toolbox:
             services: subscribed services, any of: netflix, disney_plus, hbo_max, prime_video,
                 apple_tv_plus.
             max_runtime_min: longest acceptable runtime in minutes (episode length for series).
+                For short films ("shorts", "something quick for the little one") use 40.
             min_imdb_rating: lowest acceptable IMDb score, 0-10.
             avoid: content categories to avoid (same values as find_titles).
             regions: catalog regions, ISO codes like ["SE"]; omit for the family's default.

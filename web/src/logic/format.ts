@@ -230,6 +230,57 @@ export function releasedSince(years: number | null, today: Date = new Date()): n
   return years ? today.getFullYear() - years : null;
 }
 
+/** Shorts are movies of SHORT_MAX_MIN minutes or less. */
+export const SHORT_MAX_MIN = 40;
+export type FindKind = "movie" | "short" | "tv";
+
+/** What a filter search asks for: Shorts is a movie search with a 40-minute cap, and a shorter
+ * "Max length" the family typed still wins. */
+export function searchKind(
+  kind: FindKind,
+  maxLength: number | null,
+): { media_type: "movie" | "tv"; max_runtime_min: number | undefined } {
+  if (kind === "short") {
+    return {
+      media_type: "movie",
+      max_runtime_min: Math.min(maxLength ?? SHORT_MAX_MIN, SHORT_MAX_MIN),
+    };
+  }
+  return { media_type: kind, max_runtime_min: maxLength ?? undefined };
+}
+
+/** Picking a type sets the slider: Shorts to 40 min, Movies to Any. Series keep their length,
+ * since for them it is the episode length. */
+export function withKind<F extends { kind: FindKind; runtime: number | null }>(
+  f: F,
+  kind: FindKind,
+): F {
+  if (kind === "tv") return { ...f, kind };
+  return { ...f, kind, runtime: kind === "short" ? SHORT_MAX_MIN : null };
+}
+
+/** Moving the slider sets the type: 40 min or less is a short, anything longer a movie. */
+export function withLength<F extends { kind: FindKind; runtime: number | null }>(
+  f: F,
+  runtime: number | null,
+): F {
+  if (f.kind === "tv") return { ...f, runtime };
+  const short = runtime !== null && runtime <= SHORT_MAX_MIN;
+  return { ...f, runtime, kind: short ? "short" : "movie" };
+}
+
+/** Max length slider stops in minutes; null is "Any" (the default, last stop). */
+export const LENGTH_STOPS: (number | null)[] = [10, 30, 40, 60, 120, null];
+/** Min IMDb score slider stops. The first is the default and adds no minimum, so titles without
+ * an IMDb score (common for shorts and specials) still show. */
+export const SCORE_STOPS = [4, 6, 7, 8, 9];
+
+/** "10 min", "1h", "2h", "Any". */
+export function lengthLabel(min: number | null): string {
+  if (min === null) return "Any";
+  return min >= 60 && min % 60 === 0 ? `${min / 60}h` : `${min} min`;
+}
+
 export function seenLast<T>(items: T[], isSeen: (item: T) => boolean): T[] {
   return [...items.filter((i) => !isSeen(i)), ...items.filter(isSeen)];
 }

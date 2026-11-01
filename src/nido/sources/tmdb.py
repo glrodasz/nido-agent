@@ -95,6 +95,8 @@ class TmdbClient:
             "with_watch_monetization_types": "flatrate|ads" if provider_ids else None,
             "with_genres": "|".join(str(g) for g in genre_ids) or None,
             "with_runtime.lte": max_runtime_min,
+            # TMDB stores an unknown runtime as 0, which would pass any limit.
+            "with_runtime.gte": 1 if max_runtime_min else None,
             "vote_average.gte": min_vote_average,
             "vote_count.gte": 200 if min_vote_average else None,
         }
