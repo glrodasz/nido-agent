@@ -58,6 +58,7 @@ const PATHS = {
   ),
   moon: <path d="M20.5 14.1A8.5 8.5 0 1 1 9.9 3.5a6.6 6.6 0 0 0 10.6 10.6Z" />,
   "chevron-down": <path d="m6 9 6 6 6-6" />,
+  x: <path d="M18 6 6 18M6 6l12 12" />,
 };
 
 export type IconName = keyof typeof PATHS;
