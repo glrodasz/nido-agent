@@ -951,7 +951,7 @@ fieldset.filter-field {
   outline-offset: 2px;
 }
 
-/* Genre filter chips step through off, include (+, green) and exclude (−, red, struck out). */
+/* Genre filter chips step through off, include (+, green) and exclude (−, red, wavy strike). */
 .filter-hint {
   margin: 0 0 0.5rem;
   font-size: 0.8rem;
@@ -1010,8 +1010,9 @@ fieldset.filter-field {
 }
 
 .genre-name-excluded {
-  text-decoration: line-through;
-  text-decoration-thickness: 1.5px;
+  text-decoration: line-through wavy;
+  text-decoration-thickness: 1px;
+  text-decoration-skip-ink: none;
 }
 
 /* Results */
