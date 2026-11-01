@@ -24,7 +24,10 @@ interface Props {
   saved: boolean;
   onToggleSave: (result: TitleResult) => Promise<void>;
   mark: TitleMark | null;
+  // The family's youngest: what age bans count from.
   youngest: number;
+  // The youngest of whoever watches now, for the verdict; the family's youngest when left out.
+  watchingYoungest?: number;
   onMark: (change: MarkChange) => Promise<void>;
   // Extra controls at the bottom of the card, e.g. the watchlist's Watched and Hide details.
   footer?: ComponentChildren;
@@ -54,6 +57,7 @@ export default function TitleCard({
   onToggleSave,
   mark,
   youngest,
+  watchingYoungest = youngest,
   onMark,
   footer,
 }: Props) {
@@ -74,7 +78,7 @@ export default function TitleCard({
     result.genres.slice(0, 3).map(genreLabel).join(", ") || null,
   ].filter(Boolean);
   const nearMiss = result.misses.length > 0;
-  const verdict = verdictFor(result.misses, result.age_baseline_min, youngest);
+  const verdict = verdictFor(result.misses, result.age_baseline_min, watchingYoungest);
   const verdictWhy = [...result.misses, ...result.cautions].map((r) => r.replace(/\.$/, ""));
   const region = (o: Offer) => (showRegion ? ` ${o.region}` : "");
 

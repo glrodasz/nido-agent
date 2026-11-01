@@ -167,8 +167,10 @@ export function quickChips(
   marks: Iterable<TitleMark>,
   kind: FindKind,
   canAsk: boolean,
+  // Ages of whoever watches now; the whole family when left out.
+  ages: number[] = profile.children_ages,
 ): QuickChip[] {
-  const youngest = profile.children_ages.length ? Math.min(...profile.children_ages) : null;
+  const youngest = ages.length ? Math.min(...ages) : null;
   const base = profileFilters(profile);
   const types = typeChips(base);
   if (youngest === null || youngest > SHORTS_FIRST_UP_TO_AGE) types.reverse();

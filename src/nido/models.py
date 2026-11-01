@@ -156,10 +156,18 @@ class Assessment(BaseModel):
     generated_at: datetime
 
 
-class FamilyProfile(BaseModel):
-    """Minimal personal data: ages, never names or birthdates."""
+# From this age on a person counts as an adult: no age rating limits them.
+ADULT_AGE = 18
 
+
+class FamilyProfile(BaseModel):
+    """Minimal personal data: ages, never birthdates. A child may have an optional nickname so the
+    family can pick who is watching; nicknames stay in the app and never reach the model."""
+
+    # An age of ADULT_AGE means "18 or older": an adult child, with no age limits of its own.
     children_ages: list[int] = Field(min_length=1)
+    # Aligned with children_ages; "" for a child without a nickname.
+    children_names: list[str] = Field(default_factory=list)
     # Catalog regions whose streaming offers count (a VPN can add more than the home one).
     # Age ratings do not depend on them: they come from every reference country.
     regions: list[str] = Field(default_factory=lambda: ["SE"], min_length=1)
@@ -173,6 +181,15 @@ class FamilyProfile(BaseModel):
     @property
     def youngest(self) -> int:
         return min(self.children_ages)
+
+    def watching(self, children: list[int] | None) -> list[int]:
+        """The ages of the children watching this time, by position in children_ages; none
+        picked means the whole family. Raises IndexError for a position the profile lacks."""
+        if not children:
+            return list(self.children_ages)
+        if any(i < 0 for i in children):
+            raise IndexError("child positions start at 0")
+        return [self.children_ages[i] for i in dict.fromkeys(children)]
 
 
 class Feedback(BaseModel):

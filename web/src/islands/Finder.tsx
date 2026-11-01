@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { ApiError, api } from "../logic/api";
 import {
+  childLabel,
   familyLine,
   type FindKind,
   genresFor,
@@ -13,8 +14,10 @@ import {
   scoreTick,
   searchKind,
   seenLast,
+  watchingAges,
   withKind,
   withLength,
+  youngestOf,
 } from "../logic/format";
 import type {
   AppConfig,
@@ -135,6 +138,15 @@ export default function Finder({
   const [quota, setQuota] = useState<{ chat?: Quota; search?: Quota }>({});
   const session = useRef<string | null>(null);
   const [sinkSeen, setSinkSeen] = useState(loadSeenLast);
+  // Who is watching: one child by position in the profile, or the whole family (null).
+  const [watching, setWatching] = useState<number | null>(null);
+  // Whoever the shown cards were judged for: their misses are that viewer's, so the verdict is too.
+  const [judgedFor, setJudgedFor] = useState<number | null>(null);
+  useEffect(() => {
+    setWatching(null);
+    setJudgedFor(null);
+  }, [profile]);
+  const viewerAges = watchingAges(profile, watching);
   const [order, setOrder] = useState<Order>(loadOrder);
 
   function chooseOrder(next: Order) {
@@ -172,7 +184,7 @@ export default function Finder({
     }
   }
 
-  async function search(e?: Event, f: Filters = filters) {
+  async function search(e?: Event, f: Filters = filters, who: number | null = watching) {
     e?.preventDefault();
     const { media_type, max_runtime_min } = searchKind(f.kind, f.runtime);
     const found = await run("search", () =>
@@ -186,11 +198,13 @@ export default function Finder({
         match_all_genres: f.matchAll && applicable(f).length > 1 ? true : undefined,
         min_imdb_rating: f.minImdb > SCORE_STOPS[0] ? f.minImdb : null,
         released_since: releasedSince(f.since ? Number(f.since) : null),
+        watching: who === null ? undefined : [who],
       }),
     );
     if (found) {
       setQuota((q) => ({ ...q, search: found.quota }));
       setResults(found);
+      setJudgedFor(who);
       setAnswering(null);
     }
   }
@@ -218,6 +232,20 @@ export default function Finder({
     }
   }
 
+  // Picks the filters found are redone for whoever watches now; Ask Nido's cards stay, and the
+  // next question is for them.
+  async function chooseWatching(who: number | null) {
+    if (who === watching) return;
+    setWatching(who);
+    if (!results || answering !== null) return;
+    setQuickBusy(`who:${who ?? "all"}`);
+    try {
+      await search(undefined, filters, who);
+    } finally {
+      setQuickBusy(null);
+    }
+  }
+
   function pressChip(chip: QuickChip) {
     if (chip.kind === "ask") void chat(undefined, chip.question);
     else void quick(chip.id, chip.toggle);
@@ -229,7 +257,8 @@ export default function Finder({
     if (!ask) return;
     setTurns((t) => [...t, { role: "you", text: ask }]);
     setMessage("");
-    const reply = await run("chat", () => api.chat(ask, session.current));
+    const asked = watching;
+    const reply = await run("chat", () => api.chat(ask, session.current, asked === null ? undefined : [asked]));
     if (!reply) return;
     session.current = reply.session_id;
     setQuota((q) => ({ ...q, chat: reply.quota }));
@@ -237,13 +266,14 @@ export default function Finder({
     if (text2) setTurns((t) => [...t, { role: "nido", text: text2 }]);
     if (reply.results) {
       setResults(reply.results);
+      setJudgedFor(asked);
       setAnswering(ask);
     }
   }
 
   const chips = useMemo(
-    () => quickChips(profile, marks.values(), kind, config.chat_enabled),
-    [profile, marks, kind, config.chat_enabled],
+    () => quickChips(profile, marks.values(), kind, config.chat_enabled, viewerAges),
+    [profile, marks, kind, config.chat_enabled, watching],
   );
   // The lowest stop sends no minimum (unrated shorts stay in), so it reads as "Any".
   const scoreText = minImdb !== SCORE_STOPS[0] ? `${minImdb}+` : t.finder.any;
@@ -278,8 +308,34 @@ export default function Finder({
       <section class="ask-panel" aria-label={config.chat_enabled ? t.finder.askLabel : t.finder.findLabel}>
         <div>
           <h1 class="ask-title">{t.finder.title}</h1>
-          <p class="ask-for muted">{familyLine(profile, serviceNames)}</p>
+          <p class="ask-for muted">{familyLine(profile, serviceNames, watching)}</p>
         </div>
+        {profile.children_ages.length > 1 && (
+          <div class="watching">
+            <span class="filter-label" id="watching-label">
+              {t.finder.watching}
+            </span>
+            <div class="segmented segmented-small" role="group" aria-labelledby="watching-label">
+              {[null, ...profile.children_ages.map((_, i) => i)].map((who) => {
+                const id = `who:${who ?? "all"}`;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={watching === who}
+                    class={watching === who ? "active" : ""}
+                    disabled={busy !== null}
+                    aria-busy={quickBusy === id}
+                    onClick={() => chooseWatching(who)}
+                  >
+                    {quickBusy === id && <Spinner />}
+                    {who === null ? t.finder.wholeFamily : childLabel(profile, who)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {config.chat_enabled && (
           <form class="ask" onSubmit={(e) => chat(e)}>
             <Icon name="search" />
@@ -599,6 +655,7 @@ export default function Finder({
                 onToggleSave={onToggleSave}
                 mark={marks.get(`${r.media_type}:${r.tmdb_id}`) ?? null}
                 youngest={Math.min(...profile.children_ages)}
+                watchingYoungest={youngestOf(watchingAges(profile, judgedFor))}
                 onMark={(change) => onMark(r, change)}
               />
             </Fragment>

@@ -4,7 +4,10 @@ export type MediaType = "movie" | "tv";
 export type Access = "subscription" | "ads" | "rent" | "buy" | "addon";
 
 export interface Profile {
+  // 18 means an adult child (18+): no age limits of their own.
   children_ages: number[];
+  // Optional nicknames aligned with children_ages ("" for none); never sent to the model.
+  children_names?: string[];
   regions: string[];
   services: string[];
   preferred_genres: string[];

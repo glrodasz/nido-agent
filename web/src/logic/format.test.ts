@@ -8,7 +8,9 @@ import {
   familyLine,
   formatVotes,
   genresFor,
-  parseAges,
+  ageLabel,
+  childLabel,
+  watchingAges,
   parseRegions,
   posterHue,
   newestFirst,
@@ -68,11 +70,6 @@ describe("sortOffers", () => {
 });
 
 describe("parsers", () => {
-  it("parses ages and rejects adults", () => {
-    expect(parseAges("6, 9")).toEqual([6, 9]);
-    expect(parseAges("6 19")).toBeNull();
-    expect(parseAges("")).toBeNull();
-  });
   it("parses regions", () => {
     expect(parseRegions("se, no se")).toEqual(["SE", "NO"]);
     expect(parseRegions("Sweden")).toBeNull();
@@ -160,6 +157,48 @@ describe("familyLine", () => {
     expect(
       familyLine(profile({ children_ages: [9, 6], services: ["netflix", "disney_plus", "hbo_max"] }), names),
     ).toBe("For your kids aged 6 and 9 · on Netflix, Disney+ and HBO Max");
+  });
+
+  it("narrows to the child who is watching, by nickname when there is one", () => {
+    const kids = profile({ children_ages: [9, 4], children_names: ["Leo", ""] });
+    expect(familyLine(kids, names, 0)).toBe("For Leo, 9 · on Netflix");
+    expect(familyLine(kids, names, 1)).toBe("For your 4-year-old · on Netflix");
+    expect(familyLine(kids, names, null)).toBe("For your kids aged 4 and 9 · on Netflix");
+    expect(familyLine(profile({ children_ages: [18, 4] }), names)).toBe(
+      "For your kids aged 4 and 18+ · on Netflix",
+    );
+  });
+});
+
+describe("children", () => {
+  const kids: Profile = {
+    children_ages: [18, 4, 0],
+    children_names: ["Ana", ""],
+    regions: ["SE"],
+    services: [],
+    preferred_genres: [],
+    avoid_categories: [],
+    max_runtime_min: null,
+    min_imdb_rating: null,
+  };
+
+  it("labels ages for the stepper, 18 as adult", () => {
+    expect(ageLabel(0)).toBe("Under 1");
+    expect(ageLabel(1)).toBe("1 year");
+    expect(ageLabel(4)).toBe("4 years");
+    expect(ageLabel(18)).toBe("Adult · 18+");
+  });
+
+  it("labels each child by nickname or age", () => {
+    expect(childLabel(kids, 0)).toBe("Ana · 18+");
+    expect(childLabel(kids, 1)).toBe("4-year-old");
+    expect(childLabel(kids, 2)).toBe("Baby");
+  });
+
+  it("picks the ages of whoever watches", () => {
+    expect(watchingAges(kids, null)).toEqual([18, 4, 0]);
+    expect(watchingAges(kids, 1)).toEqual([4]);
+    expect(watchingAges(kids, 7)).toEqual([18, 4, 0]);
   });
 });
 

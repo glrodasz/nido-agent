@@ -25,6 +25,8 @@ Rules (all mandatory):
 1. Turn the request into find_titles arguments. Use the family profile below for ages, services,
    regions and preferences unless the parent says otherwise for this request. If the children's
    ages or the subscribed services are still unknown, ask one short question before searching.
+   An age of 18+ is an adult child. When the profile says who is watching this time, pass only
+   those ages.
    When the parent asks about one specific title, call look_up_title instead: it says whether
    that title fits ("results") or what it misses ("near_misses"), and whether it was not found,
    is not available in their regions, or is hidden by the family.

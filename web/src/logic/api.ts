@@ -53,6 +53,8 @@ export interface SearchFilters {
   min_imdb_rating?: number | null;
   avoid?: string[];
   released_since?: number | null;
+  // Positions in the profile's children; left out = the whole family.
+  watching?: number[];
 }
 
 export const api = {
@@ -61,8 +63,8 @@ export const api = {
   saveProfile: (profile: Profile) =>
     call<{ profile: Profile }>("PUT", "/profile", profile).then((r) => r.profile),
   search: (filters: SearchFilters) => call<SearchResult>("POST", "/search", filters),
-  chat: (message: string, sessionId: string | null) =>
-    call<ChatReply>("POST", "/chat", { message, session_id: sessionId }),
+  chat: (message: string, sessionId: string | null, watching?: number[]) =>
+    call<ChatReply>("POST", "/chat", { message, session_id: sessionId, watching }),
   watchlist: () => call<{ items: WatchlistItem[] }>("GET", "/watchlist").then((r) => r.items),
   save: (t: TitleInfo, watched = false) =>
     call<{ item: WatchlistItem }>("PUT", `/watchlist/${t.media_type}/${t.tmdb_id}`, {

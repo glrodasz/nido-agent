@@ -1,11 +1,12 @@
 import { useState } from "preact/hooks";
 import { fmt, genreLabel, t } from "../i18n";
 import {
+  ADULT_AGE,
+  ageLabel,
   categoryLabel,
   GENRES,
   LENGTH_STOPS,
   lengthLabel,
-  parseAges,
   parseRegions,
   SCORE_STOPS,
   lengthTick,
@@ -14,6 +15,7 @@ import {
 } from "../logic/format";
 import { profileLength, profileScore } from "../logic/quick";
 import type { AppConfig, Profile } from "../logic/types";
+import Icon from "./Icon";
 import Spinner from "./Spinner";
 import StopSlider from "./StopSlider";
 
@@ -28,8 +30,80 @@ function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
 
+interface Child {
+  age: number;
+  name: string;
+}
+
+// A new child starts here; the stepper moves it from 0 (under 1) to 18 (adult).
+const NEW_CHILD_AGE = 5;
+const MAX_CHILDREN = 10;
+const MAX_NICKNAME = 24;
+
+function childrenOf(profile: Profile): Child[] {
+  const kids = profile.children_ages.map((age, i) => ({
+    age: Math.min(Math.max(age, 0), ADULT_AGE),
+    name: profile.children_names?.[i] ?? "",
+  }));
+  return kids.length ? kids : [{ age: NEW_CHILD_AGE, name: "" }];
+}
+
+interface StepperProps {
+  child: Child;
+  index: number;
+  onChange: (child: Child) => void;
+  onRemove: (() => void) | null;
+}
+
+/** One child: an optional nickname and an age stepper that ends at "Adult · 18+". */
+function ChildRow({ child, index, onChange, onRemove }: StepperProps) {
+  const who = child.name.trim() || fmt(t.profile.childN, { n: index + 1 });
+  const step = (by: number) =>
+    onChange({ ...child, age: Math.min(ADULT_AGE, Math.max(0, child.age + by)) });
+  return (
+    <li class={child.age >= ADULT_AGE ? "child-row child-adult" : "child-row"}>
+      <input
+        class="child-name"
+        value={child.name}
+        maxLength={MAX_NICKNAME}
+        placeholder={t.profile.nickname}
+        aria-label={fmt(t.profile.nicknameLabel, { n: index + 1 })}
+        onInput={(e) => onChange({ ...child, name: e.currentTarget.value })}
+      />
+      <div class="stepper" role="group" aria-label={fmt(t.profile.ageOf, { who })}>
+        <button
+          type="button"
+          class="stepper-btn"
+          aria-label={fmt(t.profile.younger, { who })}
+          disabled={child.age <= 0}
+          onClick={() => step(-1)}
+        >
+          <Icon name="minus" />
+        </button>
+        <output class="stepper-value" aria-live="polite">
+          {ageLabel(child.age)}
+        </output>
+        <button
+          type="button"
+          class="stepper-btn"
+          aria-label={fmt(t.profile.older, { who })}
+          disabled={child.age >= ADULT_AGE}
+          onClick={() => step(1)}
+        >
+          <Icon name="plus" />
+        </button>
+      </div>
+      {onRemove && (
+        <button type="button" class="child-remove" aria-label={fmt(t.profile.removeChild, { who })} onClick={onRemove}>
+          <Icon name="x" />
+        </button>
+      )}
+    </li>
+  );
+}
+
 export default function ProfileForm({ config, initial, firstRun, onSave }: Props) {
-  const [ages, setAges] = useState(initial.children_ages.join(", "));
+  const [children, setChildren] = useState<Child[]>(() => childrenOf(initial));
   const [regions, setRegions] = useState(initial.regions.join(", "));
   const [services, setServices] = useState(initial.services);
   const [avoid, setAvoid] = useState(initial.avoid_categories);
@@ -43,16 +117,15 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
 
   async function submit(e: Event) {
     e.preventDefault();
-    const parsedAges = parseAges(ages);
     const parsedRegions = parseRegions(regions);
-    if (!parsedAges) return setError(t.profile.agesInvalid);
     if (!parsedRegions) return setError(t.profile.regionsInvalid);
     if (services.length === 0) return setError(t.profile.servicesMissing);
     setError(null);
     setSaving(true);
     try {
       await onSave({
-        children_ages: parsedAges,
+        children_ages: children.map((c) => c.age),
+        children_names: children.map((c) => c.name.trim()),
         regions: parsedRegions,
         services,
         avoid_categories: avoid,
@@ -74,16 +147,33 @@ export default function ProfileForm({ config, initial, firstRun, onSave }: Props
       <h2>{firstRun ? t.profile.firstTitle : t.profile.title}</h2>
       <p class="muted">{t.profile.intro}</p>
 
-      <label class="field">
-        <span>{t.profile.ages}</span>
-        <input
-          value={ages}
-          onInput={(e) => setAges(e.currentTarget.value)}
-          placeholder="6, 9"
-          inputMode="numeric"
-          required
-        />
-      </label>
+      <fieldset class="field children">
+        <legend>{t.profile.children}</legend>
+        <ol class="child-list">
+          {children.map((c, i) => (
+            <ChildRow
+              key={i}
+              child={c}
+              index={i}
+              onChange={(next) => setChildren(children.map((old, j) => (j === i ? next : old)))}
+              onRemove={
+                children.length > 1 ? () => setChildren(children.filter((_, j) => j !== i)) : null
+              }
+            />
+          ))}
+        </ol>
+        {children.length < MAX_CHILDREN && (
+          <button
+            type="button"
+            class="btn btn-small child-add"
+            onClick={() => setChildren([...children, { age: NEW_CHILD_AGE, name: "" }])}
+          >
+            <Icon name="plus" />
+            {t.profile.addChild}
+          </button>
+        )}
+        <small class="muted">{fmt(t.profile.childrenHint, { adult: ADULT_AGE })}</small>
+      </fieldset>
 
       <fieldset class="field">
         <legend>{t.profile.services}</legend>
