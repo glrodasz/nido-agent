@@ -79,12 +79,36 @@ export function formatVotes(votes: number | null): string {
   return `${votes} votes`;
 }
 
-/** "6, 9" -> [6, 9]; null when any entry is not an age from 0 to 17. */
-export function parseAges(text: string): number[] | null {
-  const parts = text.split(/[\s,]+/).filter(Boolean);
-  if (parts.length === 0) return null;
-  const ages = parts.map(Number);
-  return ages.every((a) => Number.isInteger(a) && a >= 0 && a <= 17) ? ages : null;
+// From this age on a child counts as an adult: no age rating limits them (server ADULT_AGE).
+export const ADULT_AGE = 18;
+
+/** "4 years", "Under 1", or "Adult · 18+" for the age stepper. */
+export function ageLabel(age: number): string {
+  if (age >= ADULT_AGE) return `Adult · ${ADULT_AGE}+`;
+  if (age === 0) return "Under 1";
+  return age === 1 ? "1 year" : `${age} years`;
+}
+
+const shortAge = (age: number) => (age >= ADULT_AGE ? `${ADULT_AGE}+` : String(age));
+
+/** One child as the "Who's watching" picker shows them: "Leo · 9", or "9-year-old" unnamed. */
+export function childLabel(profile: Profile, index: number): string {
+  const age = profile.children_ages[index];
+  const name = profile.children_names?.[index]?.trim();
+  if (name) return `${name} · ${shortAge(age)}`;
+  if (age >= ADULT_AGE) return "Adult child";
+  return age === 0 ? "Baby" : `${age}-year-old`;
+}
+
+/** The ages of whoever watches: one child by position, or everyone (null). */
+export function watchingAges(profile: Profile, watching: number | null): number[] {
+  const age = watching === null ? undefined : profile.children_ages[watching];
+  return age === undefined ? profile.children_ages : [age];
+}
+
+/** The age that sets the limits: the youngest of whoever watches. */
+export function youngestOf(ages: number[]): number {
+  return ages.length ? Math.min(...ages) : 0;
 }
 
 /** "se, no" -> ["SE", "NO"]; null when any entry is not a two-letter code. */
@@ -96,6 +120,7 @@ export function parseRegions(text: string): string[] | null {
 
 export const EMPTY_PROFILE: Profile = {
   children_ages: [],
+  children_names: [],
   regions: ["SE"],
   services: [],
   preferred_genres: [],
@@ -135,8 +160,8 @@ export function genresFor(mediaType: MediaType): string[] {
   return GENRES.filter((g) => GENRE_TYPES[g].includes(mediaType));
 }
 
-// Where an age range starts: 0-6, 7-9, 10-12, 13-15, 16-17 (server.AGE_RANGE_STARTS). Profiles
-// stop at 17, so an age ban lifts at 17 at the latest.
+// Where an age range starts: 0-6, 7-9, 10-12, 13-15, 16-17 (server.AGE_RANGE_STARTS). At 18 a
+// child counts as an adult, so an age ban lifts at 17 at the latest.
 const AGE_RANGE_STARTS = [7, 10, 13, 16];
 export const MAX_CHILD_AGE = 17;
 
@@ -184,15 +209,25 @@ function joinAnd(items: string[]): string {
     : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
-/** "For your 4-year-old · on Netflix and Disney+": who and where the picks are for. */
-export function familyLine(profile: Profile, serviceNames: Record<string, string>): string {
-  const ages = [...profile.children_ages].sort((a, b) => a - b);
+/** "For your 4-year-old · on Netflix and Disney+": who and where the picks are for. With one
+ * child picked as watching, only that child: "For Leo, 9 · on Netflix". */
+export function familyLine(
+  profile: Profile,
+  serviceNames: Record<string, string>,
+  watching: number | null = null,
+): string {
+  const name = watching === null ? "" : (profile.children_names?.[watching]?.trim() ?? "");
+  const ages = [...watchingAges(profile, watching)].sort((a, b) => a - b);
   const who =
     ages.length === 0
       ? "For your family"
-      : ages.length === 1
-        ? `For your ${ages[0]}-year-old`
-        : `For your kids aged ${joinAnd(ages.map(String))}`;
+      : name
+        ? `For ${name}, ${shortAge(ages[0])}`
+        : ages.length === 1
+          ? ages[0] >= ADULT_AGE
+            ? "For your adult child"
+            : `For your ${ages[0]}-year-old`
+          : `For your kids aged ${joinAnd(ages.map(shortAge))}`;
   const services = profile.services.map((s) => serviceNames[s] ?? s);
   return services.length ? `${who} · on ${joinAnd(services)}` : who;
 }

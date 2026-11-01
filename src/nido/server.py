@@ -63,6 +63,7 @@ from nido.auth import Authenticator, AuthError, FirebaseVerifier, User
 from nido.catalog import SERVICES, SERVICES_BY_KEY
 from nido.config import Settings, llm_credentials_available
 from nido.models import (
+    ADULT_AGE,
     Ban,
     BanScope,
     FamilyProfile,
@@ -89,6 +90,8 @@ ATTRIBUTION = (
 
 INVITE_TTL = timedelta(days=7)
 MAX_FAMILY_MEMBERS = 8
+MAX_CHILDREN = 10
+MAX_NICKNAME_CHARS = 24
 
 
 class SearchRequest(BaseModel):
@@ -104,11 +107,14 @@ class SearchRequest(BaseModel):
     regions: list[str] | None = None
     # Earliest release year (series: latest episode); the Find page sends five years back.
     released_since: int | None = Field(default=None, ge=1900, le=2100)
+    # Who is watching: positions in the profile's children; left out or empty = the whole family.
+    watching: list[int] | None = Field(default=None, max_length=MAX_CHILDREN)
 
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
     session_id: str | None = Field(default=None, max_length=128)
+    watching: list[int] | None = Field(default=None, max_length=MAX_CHILDREN)
 
 
 class WatchlistUpdate(BaseModel):
@@ -139,8 +145,8 @@ class MarkUpdate(BaseModel):
     ban: BanRequest | None = None
 
 
-# Where an age range starts: 0-6, 7-9, 10-12, 13-15, 16-17. Profiles stop at 17, so an age ban
-# lifts at 17 at the latest; for a 17-year-old only a ban at every age makes sense.
+# Where an age range starts: 0-6, 7-9, 10-12, 13-15, 16-17. At 18 a child counts as an adult, so
+# an age ban lifts at 17 at the latest; for a 17-year-old only a ban at every age makes sense.
 AGE_RANGE_STARTS = (7, 10, 13, 16)
 MAX_CHILD_AGE = 17
 
@@ -190,23 +196,47 @@ def normalize_profile(profile: FamilyProfile) -> FamilyProfile:
     regions = list(dict.fromkeys(r.strip().upper() for r in profile.regions if r.strip()))
     if not regions or any(len(r) != 2 or not r.isalpha() for r in regions):
         raise HTTPException(422, "regions must be two-letter country codes, e.g. SE")
-    if any(a < 0 or a > MAX_CHILD_AGE for a in profile.children_ages):
-        raise HTTPException(422, "children's ages must be between 0 and 17")
+    if len(profile.children_ages) > MAX_CHILDREN:
+        raise HTTPException(422, f"a family profile has at most {MAX_CHILDREN} children")
+    if any(a < 0 or a > ADULT_AGE for a in profile.children_ages):
+        raise HTTPException(422, f"children's ages must be between 0 and {ADULT_AGE} (adult)")
+    names = [" ".join(n.split())[:MAX_NICKNAME_CHARS] for n in profile.children_names]
+    names = (names + [""] * len(profile.children_ages))[: len(profile.children_ages)]
     return profile.model_copy(
         update={
+            "children_names": names if any(names) else [],
             "regions": regions,
             "services": [s for s in dict.fromkeys(profile.services) if s in SERVICES_BY_KEY],
         }
     )
 
 
-def describe_family(profile: FamilyProfile | None) -> str:
-    """What the agent may know about the family: ages and preferences, nothing identifying."""
+def _age_text(age: int) -> str:
+    return f"{ADULT_AGE}+ (adult)" if age >= ADULT_AGE else str(age)
+
+
+def watching_ages(profile: FamilyProfile, watching: list[int] | None) -> list[int]:
+    try:
+        return profile.watching(watching)
+    except IndexError as exc:
+        raise HTTPException(422, "watching names a child the profile does not have") from exc
+
+
+def describe_family(profile: FamilyProfile | None, watching: list[int] | None = None) -> str:
+    """What the agent may know about the family: ages and preferences, nothing identifying (the
+    children's nicknames stay out)."""
     if profile is None:
         return ""
     services = ", ".join(SERVICES_BY_KEY[s].name for s in profile.services if s in SERVICES_BY_KEY)
-    lines = [
-        f"- Children's ages: {', '.join(str(a) for a in sorted(profile.children_ages))}",
+    ages = sorted(profile.children_ages)
+    lines = [f"- Children's ages: {', '.join(_age_text(a) for a in ages)}"]
+    viewers = sorted(profile.watching(watching))
+    if viewers != ages:
+        lines.append(
+            f"- Watching this time: only the {'children' if len(viewers) > 1 else 'child'} aged "
+            f"{', '.join(_age_text(a) for a in viewers)}; search for these ages"
+        )
+    lines += [
         f"- Subscribed services (keys for find_titles): {', '.join(profile.services) or 'none'}"
         + (f" ({services})" if services else ""),
         f"- Catalog regions: {', '.join(profile.regions)}",
@@ -300,12 +330,15 @@ def _final_text(event: Any) -> str:
     return "".join(p.text or "" for p in event.content.parts if not getattr(p, "thought", False))
 
 
-def family_guard(profile: FamilyProfile | None) -> dict[str, Any]:
-    """The saved profile's limits the tools enforce whatever the chat says (agent.tools)."""
+def family_guard(
+    profile: FamilyProfile | None, watching: list[int] | None = None
+) -> dict[str, Any]:
+    """The saved profile's limits the tools enforce whatever the chat says (agent.tools). With
+    some children picked as watching, only their ages count: the chat can narrow, not widen."""
     if profile is None:
         return {}
     return {
-        "children_ages": list(profile.children_ages),
+        "children_ages": profile.watching(watching),
         "avoid": [c.value for c in profile.avoid_categories],
     }
 
@@ -443,7 +476,7 @@ def create_app(
         try:
             return await toolbox.search(
                 media_type=request.media_type.value,
-                children_ages=profile.children_ages,
+                children_ages=watching_ages(profile, request.watching),
                 services=profile.services,
                 genres=request.genres,
                 exclude_genres=request.exclude_genres,
@@ -523,6 +556,7 @@ def create_app(
     @app.post("/api/search")
     async def search(request: SearchRequest, family: Family) -> dict[str, Any]:
         profile = await require_profile(family)
+        watching_ages(profile, request.watching)  # 422 before it counts against the quota
         quota = await take_quota(family, "search")
         marks = await store.list_marks(family)
         found = with_marks(await find(profile, request, marks), marks, profile) or {}
@@ -532,10 +566,12 @@ def create_app(
     async def chat(request: ChatRequest, user: CurrentUser, family: Family) -> dict[str, Any]:
         if runner is None:
             raise HTTPException(503, "chat is off: no model credentials on the server")
+        profile = await store.get_profile(family)
+        if profile is not None:
+            watching_ages(profile, request.watching)  # 422 before it counts against the quota
         quota = await take_quota(family, "chat")
         from google.genai import types
 
-        profile = await store.get_profile(family)
         marks = await store.list_marks(family)
         sessions = runner.session_service
         session = None
@@ -563,10 +599,10 @@ def create_app(
                 session_id=session.id,
                 new_message=types.Content(role="user", parts=[types.Part(text=request.message)]),
                 state_delta={
-                    "family": describe_family(profile),
+                    "family": describe_family(profile, request.watching),
                     "today": date.today().isoformat(),
                     HIDDEN_STATE_KEY: hidden,
-                    GUARD_STATE_KEY: family_guard(profile),
+                    GUARD_STATE_KEY: family_guard(profile, request.watching),
                 },
             ):
                 for output in _find_titles_outputs(event):

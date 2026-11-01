@@ -73,7 +73,13 @@ def test_profile_round_trip_normalizes_regions_and_services():
 
 @pytest.mark.parametrize(
     "patch",
-    [{"regions": ["Sweden"]}, {"children_ages": [21]}, {"children_ages": []}],
+    [
+        {"regions": ["Sweden"]},
+        {"children_ages": [19]},
+        {"children_ages": [-1]},
+        {"children_ages": []},
+        {"children_ages": list(range(11))},
+    ],
 )
 def test_profile_rejects_bad_values(patch):
     c, _ = client()
@@ -337,6 +343,61 @@ def test_family_description_has_no_identifying_fields():
     assert describe_family(None) == ""
 
 
+def test_profile_keeps_optional_nicknames_aligned_with_the_ages():
+    c, _ = client()
+    saved = c.put(
+        "/api/profile", json={**PROFILE, "children_names": ["  Leo  ", "", "extra"]}
+    ).json()["profile"]
+    assert saved["children_ages"] == [9, 6]
+    assert saved["children_names"] == ["Leo", ""]
+    no_names = c.put("/api/profile", json={**PROFILE, "children_names": ["", " "]}).json()
+    assert no_names["profile"]["children_names"] == []
+
+
+def test_an_adult_child_is_allowed_and_described_as_adult():
+    c, _ = client()
+    saved = c.put("/api/profile", json={**PROFILE, "children_ages": [18, 4]}).json()["profile"]
+    assert saved["children_ages"] == [18, 4]
+    text = describe_family(FamilyProfile(children_ages=[18, 4], children_names=["Ana", "Leo"]))
+    assert "Children's ages: 4, 18+ (adult)" in text
+
+
+def test_search_for_one_child_uses_only_that_childs_age():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    c.post("/api/search", json={"watching": [0]})
+    assert toolbox.calls[-1]["children_ages"] == [9]
+    c.post("/api/search", json={"watching": []})
+    assert toolbox.calls[-1]["children_ages"] == [9, 6]
+    before = len(toolbox.calls)
+    assert c.post("/api/search", json={"watching": [5]}).status_code == 422
+    assert c.post("/api/search", json={"watching": [-1]}).status_code == 422
+    assert len(toolbox.calls) == before
+
+
+def test_bans_follow_the_whole_family_even_when_one_child_watches():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    put_mark(c, 2, ban={"scope": "age", "until_age": 8})
+    c.post("/api/search", json={"watching": [0]})
+    assert toolbox.calls[-1]["hidden"] == ["movie:2"]
+
+
+def test_chat_for_one_child_narrows_the_guard_and_keeps_names_out():
+    runner = FakeRunner([event(tool_output=RESULT), event(text="ok")])
+    c, _ = client(runner=runner)
+    c.put("/api/profile", json={**PROFILE, "children_names": ["Leo", "Mia"]})
+    c.post("/api/chat", json={"message": "x", "watching": [1]})
+    state = runner.state_deltas[-1]
+    assert state["family_guard"]["children_ages"] == [6]
+    assert "Watching this time: only the child aged 6" in state["family"]
+    assert "Leo" not in state["family"] and "Mia" not in state["family"]
+    c.post("/api/chat", json={"message": "x"})
+    assert runner.state_deltas[-1]["family_guard"]["children_ages"] == [9, 6]
+    assert "Watching this time" not in runner.state_deltas[-1]["family"]
+    assert c.post("/api/chat", json={"message": "x", "watching": [2]}).status_code == 422
+
+
 def test_firebase_mode_without_token_is_401():
     from nido.auth import FirebaseVerifier
 
@@ -495,13 +556,13 @@ async def test_find_titles_reads_bans_from_state_not_from_the_model():
 
 
 class HeaderAuthenticator:
-    """Signs in whoever the Authorization header names; "guillermo" and "grandma" are allowed."""
+    """Signs in whoever the Authorization header names; "parent" and "grandma" are allowed."""
 
     mode = "firebase"
 
     async def __call__(self, authorization: str | None) -> User:
-        uid = authorization or "guillermo"
-        return User(uid=uid, email=f"{uid}@example.com", allowed=uid in {"guillermo", "grandma"})
+        uid = authorization or "parent"
+        return User(uid=uid, email=f"{uid}@example.com", allowed=uid in {"parent", "grandma"})
 
 
 def family_client(store: MemoryStore | None = None) -> TestClient:
@@ -515,7 +576,7 @@ def family_client(store: MemoryStore | None = None) -> TestClient:
 
 
 ME, PARTNER, STRANGER = (
-    {"Authorization": "guillermo"},
+    {"Authorization": "parent"},
     {"Authorization": "partner"},
     {"Authorization": "stranger"},
 )
@@ -527,12 +588,12 @@ def invite(c: TestClient, headers: dict[str, str] = ME) -> str:
 
 def test_every_account_starts_its_own_family_and_existing_data_stays():
     store = MemoryStore()
-    asyncio.run(store.put_profile("guillermo", FamilyProfile(children_ages=[4])))
+    asyncio.run(store.put_profile("parent", FamilyProfile(children_ages=[4])))
     c = family_client(store)
     assert c.get("/api/profile", headers=ME).json()["profile"]["children_ages"] == [4]
     family = c.get("/api/family", headers=ME).json()
     assert family["role"] == "owner"
-    assert [(m["email"], m["you"]) for m in family["members"]] == [("guillermo@example.com", True)]
+    assert [(m["email"], m["you"]) for m in family["members"]] == [("parent@example.com", True)]
     # Anyone else signing in gets an empty family of their own, never someone else's data.
     assert c.get("/api/profile", headers=PARTNER).json()["profile"] is None
     assert c.get("/api/family", headers=PARTNER).json()["role"] == "owner"
@@ -548,7 +609,7 @@ def test_an_invite_shares_profile_watchlist_and_marks_and_works_once():
     assert c.post(f"/api/invites/{token}", headers=STRANGER).status_code == 410
 
     assert c.get("/api/profile", headers=PARTNER).json()["profile"]["children_ages"] == [9, 6]
-    put_mark(c, 7, seen=True)  # as guillermo
+    put_mark(c, 7, seen=True)  # as parent
     c.put("/api/watchlist/movie/8", json={"name": "Up"}, headers=PARTNER)
     assert [
         i["title"]["tmdb_id"] for i in c.get("/api/titles", headers=PARTNER).json()["items"]
@@ -557,7 +618,7 @@ def test_an_invite_shares_profile_watchlist_and_marks_and_works_once():
         8
     ]
     roles = {m["email"]: m["role"] for m in c.get("/api/family", headers=PARTNER).json()["members"]}
-    assert roles == {"guillermo@example.com": "owner", "partner@example.com": "member"}
+    assert roles == {"parent@example.com": "owner", "partner@example.com": "member"}
 
 
 def test_unknown_and_expired_invites_are_gone():
@@ -576,7 +637,7 @@ def test_only_the_owner_removes_members_and_the_owner_cannot_leave():
     c.post(f"/api/invites/{invite(c)}", headers=PARTNER)
     c.post(f"/api/invites/{invite(c)}", headers=STRANGER)
     assert c.delete("/api/family/members/stranger", headers=PARTNER).status_code == 403
-    assert c.delete("/api/family/members/guillermo", headers=ME).status_code == 409
+    assert c.delete("/api/family/members/parent", headers=ME).status_code == 409
     assert c.delete("/api/family/members/stranger", headers=ME).json() == {"ok": True}
     # Removed, they are back in a family of their own.
     assert c.get("/api/profile", headers=STRANGER).json()["profile"] is None
