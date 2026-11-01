@@ -470,7 +470,7 @@ export default function Finder({
                     onClick={() => setFilters(cycleGenre(filters, g))}
                   >
                     {state !== "off" && <Icon name={state === "include" ? "plus" : "minus"} />}
-                    <span class={state === "exclude" ? "genre-name-excluded" : undefined}>{g}</span>
+                    {g}
                   </button>
                 );
               })}
@@ -480,7 +480,7 @@ export default function Finder({
                 <span id="genre-match-label">Titles need</span>
                 <div class="segmented segmented-small segmented-blue" role="group" aria-labelledby="genre-match-label">
                   {[
-                    { all: false, label: "Any of the + genres" },
+                    { all: false, label: "Any of them" },
                     { all: true, label: "All of them" },
                   ].map((o) => (
                     <button
