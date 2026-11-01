@@ -117,3 +117,17 @@ async def test_look_up_applies_runtime_and_imdb_limits():
         "Runs 95 min, longer than your 60 min limit.",
         "IMDb 7.5, below your minimum of 8.0.",
     ]
+
+
+async def test_details_judge_a_known_title_against_the_profile():
+    box = lookup_box([], {7})
+    result = await box.details("tv", 7, PROFILE.model_copy(update={"regions": ["SE"]}))
+    assert result["tmdb_id"] == 7
+    assert result["misses"] == ["Rated 15+, and your youngest is 4."]
+
+
+async def test_details_still_open_a_title_with_nowhere_to_watch():
+    box = lookup_box([], set())
+    result = await box.details("tv", 7, PROFILE.model_copy(update={"regions": ["ZZ"]}))
+    assert result["tmdb_id"] == 7 and result["where_to_watch"] == []
+    assert result["cautions"] == ["Not streaming in your regions right now."]

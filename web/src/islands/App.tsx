@@ -298,7 +298,10 @@ export default function App() {
         onWatched={setWatched}
         onRemove={remove}
         marks={marks}
-        onMark={markListed}
+        onMark={markTitle}
+        profile={profile}
+        savedKeys={new Set(watchlist.map(itemKey))}
+        onToggleSave={toggleSave}
       />
     );
   } else {

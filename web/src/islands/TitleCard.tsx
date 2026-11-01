@@ -10,6 +10,7 @@ import {
   verifiedAgo,
   yearSpan,
 } from "../logic/format";
+import type { ComponentChildren } from "preact";
 import type { MarkChange, Offer, TitleMark, TitleResult } from "../logic/types";
 import Icon from "./Icon";
 import Spinner from "./Spinner";
@@ -24,6 +25,8 @@ interface Props {
   mark: TitleMark | null;
   youngest: number;
   onMark: (change: MarkChange) => Promise<void>;
+  // Extra controls at the bottom of the card, e.g. the watchlist's Watched and Hide details.
+  footer?: ComponentChildren;
 }
 
 function guidanceLinks(result: TitleResult): { name: string; url: string }[] {
@@ -51,6 +54,7 @@ export default function TitleCard({
   mark,
   youngest,
   onMark,
+  footer,
 }: Props) {
   const [posterFailed, setPosterFailed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -255,6 +259,7 @@ export default function TitleCard({
           </section>
           </div>
         </details>
+        {footer && <div class="card-foot">{footer}</div>}
       </div>
     </article>
   );

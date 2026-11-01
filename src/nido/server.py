@@ -8,6 +8,7 @@
     PUT    /api/watchlist/{media_type}/{tmdb_id}  save or update one
     DELETE /api/watchlist/{media_type}/{tmdb_id}
     GET    /api/titles                            the family's marks: seen, liked, rewatch, banned
+    GET    /api/titles/{media_type}/{tmdb_id}     one title's full card, for the watchlist
     PUT    /api/titles/{media_type}/{tmdb_id}     change some marks on one title
     GET    /api/family                            members of the caller's family
     POST   /api/family/invites                    a new single-use invite link token
@@ -613,6 +614,26 @@ def create_app(
         profile = await store.get_profile(family)
         marks = await store.list_marks(family)
         return {"items": [present_mark(m, profile) for m in marks]}
+
+    @app.get("/api/titles/{media_type}/{tmdb_id}")
+    async def title_details(media_type: MediaType, tmdb_id: int, family: Family) -> dict[str, Any]:
+        # Opening a title the family saved is not a search: TMDB and OMDb answers are cached,
+        # so it does not count against the daily quota.
+        profile = await require_profile(family)
+        marks = await store.list_marks(family)
+        try:
+            result = await toolbox.details(media_type.value, tmdb_id, profile)
+        except RuntimeError as exc:  # missing TMDB token
+            raise HTTPException(503, str(exc)) from exc
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                raise HTTPException(404, "title not found") from exc
+            log.warning("title details failed: %s", exc)
+            raise HTTPException(502, "a data source did not answer; try again") from exc
+        except httpx.HTTPError as exc:
+            log.warning("title details failed: %s", exc)
+            raise HTTPException(502, "a data source did not answer; try again") from exc
+        return {"result": with_marks({"results": [result]}, marks, profile)["results"][0]}
 
     @app.put("/api/titles/{media_type}/{tmdb_id}")
     async def put_mark(
