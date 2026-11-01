@@ -1252,6 +1252,81 @@ a.imdb:hover {
   min-width: 0;
 }
 
+/* A watchlist row opens into the title's full card, marks included. */
+.wl-open {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: -0.35rem 0 -0.35rem -0.45rem;
+  padding: 0.35rem 0.45rem;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wl-open:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+.wl-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.wl-chev {
+  display: inline-flex;
+  color: var(--muted);
+  flex: none;
+}
+
+.wl-badges {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  vertical-align: -2px;
+  color: var(--coral-ink);
+}
+
+.wl-badge {
+  display: inline-flex;
+}
+
+.wl-error {
+  color: var(--coral-ink);
+  font-size: 0.85rem;
+}
+
+.card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.card-foot > :last-child {
+  margin-left: auto;
+}
+
+.card-foot .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.chev-up {
+  display: inline-flex;
+  transform: rotate(180deg);
+}
+
 @media (max-width: 560px) {
   .card {
     grid-template-columns: 72px 1fr;
@@ -1294,6 +1369,10 @@ a.imdb:hover {
 
   .wl-item {
     flex-wrap: wrap;
+  }
+
+  .wl-open {
+    flex-basis: 100%;
   }
 }
 
