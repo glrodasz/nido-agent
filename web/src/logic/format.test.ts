@@ -7,6 +7,7 @@ import {
   categoryLabel,
   familyLine,
   formatVotes,
+  isNight,
   genresFor,
   ageLabel,
   childLabel,
@@ -307,5 +308,20 @@ describe("genresFor", () => {
     expect(genresFor("tv")).toContain("Kids");
     expect(genresFor("tv")).not.toContain("Music");
     expect(genresFor("tv")).toContain("Western");
+  });
+});
+
+describe("isNight", () => {
+  const at = (hour: number, minute = 0) => new Date(2026, 10, 2, hour, minute);
+  it("is night from 19:00 to 05:59 local time", () => {
+    expect(isNight(at(19))).toBe(true);
+    expect(isNight(at(23, 30))).toBe(true);
+    expect(isNight(at(0))).toBe(true);
+    expect(isNight(at(5, 59))).toBe(true);
+  });
+  it("is day from 06:00 to 18:59", () => {
+    expect(isNight(at(6))).toBe(false);
+    expect(isNight(at(12))).toBe(false);
+    expect(isNight(at(18, 59))).toBe(false);
   });
 });

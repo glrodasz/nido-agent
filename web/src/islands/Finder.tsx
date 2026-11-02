@@ -5,6 +5,7 @@ import {
   familyLine,
   type FindKind,
   genresFor,
+  isNight,
   LENGTH_STOPS,
   lengthLabel,
   newestFirst,
@@ -696,7 +697,7 @@ export default function Finder({
           </header>
           {today && (
             <p class="results-for muted">
-              <Icon name="sun" />
+              <Icon name={isNight() ? "moon" : "sun"} />
               {t.finder.todayHint}
             </p>
           )}

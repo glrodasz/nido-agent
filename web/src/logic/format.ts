@@ -10,6 +10,12 @@ export function verifiedAgo(iso: string, now: Date = new Date()): string {
   return plural(days, t.ago.days);
 }
 
+/** Night runs from 19:00 to 05:59 on the viewer's clock, when Today's picks show a moon. */
+export function isNight(now: Date = new Date()): boolean {
+  const hour = now.getHours();
+  return hour >= 19 || hour < 6;
+}
+
 export function accessLabel(access: Access): string {
   return t.access[access] ?? access;
 }
