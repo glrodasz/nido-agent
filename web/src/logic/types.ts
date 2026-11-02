@@ -78,8 +78,10 @@ export interface SearchResult {
   // The closest titles that break the profile, sent only when results is empty.
   near_misses?: TitleResult[];
   attribution: string;
-  // The family's searches today; only on /api/search.
+  // The family's searches today: on /api/search, and on /api/daily when it built the picks.
   quota?: Quota;
+  // On /api/daily: the UTC day the picks are for.
+  day?: string;
 }
 
 export interface ChatReply {

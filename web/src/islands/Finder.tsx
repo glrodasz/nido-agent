@@ -85,6 +85,12 @@ const SEEN_LAST_KEY = "nido-seen-last";
 const ORDER_KEY = "nido-order";
 type Order = "newest" | "rated";
 
+// Today's picks this visit already loaded, so going back to Find from another tab does not ask
+// again. The server caches them for the day too; this only saves the round trip.
+let todayMemo: { key: string; result: SearchResult } | null = null;
+const utcDay = () => new Date().toISOString().slice(0, 10);
+const todayKey = (profile: Profile) => `${utcDay()}:${JSON.stringify(profile)}`;
+
 function loadOrder(): Order {
   try {
     return localStorage.getItem(ORDER_KEY) === "rated" ? "rated" : "newest";
@@ -130,6 +136,11 @@ export default function Finder({
   const [results, setResults] = useState<SearchResult | null>(null);
   // The question the cards answer when they came from Ask Nido; null for the filters.
   const [answering, setAnswering] = useState<string | null>(null);
+  // True while the cards are today's picks, before the family searched or asked anything.
+  const [today, setToday] = useState(false);
+  const [todayLoading, setTodayLoading] = useState(false);
+  // Set once the family searches or asks, so today's picks arriving late do not replace them.
+  const acted = useRef(false);
   const [busy, setBusy] = useState<"search" | "chat" | null>(null);
   // The quick filter whose search is running, so that chip is the one that spins.
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
@@ -148,6 +159,43 @@ export default function Finder({
   }, [profile]);
   const viewerAges = watchingAges(profile, watching);
   const [order, setOrder] = useState<Order>(loadOrder);
+
+  // Find opens on today's picks instead of an empty page; a new profile gets new picks.
+  useEffect(() => {
+    if (acted.current) return;
+    const key = todayKey(profile);
+    if (todayMemo?.key === key) {
+      showToday(todayMemo.result);
+      return;
+    }
+    let live = true;
+    setTodayLoading(true);
+    api
+      .daily()
+      .then((found) => {
+        if (found.quota) setQuota((q) => ({ ...q, search: found.quota }));
+        todayMemo = { key, result: found };
+        if (live && !acted.current) showToday(found);
+      })
+      .catch((err) => {
+        // Out of searches: the tag says so. Anything else leaves Find as it always was.
+        if (err instanceof ApiError && err.status === 429) {
+          setQuota((q) => ({ ...q, search: { used: q.search?.limit ?? 0, limit: q.search?.limit ?? 0 } }));
+        }
+      })
+      .finally(() => live && setTodayLoading(false));
+    return () => {
+      live = false;
+    };
+  }, [profile]);
+
+  function showToday(found: SearchResult) {
+    if (found.results.length === 0) return;
+    setResults(found);
+    setToday(true);
+    setJudgedFor(null);
+    setAnswering(null);
+  }
 
   function chooseOrder(next: Order) {
     setOrder(next);
@@ -202,6 +250,8 @@ export default function Finder({
       }),
     );
     if (found) {
+      acted.current = true;
+      setToday(false);
       setQuota((q) => ({ ...q, search: found.quota }));
       setResults(found);
       setJudgedFor(who);
@@ -223,7 +273,7 @@ export default function Finder({
   // Back to the defaults. Picks the filters found are redone with them; Ask Nido's cards stay.
   async function clear(control: string) {
     setFilters(base);
-    if (!results || answering !== null) return;
+    if (!results || answering !== null || today) return;
     setQuickBusy(control);
     try {
       await search(undefined, base);
@@ -237,7 +287,8 @@ export default function Finder({
   async function chooseWatching(who: number | null) {
     if (who === watching) return;
     setWatching(who);
-    if (!results || answering !== null) return;
+    // Today's picks are for the whole family and stay; Ask Nido's cards stay too.
+    if (!results || answering !== null || today) return;
     setQuickBusy(`who:${who ?? "all"}`);
     try {
       await search(undefined, filters, who);
@@ -265,6 +316,8 @@ export default function Finder({
     const text2 = [reply.reply, reply.note].filter(Boolean).join("\n\n");
     if (text2) setTurns((t) => [...t, { role: "nido", text: text2 }]);
     if (reply.results) {
+      acted.current = true;
+      setToday(false);
       setResults(reply.results);
       setJudgedFor(asked);
       setAnswering(ask);
@@ -591,11 +644,23 @@ export default function Finder({
         </p>
       )}
 
+      {!results && todayLoading && (
+        <section class="results" aria-labelledby="picks-title" aria-busy="true">
+          <header class="results-head">
+            <h2 id="picks-title">{t.finder.today}</h2>
+          </header>
+          <p class="loading" role="status">
+            <Spinner />
+            {t.finder.loadingToday}
+          </p>
+        </section>
+      )}
+
       {results && (
         <section class="results" aria-labelledby="picks-title" aria-busy={busy !== null}>
           <header class="results-head">
             <h2 id="picks-title">
-              {results.results.length > 0 ? t.finder.picks : t.finder.closest}
+              {today ? t.finder.today : results.results.length > 0 ? t.finder.picks : t.finder.closest}
             </h2>
             <div class="results-tools">
               {picks.length > 1 && (
@@ -629,6 +694,12 @@ export default function Finder({
               )}
             </div>
           </header>
+          {today && (
+            <p class="results-for muted">
+              <Icon name="sun" />
+              {t.finder.todayHint}
+            </p>
+          )}
           {answering && (
             <p class="results-for muted">
               <Icon name="search" />

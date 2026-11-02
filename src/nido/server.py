@@ -2,6 +2,7 @@
 
     GET    /api/config                            services, categories, what is enabled
     GET    /api/profile    PUT /api/profile       the family profile
+    GET    /api/daily                             today's picks: Find's opening cards, cached a day
     POST   /api/search                            filter panel: deterministic, no model call
     POST   /api/chat                              one turn with the ADK agent
     GET    /api/watchlist                         saved titles
@@ -24,6 +25,11 @@ NIDO_MAX_CHAT_TURNS_PER_DAY), kept in the store so restarts do not reset them; p
 answer 429, and below it they report `quota` ({used, limit}). A family whose owner is on
 NIDO_ALLOWED_EMAILS has no limit (limit null) and still sees what it used.
 
+Today's picks (/api/daily) are one movie search and one series search with the profile's
+defaults, built at most once a day per family and profile: the build counts as one search, and
+every later load that day reads the store's cache. Marks never rebuild it: banned and seen titles
+are dropped when the picks are served, and the day picks a different handful of the shortlist.
+
 Banned titles are left out of search and chat by code: the server hands their keys to the
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
 
@@ -40,7 +46,11 @@ message nor a title's synopsis can make Nido carry a phishing link. Live attacks
 evals/prompt_injection.py.
 """
 
+import asyncio
+import hashlib
+import json
 import logging
+import random
 import re
 import secrets
 import unicodedata
@@ -84,6 +94,13 @@ log = logging.getLogger(__name__)
 
 MAX_MESSAGE_CHARS = 2000
 
+
+# Today's picks: how many cards, how many years back they reach, and how long a build is kept
+# (a day past its own, like the quotas, so a late load near midnight still finds it).
+DAILY_SIZE = 12
+DAILY_YEARS = 5
+DAILY_TTL = timedelta(days=2)
+DAILY_KINDS = (MediaType.MOVIE, MediaType.TV)
 
 INVITE_TTL = timedelta(days=7)
 MAX_FAMILY_MEMBERS = 8
@@ -321,6 +338,46 @@ def chat_cards(
     return {**base, "results": rest[:MAX_CARDS], "near_misses": named[:MAX_CARDS]}
 
 
+def daily_key(family: str, day: date, profile: FamilyProfile) -> str:
+    """Cache key of a family's picks for a day. It holds a digest of the profile fields the
+    search reads, so saving a different profile builds new picks; nicknames do not count."""
+    fields = profile.model_dump(mode="json", exclude={"children_names", "mood"})
+    digest = hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()[:16]
+    return f"daily:{family}:{day.isoformat()}:{digest}"
+
+
+def daily_picks(
+    built: dict[str, list[dict[str, Any]]],
+    *,
+    family: str,
+    day: date,
+    skip: set[str],
+    size: int = DAILY_SIZE,
+) -> list[dict[str, Any]]:
+    """Today's handful from each type's shortlist, movies and series taking turns.
+
+    `built` holds each type's ranked shortlist. Titles in `skip` (banned or already seen) are
+    left out, so a mark shows on the next load without a rebuild. The same family and day always
+    pick the same titles; another day picks another handful, kept in ranking order and leaning
+    to the top of the shortlist."""
+    rng = random.Random(f"{family}:{day.isoformat()}")
+    lists = []
+    for kind in DAILY_KINDS:
+        pool = [r for r in built.get(kind.value) or [] if _key(r) not in skip]
+        chosen = sorted(rng.sample(range(len(pool)), min(len(pool), size)))
+        lists.append([pool[i] for i in chosen])
+    # Half of each, the rest filled from whichever type has more.
+    share = [min(len(lst), size // len(lists)) for lst in lists]
+    spare = size - sum(share)
+    for i, lst in enumerate(lists):
+        extra = min(spare, len(lst) - share[i])
+        share[i] += extra
+        spare -= extra
+    taken = [lst[:n] for lst, n in zip(lists, share, strict=True)]
+    longest = max((len(t) for t in taken), default=0)
+    return [t[i] for i in range(longest) for t in taken if i < len(t)]
+
+
 def _final_text(event: Any) -> str:
     if not event.is_final_response() or not event.content or not event.content.parts:
         return ""
@@ -550,6 +607,58 @@ def create_app(
         if profile is None:
             raise HTTPException(409, "set up the family profile first")
         return profile
+
+    @app.get("/api/daily")
+    async def daily(family: Family, locale: PageLocale) -> dict[str, Any]:
+        """Today's picks for the whole family, built once a day per profile."""
+        profile = await require_profile(family)
+        today = datetime.now(UTC).date()
+        key = daily_key(family, today, profile)
+        marks = await store.list_marks(family)
+        hidden = hidden_keys(marks, profile)
+        quota = None
+        hit = await store.cache_get(key, DAILY_TTL)
+        if hit is not None:
+            built = hit.data
+        else:
+            quota = await take_quota(family, "search", locale)
+            found = await asyncio.gather(
+                *(
+                    find(
+                        profile,
+                        SearchRequest(media_type=kind, released_since=today.year - DAILY_YEARS),
+                        marks,
+                        locale,
+                    )
+                    for kind in DAILY_KINDS
+                )
+            )
+            built = {
+                "regions": found[0].get("regions") or profile.regions,
+                "attribution": found[0].get("attribution"),
+                **{
+                    kind.value: output.get("results") or []
+                    for kind, output in zip(DAILY_KINDS, found, strict=True)
+                },
+            }
+            await store.cache_put(key, built, DAILY_TTL)
+        seen = {m.title.key for m in marks if m.seen}
+        picks = daily_picks(built, family=family, day=today, skip={*hidden, *seen})
+        output = with_marks(
+            {
+                "regions": built.get("regions") or profile.regions,
+                "results": picks,
+                "near_misses": [],
+                "attribution": built.get("attribution") or "",
+            },
+            marks,
+            profile,
+        )
+        return {
+            **(localize_output(output, locale) or {}),
+            "day": today.isoformat(),
+            **({"quota": quota} if quota else {}),
+        }
 
     @app.post("/api/search")
     async def search(request: SearchRequest, family: Family, locale: PageLocale) -> dict[str, Any]:

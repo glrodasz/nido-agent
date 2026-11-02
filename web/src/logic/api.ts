@@ -63,6 +63,8 @@ export const api = {
   saveProfile: (profile: Profile) =>
     call<{ profile: Profile }>("PUT", "/profile", profile).then((r) => r.profile),
   search: (filters: SearchFilters) => call<SearchResult>("POST", "/search", filters),
+  /** Today's picks for the whole family: built once a day on the server, cached after. */
+  daily: () => call<SearchResult>("GET", "/daily"),
   chat: (message: string, sessionId: string | null, watching?: number[]) =>
     call<ChatReply>("POST", "/chat", { message, session_id: sessionId, watching }),
   watchlist: () => call<{ items: WatchlistItem[] }>("GET", "/watchlist").then((r) => r.items),
