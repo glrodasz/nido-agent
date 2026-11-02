@@ -74,6 +74,8 @@ class Title(BaseModel):
     genres: list[str] = Field(default_factory=list)
     synopsis: str = ""
     poster_url: HttpUrl | None = None
+    # YouTube trailer ids by language (es, en, pt): the card plays the page's language first.
+    trailers: dict[str, str] = Field(default_factory=dict)
 
     @property
     def latest_date(self) -> date | None:

@@ -45,6 +45,8 @@ export interface TitleResult {
   genres: string[];
   synopsis: string;
   poster_url: string | null;
+  // YouTube trailer ids by language (es, en, pt); missing on cards saved before trailers existed.
+  trailers?: Record<string, string>;
   imdb: {
     score: number;
     votes: number | null;

@@ -13,6 +13,8 @@ import {
   watchingAges,
   parseRegions,
   posterHue,
+  largePoster,
+  trailerFor,
   newestFirst,
   releasedSince,
   seenLast,
@@ -307,5 +309,28 @@ describe("genresFor", () => {
     expect(genresFor("tv")).toContain("Kids");
     expect(genresFor("tv")).not.toContain("Music");
     expect(genresFor("tv")).toContain("Western");
+  });
+});
+
+describe("largePoster", () => {
+  it("asks TMDB for the bigger size", () => {
+    expect(largePoster("https://image.tmdb.org/t/p/w342/abc.jpg")).toBe("https://image.tmdb.org/t/p/w780/abc.jpg");
+  });
+  it("leaves other URLs alone", () => {
+    expect(largePoster("https://example.com/w342/abc.jpg")).toBe("https://example.com/w342/abc.jpg");
+  });
+});
+
+describe("trailerFor", () => {
+  it("prefers the page's language, then English", () => {
+    expect(trailerFor({ en: "enTrailer01", es: "esTrailer01" }, "es")).toBe("esTrailer01");
+    expect(trailerFor({ en: "enTrailer01" }, "pt")).toBe("enTrailer01");
+  });
+  it("has nothing when there is no trailer in either", () => {
+    expect(trailerFor({ es: "esTrailer01" }, "pt")).toBeNull();
+    expect(trailerFor(undefined, "es")).toBeNull();
+  });
+  it("ignores anything that is not a YouTube id", () => {
+    expect(trailerFor({ es: "bad id/../x" }, "es")).toBeNull();
   });
 });

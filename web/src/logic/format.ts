@@ -221,6 +221,22 @@ export function posterHue(tmdbId: number): number {
   return (tmdbId * 47) % 360;
 }
 
+/** The card's TMDB poster at the size the enlarged view needs; other URLs stay as they are. */
+export function largePoster(url: string): string {
+  return url.replace(/^(https:\/\/image\.tmdb\.org\/t\/p\/)w\d+\//, "$1w780/");
+}
+
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/** The trailer to play: the page's language first, then English; null when there is none. */
+export function trailerFor(trailers: Record<string, string> | undefined, locale: string): string | null {
+  for (const lang of [locale, "en"]) {
+    const key = trailers?.[lang];
+    if (key && YOUTUBE_ID.test(key)) return key;
+  }
+  return null;
+}
+
 /** Unseen titles first, seen ones after; the ranking order holds within each group. */
 /** "2018–2026" for a series that aired after its first year, so "Newest" order reads right. */
 export function yearSpan(r: {

@@ -1107,6 +1107,159 @@ fieldset.filter-field {
   box-shadow: 0 4px 10px -4px rgb(0 0 0 / 0.3);
 }
 
+/* Tapping the poster opens it larger; a trailer button sits under it when TMDB has one. */
+.card-poster {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.poster-btn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 10px;
+  cursor: zoom-in;
+  transition: transform 0.15s ease;
+}
+
+.poster-btn:hover {
+  transform: translateY(-2px);
+}
+
+.trailer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--key-bg);
+  box-shadow: var(--shadow-key);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.trailer-btn .icon,
+.trailer-btn svg {
+  width: 0.85em;
+  height: 0.85em;
+  color: var(--coral);
+}
+
+.trailer-btn:hover {
+  border-color: var(--coral);
+}
+
+/* The enlarged poster or trailer, over a dimmed page. */
+.viewer {
+  width: min(92vw, 960px);
+  max-height: 92vh;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f5f1ea;
+  overflow: visible;
+}
+
+.viewer-poster {
+  width: fit-content;
+}
+
+.viewer::backdrop {
+  background: rgb(17 22 27 / 0.82);
+  backdrop-filter: blur(4px);
+}
+
+.viewer-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 200px;
+  min-height: 200px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #11161b;
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.7);
+}
+
+.viewer-poster img {
+  display: block;
+  /* As big as the screen allows, keeping the poster's 2:3 shape. */
+  width: min(92vw, 780px, calc((92vh - 3.5rem) * 2 / 3));
+  height: auto;
+  aspect-ratio: 2 / 3;
+}
+
+.viewer-trailer .viewer-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.viewer-trailer iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.viewer-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: #f5f1ea;
+  pointer-events: none;
+}
+
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.viewer-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-bar a {
+  color: #f5f1ea;
+}
+
+.viewer-close {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  border: 1px solid rgb(245 241 234 / 0.3);
+  border-radius: 50%;
+  background: rgb(245 241 234 / 0.12);
+  color: #f5f1ea;
+  cursor: pointer;
+}
+
+.viewer-close:hover {
+  background: rgb(245 241 234 / 0.24);
+}
+
 /* No poster: a gradient in the title's own hue, with its name. */
 .poster-empty {
   display: flex;
@@ -1500,6 +1653,12 @@ a.imdb:hover {
 
   .poster-empty span {
     font-size: 0.7rem;
+  }
+
+  .trailer-btn {
+    gap: 0.2rem;
+    padding: 0 0.25rem;
+    font-size: 0.74rem;
   }
 
   .card-head h3 {

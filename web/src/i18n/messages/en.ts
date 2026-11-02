@@ -166,6 +166,13 @@ const en = {
     guidance: "Parental guidance",
     imdbParents: "IMDb Parents Guide",
     watchTitle: " — watch {title}",
+    enlargePoster: "Show the {title} poster larger",
+    poster: "{title} poster",
+    trailer: "Trailer",
+    trailerOf: "{title} trailer",
+    loadingMedia: "Loading…",
+    watchOnYouTube: "Watch on YouTube",
+    close: "Close",
   },
   ago: {
     today: "today",

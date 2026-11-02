@@ -6,6 +6,7 @@ TMDB's free API is for non-commercial use with attribution (https://www.themovie
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from datetime import UTC, date, datetime
 from typing import Any
@@ -26,6 +27,11 @@ BASE_URL = "https://api.themoviedb.org/3"
 IMAGE_BASE = "https://image.tmdb.org/t/p/w342"
 SOURCE = "TMDB"
 PROVIDER_SOURCE = "TMDB (JustWatch)"
+
+# Languages the web app speaks; TMDB returns videos only in the languages asked for.
+TRAILER_LANGUAGES = ("es", "en", "pt")
+# A YouTube video id: it lands in an embed URL, so nothing else gets through.
+YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 
 # TMDB watch provider buckets -> how the family would get the title.
 _ACCESS = {
@@ -132,7 +138,8 @@ class TmdbClient:
         ratings = "release_dates" if media_type is MediaType.MOVIE else "content_ratings"
         return await self._get(
             f"/{media_type}/{tmdb_id}",
-            append_to_response=f"{ratings},external_ids,watch/providers",
+            append_to_response=f"{ratings},external_ids,watch/providers,videos",
+            include_video_language=",".join(TRAILER_LANGUAGES),
         )
 
 
@@ -201,7 +208,28 @@ def parse_title(media_type: MediaType, data: dict[str, Any]) -> Title:
         genres=genres,
         synopsis=data.get("overview") or "",
         poster_url=f"{IMAGE_BASE}{poster}" if poster else None,
+        trailers=parse_trailers(data),
     )
+
+
+def parse_trailers(data: dict[str, Any]) -> dict[str, str]:
+    """The best YouTube trailer per language from a details payload's videos: a trailer before a
+    teaser, an official video before a fan upload, then the newest."""
+    best: dict[str, tuple[tuple[int, int, str], str]] = {}
+    for video in (data.get("videos") or {}).get("results") or []:
+        lang, key, kind = video.get("iso_639_1"), video.get("key") or "", video.get("type")
+        if (
+            video.get("site") != "YouTube"
+            or lang not in TRAILER_LANGUAGES
+            or kind not in ("Trailer", "Teaser")
+            or not YOUTUBE_ID.fullmatch(key)
+        ):
+            continue
+        official = int(bool(video.get("official")))
+        rank = (int(kind == "Trailer"), official, video.get("published_at") or "")
+        if lang not in best or rank > best[lang][0]:
+            best[lang] = (rank, key)
+    return {lang: key for lang, (_, key) in best.items()}
 
 
 def parse_classifications(

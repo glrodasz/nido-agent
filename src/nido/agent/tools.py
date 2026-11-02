@@ -137,7 +137,8 @@ class Toolbox:
         self, media_type: MediaType, tmdb_id: int
     ) -> tuple[dict[str, Any], datetime]:
         tmdb, _ = self._clients()
-        key = f"tmdb:details:{media_type}:{tmdb_id}:{self._settings.language}"
+        # v2: payloads carry videos (trailers); older cached ones do not.
+        key = f"tmdb:details:v2:{media_type}:{tmdb_id}:{self._settings.language}"
         return await self._cached(key, DETAILS_TTL, lambda: tmdb.details(media_type, tmdb_id))
 
     async def _provider_ids(self, kind: MediaType, region: str) -> dict[str, list[int]]:
@@ -574,6 +575,7 @@ def _present(ranked: Ranked, regions: list[str]) -> dict[str, Any]:
         "genres": t.genres,
         "synopsis": t.synopsis,
         "poster_url": str(t.poster_url) if t.poster_url else None,
+        "trailers": t.trailers,
         "imdb": (
             {
                 "score": c.rating.score,
