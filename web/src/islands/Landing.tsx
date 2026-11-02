@@ -5,7 +5,7 @@ import Spinner from "./Spinner";
 // The page signed-out visitors see: what Nido does, then "Sign in with Google", in the page's
 // language (copy in src/i18n/landing.ts). The demo picks are examples, not live data.
 import { formatNumber, locale } from "../i18n";
-import { LANDING, type Scene } from "../i18n/landing";
+import { BLUEY_POSTER, LANDING, SPIRITED_AWAY_POSTER, posterUrl, type Scene } from "../i18n/landing";
 import { LanguageLinks } from "./LanguageMenu";
 
 const copy = () => LANDING[locale];
@@ -21,6 +21,17 @@ const RATINGS: [country: string, rating: string][] = [
   ["DK", "7"],
   ["FI", "7"],
 ];
+
+/** A demo poster: the TMDB image over a gradient placeholder that stays if the image fails. */
+function Poster({ gradient, img, label, small }: { gradient: string; img: string; label?: string; small?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span class={small ? "lp-poster lp-poster-sm" : "lp-poster"} style={{ background: `linear-gradient(160deg, ${gradient})` }}>
+      {label}
+      {!failed && <img src={posterUrl(img)} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />}
+    </span>
+  );
+}
 
 /** Renders our own copy's **bold** and *emphasis*; the text is ours, so no markdown parser is needed. */
 function rich(text: string) {
@@ -116,9 +127,7 @@ function DemoAnswer({ scene }: { scene: Scene }) {
       <div class="lp-picks">
         {scene.picks.map((p) => (
           <article class="lp-pick" key={p.title}>
-            <span class="lp-poster" style={{ background: `linear-gradient(160deg, ${p.poster})` }}>
-              {p.title}
-            </span>
+            <Poster gradient={p.poster} img={p.img} label={p.title} />
             <div class="lp-pick-body">
               <h3>{p.title}</h3>
               <p class="muted">
@@ -316,7 +325,7 @@ export default function Landing({
             </div>
             <div class="lp-vignette">
               <div class="lp-mini">
-                <span class="lp-poster lp-poster-sm" style={{ background: "linear-gradient(160deg, #8fb6c9, #2f6280)" }} />
+                <Poster small gradient="#8fb6c9, #2f6280" img={BLUEY_POSTER} />
                 <div>
                   <b>Bluey</b>
                   <span class="muted">{c.bluey}</span>
@@ -334,7 +343,7 @@ export default function Landing({
             </div>
             <div class="lp-vignette" aria-hidden="true">
               <div class="lp-mini">
-                <span class="lp-poster lp-poster-sm" style={{ background: "linear-gradient(160deg, #7fa7b8, #2c5466)" }} />
+                <Poster small gradient="#7fa7b8, #2c5466" img={SPIRITED_AWAY_POSTER} />
                 <div>
                   <b>{c.spirited}</b>
                   <span class="muted">{c.spiritedMeta}</span>

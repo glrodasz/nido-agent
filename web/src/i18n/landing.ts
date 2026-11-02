@@ -1,5 +1,5 @@
 // The landing page's copy in each language. **bold** and *emphasis* are rendered by Landing.tsx.
-// Demo picks are examples, not live data; titles use each language's release name.
+// Demo picks are examples, not live data (posters come from TMDB); titles use each language's release name.
 import type { Locale } from "./locale";
 
 export type Pick = {
@@ -12,8 +12,16 @@ export type Pick = {
   imdb: number;
   fit: boolean;
   why?: string;
+  /** Placeholder gradient, shown until (or instead of) the TMDB poster loads. */
   poster: string;
+  /** TMDB poster path, e.g. "/abc.jpg". */
+  img: string;
 };
+
+const POSTER_BASE = "https://image.tmdb.org/t/p/w185";
+export const posterUrl = (path: string) => POSTER_BASE + path;
+export const BLUEY_POSTER = "/9p4pNoGcuyCfHcGWKNrTopqMWtq.jpg";
+export const SPIRITED_AWAY_POSTER = "/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg";
 
 export type Scene = { chip: string; question: string; reply: string; picks: Pick[] };
 
@@ -35,8 +43,8 @@ const en = {
       reply:
         "Two you'll all enjoy. **WALL·E** is perfect for your 4-year-old; **The Mitchells vs. the Machines** is wilder and better watched together.",
       picks: [
-        { title: "WALL·E", year: "2008", kind: "movie", minutes: 98, genres: "Animation, Science Fiction", service: ["Disney+", "#113ccf"], imdb: 8.4, fit: true, poster: "#c9a46a, #6b4a2b" },
-        { title: "The Mitchells vs. the Machines", year: "2021", kind: "movie", minutes: 114, genres: "Animation, Comedy", service: ["Netflix", "#e50914"], imdb: 7.6, fit: false, why: "Rated 7+ and your child is 4", poster: "#b18be0, #4b2a86" },
+        { title: "WALL·E", year: "2008", kind: "movie", minutes: 98, genres: "Animation, Science Fiction", service: ["Disney+", "#113ccf"], imdb: 8.4, fit: true, poster: "#c9a46a, #6b4a2b", img: "/hbhFnRzzg6ZDmm8YAmxBnQpQIPh.jpg" },
+        { title: "The Mitchells vs. the Machines", year: "2021", kind: "movie", minutes: 114, genres: "Animation, Comedy", service: ["Netflix", "#e50914"], imdb: 7.6, fit: false, why: "Rated 7+ and your child is 4", poster: "#b18be0, #4b2a86", img: "/mI2Di7HmskQQ34kz0iau6J1vr70.jpg" },
       ],
     },
     {
@@ -45,8 +53,8 @@ const en = {
       reply:
         "**My Neighbor Totoro** is calm and beautiful for the little ones. **Shaun the Sheep Movie** has no dialogue and makes every age laugh.",
       picks: [
-        { title: "My Neighbor Totoro", year: "1988", kind: "movie", minutes: 86, genres: "Animation, Fantasy", service: ["HBO Max", "#5b2bd6"], imdb: 8.1, fit: true, poster: "#9cc79a, #3b6e47" },
-        { title: "Shaun the Sheep Movie", year: "2015", kind: "movie", minutes: 85, genres: "Animation, Comedy", service: ["Netflix", "#e50914"], imdb: 7.3, fit: true, why: "A few mildly tense moments", poster: "#d8c79a, #7b6a3a" },
+        { title: "My Neighbor Totoro", year: "1988", kind: "movie", minutes: 86, genres: "Animation, Fantasy", service: ["HBO Max", "#5b2bd6"], imdb: 8.1, fit: true, poster: "#9cc79a, #3b6e47", img: "/rtGDOeG9LzoerkDGZF9dnVeLppL.jpg" },
+        { title: "Shaun the Sheep Movie", year: "2015", kind: "movie", minutes: 85, genres: "Animation, Comedy", service: ["Netflix", "#e50914"], imdb: 7.3, fit: true, why: "A few mildly tense moments", poster: "#d8c79a, #7b6a3a", img: "/1GMvKNy2Ht5QwI0oV0ycYnxzWdC.jpg" },
       ],
     },
     {
@@ -55,16 +63,15 @@ const en = {
       reply:
         "**Bluey** is many parents' favourite: 7-minute episodes and lots of humour. **Puffin Rock** is calmer, ideal before bed.",
       picks: [
-        { title: "Bluey", year: "2018–", kind: "series", minutes: 7, genres: "Animation, Family", service: ["Disney+", "#113ccf"], imdb: 9.3, fit: true, poster: "#8fb6c9, #2f6280" },
-        { title: "Puffin Rock", year: "2015–2022", kind: "series", minutes: 7, genres: "Animation, Kids", service: ["Netflix", "#e50914"], imdb: 8.0, fit: true, poster: "#a6c9b8, #3f6f63" },
+        { title: "Bluey", year: "2018–", kind: "series", minutes: 7, genres: "Animation, Family", service: ["Disney+", "#113ccf"], imdb: 9.3, fit: true, poster: "#8fb6c9, #2f6280", img: "/9p4pNoGcuyCfHcGWKNrTopqMWtq.jpg" },
+        { title: "Puffin Rock", year: "2015–2022", kind: "series", minutes: 7, genres: "Animation, Kids", service: ["Netflix", "#e50914"], imdb: 8.0, fit: true, poster: "#a6c9b8, #3f6f63", img: "/8ZYTNkpubnG8epqlJLjaWbbO30R.jpg" },
       ],
     },
   ] as Scene[],
   marks: ["Seen", "We liked it", "Our kid liked it", "On repeat"],
   kicker: "For family movie night",
-  heroTitle: "Tired of not knowing what to watch, or what's *right* for your kids?",
-  heroLede:
-    "Nido searches the streaming services you already pay for and suggests movies and series **that suit your kids and that you'll enjoy too**. Tell it your child's age and what you'd rather avoid, and Nido does the rest.",
+  heroTitle: "What to watch as a family, *sorted*.",
+  heroLede: "Movies and series **right for your kids that you'll enjoy too**, on the streaming you already pay for.",
   signIn: "Sign in with Google",
   seeWhat: "See what Nido does",
   fine: "Free, with a daily search limit per family.",
@@ -147,8 +154,8 @@ const es: LandingCopy = {
       reply:
         "Dos que les van a gustar a todos. **WALL·E** es perfecta para tu hijo de 4; **Los Mitchell** es más alocada y conviene verla juntos.",
       picks: [
-        { title: "WALL·E", year: "2008", kind: "movie", minutes: 98, genres: "Animación, Ciencia ficción", service: ["Disney+", "#113ccf"], imdb: 8.4, fit: true, poster: "#c9a46a, #6b4a2b" },
-        { title: "Los Mitchell vs. las máquinas", year: "2021", kind: "movie", minutes: 114, genres: "Animación, Comedia", service: ["Netflix", "#e50914"], imdb: 7.6, fit: false, why: "Clasificada 7+ y tu hijo tiene 4", poster: "#b18be0, #4b2a86" },
+        { title: "WALL·E", year: "2008", kind: "movie", minutes: 98, genres: "Animación, Ciencia ficción", service: ["Disney+", "#113ccf"], imdb: 8.4, fit: true, poster: "#c9a46a, #6b4a2b", img: "/hbhFnRzzg6ZDmm8YAmxBnQpQIPh.jpg" },
+        { title: "Los Mitchell vs. las máquinas", year: "2021", kind: "movie", minutes: 114, genres: "Animación, Comedia", service: ["Netflix", "#e50914"], imdb: 7.6, fit: false, why: "Clasificada 7+ y tu hijo tiene 4", poster: "#b18be0, #4b2a86", img: "/mI2Di7HmskQQ34kz0iau6J1vr70.jpg" },
       ],
     },
     {
@@ -157,8 +164,8 @@ const es: LandingCopy = {
       reply:
         "**Mi vecino Totoro** es tranquila y hermosa para los más chiquitos. **Shaun, el cordero** no tiene diálogos y hace reír a cualquier edad.",
       picks: [
-        { title: "Mi vecino Totoro", year: "1988", kind: "movie", minutes: 86, genres: "Animación, Fantasía", service: ["HBO Max", "#5b2bd6"], imdb: 8.1, fit: true, poster: "#9cc79a, #3b6e47" },
-        { title: "Shaun, el cordero: La película", year: "2015", kind: "movie", minutes: 85, genres: "Animación, Comedia", service: ["Netflix", "#e50914"], imdb: 7.3, fit: true, why: "Algún momento de tensión leve", poster: "#d8c79a, #7b6a3a" },
+        { title: "Mi vecino Totoro", year: "1988", kind: "movie", minutes: 86, genres: "Animación, Fantasía", service: ["HBO Max", "#5b2bd6"], imdb: 8.1, fit: true, poster: "#9cc79a, #3b6e47", img: "/rtGDOeG9LzoerkDGZF9dnVeLppL.jpg" },
+        { title: "Shaun, el cordero: La película", year: "2015", kind: "movie", minutes: 85, genres: "Animación, Comedia", service: ["Netflix", "#e50914"], imdb: 7.3, fit: true, why: "Algún momento de tensión leve", poster: "#d8c79a, #7b6a3a", img: "/1GMvKNy2Ht5QwI0oV0ycYnxzWdC.jpg" },
       ],
     },
     {
@@ -167,16 +174,15 @@ const es: LandingCopy = {
       reply:
         "**Bluey** es la favorita de muchos padres: capítulos de 7 minutos y mucho humor. **Puffin Rock** es más calmada, ideal antes de dormir.",
       picks: [
-        { title: "Bluey", year: "2018–", kind: "series", minutes: 7, genres: "Animación, Familia", service: ["Disney+", "#113ccf"], imdb: 9.3, fit: true, poster: "#8fb6c9, #2f6280" },
-        { title: "Puffin Rock", year: "2015–2022", kind: "series", minutes: 7, genres: "Animación, Infantil", service: ["Netflix", "#e50914"], imdb: 8.0, fit: true, poster: "#a6c9b8, #3f6f63" },
+        { title: "Bluey", year: "2018–", kind: "series", minutes: 7, genres: "Animación, Familia", service: ["Disney+", "#113ccf"], imdb: 9.3, fit: true, poster: "#8fb6c9, #2f6280", img: "/9p4pNoGcuyCfHcGWKNrTopqMWtq.jpg" },
+        { title: "Puffin Rock", year: "2015–2022", kind: "series", minutes: 7, genres: "Animación, Infantil", service: ["Netflix", "#e50914"], imdb: 8.0, fit: true, poster: "#a6c9b8, #3f6f63", img: "/8ZYTNkpubnG8epqlJLjaWbbO30R.jpg" },
       ],
     },
   ],
   marks: ["Vista", "Nos gustó", "Le gustó a mi hijo", "Para repetir"],
   kicker: "Para ver en familia",
-  heroTitle: "¿Cansado de no saber qué ver, ni qué es *adecuado* para tus hijos?",
-  heroLede:
-    "Nido busca en los servicios de streaming que ya pagas y te propone películas y series **aptas para tus hijos y que también vas a disfrutar tú**. Le dices la edad de tu hijo y lo que prefieres evitar, y Nido hace el resto.",
+  heroTitle: "Qué ver en familia, *resuelto*.",
+  heroLede: "Películas y series **aptas para tus hijos que tú también vas a disfrutar**, en el streaming que ya pagas.",
   signIn: "Entrar con Google",
   seeWhat: "Ver qué hace Nido",
   fine: "Gratis, con un límite diario de búsquedas por familia.",
@@ -257,8 +263,8 @@ const pt: LandingCopy = {
       reply:
         "Dois que todos vão curtir. **WALL·E** é perfeito para o seu filho de 4; **A Família Mitchell** é mais maluco e vale ver juntos.",
       picks: [
-        { title: "WALL·E", year: "2008", kind: "movie", minutes: 98, genres: "Animação, Ficção científica", service: ["Disney+", "#113ccf"], imdb: 8.4, fit: true, poster: "#c9a46a, #6b4a2b" },
-        { title: "A Família Mitchell e a Revolta das Máquinas", year: "2021", kind: "movie", minutes: 114, genres: "Animação, Comédia", service: ["Netflix", "#e50914"], imdb: 7.6, fit: false, why: "Classificação 7+ e o seu filho tem 4", poster: "#b18be0, #4b2a86" },
+        { title: "WALL·E", year: "2008", kind: "movie", minutes: 98, genres: "Animação, Ficção científica", service: ["Disney+", "#113ccf"], imdb: 8.4, fit: true, poster: "#c9a46a, #6b4a2b", img: "/hbhFnRzzg6ZDmm8YAmxBnQpQIPh.jpg" },
+        { title: "A Família Mitchell e a Revolta das Máquinas", year: "2021", kind: "movie", minutes: 114, genres: "Animação, Comédia", service: ["Netflix", "#e50914"], imdb: 7.6, fit: false, why: "Classificação 7+ e o seu filho tem 4", poster: "#b18be0, #4b2a86", img: "/mI2Di7HmskQQ34kz0iau6J1vr70.jpg" },
       ],
     },
     {
@@ -267,8 +273,8 @@ const pt: LandingCopy = {
       reply:
         "**Meu Amigo Totoro** é tranquilo e lindo para os pequenos. **Shaun, o Carneiro** não tem diálogos e faz rir em qualquer idade.",
       picks: [
-        { title: "Meu Amigo Totoro", year: "1988", kind: "movie", minutes: 86, genres: "Animação, Fantasia", service: ["HBO Max", "#5b2bd6"], imdb: 8.1, fit: true, poster: "#9cc79a, #3b6e47" },
-        { title: "Shaun, o Carneiro: O Filme", year: "2015", kind: "movie", minutes: 85, genres: "Animação, Comédia", service: ["Netflix", "#e50914"], imdb: 7.3, fit: true, why: "Alguns momentos de leve tensão", poster: "#d8c79a, #7b6a3a" },
+        { title: "Meu Amigo Totoro", year: "1988", kind: "movie", minutes: 86, genres: "Animação, Fantasia", service: ["HBO Max", "#5b2bd6"], imdb: 8.1, fit: true, poster: "#9cc79a, #3b6e47", img: "/rtGDOeG9LzoerkDGZF9dnVeLppL.jpg" },
+        { title: "Shaun, o Carneiro: O Filme", year: "2015", kind: "movie", minutes: 85, genres: "Animação, Comédia", service: ["Netflix", "#e50914"], imdb: 7.3, fit: true, why: "Alguns momentos de leve tensão", poster: "#d8c79a, #7b6a3a", img: "/1GMvKNy2Ht5QwI0oV0ycYnxzWdC.jpg" },
       ],
     },
     {
@@ -277,16 +283,15 @@ const pt: LandingCopy = {
       reply:
         "**Bluey** é a favorita de muitos pais: episódios de 7 minutos e muito humor. **Puffin Rock** é mais calma, ideal antes de dormir.",
       picks: [
-        { title: "Bluey", year: "2018–", kind: "series", minutes: 7, genres: "Animação, Família", service: ["Disney+", "#113ccf"], imdb: 9.3, fit: true, poster: "#8fb6c9, #2f6280" },
-        { title: "Puffin Rock", year: "2015–2022", kind: "series", minutes: 7, genres: "Animação, Infantil", service: ["Netflix", "#e50914"], imdb: 8.0, fit: true, poster: "#a6c9b8, #3f6f63" },
+        { title: "Bluey", year: "2018–", kind: "series", minutes: 7, genres: "Animação, Família", service: ["Disney+", "#113ccf"], imdb: 9.3, fit: true, poster: "#8fb6c9, #2f6280", img: "/9p4pNoGcuyCfHcGWKNrTopqMWtq.jpg" },
+        { title: "Puffin Rock", year: "2015–2022", kind: "series", minutes: 7, genres: "Animação, Infantil", service: ["Netflix", "#e50914"], imdb: 8.0, fit: true, poster: "#a6c9b8, #3f6f63", img: "/8ZYTNkpubnG8epqlJLjaWbbO30R.jpg" },
       ],
     },
   ],
   marks: ["Visto", "Nós gostamos", "Meu filho gostou", "Para repetir"],
   kicker: "Para assistir em família",
-  heroTitle: "Cansado de não saber o que assistir, nem o que é *adequado* para os seus filhos?",
-  heroLede:
-    "O Nido busca nos serviços de streaming que você já assina e sugere filmes e séries **adequados para os seus filhos e que você também vai curtir**. Diga a idade do seu filho e o que prefere evitar, e o Nido faz o resto.",
+  heroTitle: "O que assistir em família, *resolvido*.",
+  heroLede: "Filmes e séries **adequados para os seus filhos que você também vai curtir**, no streaming que você já assina.",
   signIn: "Entrar com o Google",
   seeWhat: "Ver o que o Nido faz",
   fine: "Grátis, com um limite diário de buscas por família.",
