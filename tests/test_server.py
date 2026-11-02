@@ -701,3 +701,97 @@ def test_chat_answers_in_the_page_language_and_translates_the_cards():
     assert body["results"]["results"][0]["why"] == ["Incluida en tus suscripciones."]
     c.post("/api/chat", json={"message": "something fun"})
     assert runner.state_deltas[1]["language"] == "English"
+
+
+def _shortlist(kind: str, n: int) -> list[dict[str, Any]]:
+    return [{"title": f"{kind} {i}", "media_type": kind, "tmdb_id": i} for i in range(1, n + 1)]
+
+
+class DailyToolbox(FakeToolbox):
+    async def search(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(kwargs)
+        return {"regions": ["SE"], "results": _shortlist(kwargs["media_type"], 20)}
+
+
+def test_daily_picks_build_once_a_day_and_count_one_search():
+    c, toolbox = client(toolbox=DailyToolbox())
+    assert c.get("/api/daily").status_code == 409  # no profile yet
+    c.put("/api/profile", json=PROFILE)
+    first = c.get("/api/daily").json()
+    assert len(first["results"]) == 12
+    assert first["quota"]["used"] == 1  # one search for both types
+    kinds = {call["media_type"] for call in toolbox.calls}
+    assert kinds == {"movie", "tv"}
+    assert all(call["released_since"] == datetime.now(UTC).year - 5 for call in toolbox.calls)
+    # Movies and series take turns.
+    assert [r["media_type"] for r in first["results"][:4]] == ["movie", "tv", "movie", "tv"]
+    calls = len(toolbox.calls)
+    again = c.get("/api/daily").json()
+    assert len(toolbox.calls) == calls  # served from the cache
+    assert "quota" not in again
+    assert again["results"] == first["results"]
+    assert c.post("/api/search", json={}).json()["quota"]["used"] == 2
+
+
+def test_daily_picks_rebuild_when_the_profile_changes_not_for_a_nickname():
+    c, toolbox = client(toolbox=DailyToolbox())
+    c.put("/api/profile", json=PROFILE)
+    c.get("/api/daily")
+    calls = len(toolbox.calls)
+    c.put("/api/profile", json={**PROFILE, "children_names": ["Oldest", ""]})
+    c.get("/api/daily")
+    assert len(toolbox.calls) == calls
+    c.put("/api/profile", json={**PROFILE, "children_ages": [9, 4]})
+    rebuilt = c.get("/api/daily").json()
+    assert len(toolbox.calls) == calls + 2
+    assert rebuilt["quota"]["used"] == 2
+
+
+def test_daily_picks_drop_banned_and_seen_titles_without_a_rebuild():
+    c, toolbox = client(toolbox=DailyToolbox())
+    c.put("/api/profile", json=PROFILE)
+    first = c.get("/api/daily").json()["results"]
+    seen, banned = first[0], first[1]
+    c.put(
+        f"/api/titles/{seen['media_type']}/{seen['tmdb_id']}",
+        json={"name": seen["title"], "seen": True},
+    )
+    c.put(
+        f"/api/titles/{banned['media_type']}/{banned['tmdb_id']}",
+        json={"name": banned["title"], "ban": {"scope": "always"}},
+    )
+    calls = len(toolbox.calls)
+    later = c.get("/api/daily").json()["results"]
+    assert len(toolbox.calls) == calls
+    keys = {(r["media_type"], r["tmdb_id"]) for r in later}
+    assert (seen["media_type"], seen["tmdb_id"]) not in keys
+    assert (banned["media_type"], banned["tmdb_id"]) not in keys
+    assert len(later) == 12
+
+
+def test_daily_picks_rotate_by_day_and_fill_from_the_other_type():
+    from datetime import date
+
+    from nido.server import daily_picks
+
+    built = {"movie": _shortlist("movie", 20), "tv": _shortlist("tv", 20)}
+    monday = daily_picks(built, family="f", day=date(2026, 11, 2), skip=set())
+    assert monday == daily_picks(built, family="f", day=date(2026, 11, 2), skip=set())
+    assert monday != daily_picks(built, family="f", day=date(2026, 11, 3), skip=set())
+    few = daily_picks(
+        {"movie": _shortlist("movie", 20), "tv": _shortlist("tv", 2)},
+        family="f",
+        day=date(2026, 11, 2),
+        skip=set(),
+    )
+    assert len(few) == 12
+    assert sum(r["media_type"] == "tv" for r in few) == 2
+    assert daily_picks({}, family="f", day=date(2026, 11, 2), skip=set()) == []
+
+
+def test_daily_picks_stay_off_when_searches_run_out():
+    settings = Settings(store="memory", auth="none", max_searches_per_day=1)
+    c, _ = client(toolbox=DailyToolbox(), settings=settings)
+    c.put("/api/profile", json=PROFILE)
+    c.post("/api/search", json={})
+    assert c.get("/api/daily").status_code == 429
