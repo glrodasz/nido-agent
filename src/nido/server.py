@@ -26,11 +26,11 @@ answer 429, and below it they report `quota` ({used, limit}). A family whose own
 NIDO_ALLOWED_EMAILS has no limit (limit null) and still sees what it used.
 
 Today's picks (/api/daily) are one movie search and one series search with the profile's
-defaults, built at most once a day per family and profile, and every later load that day reads
-the store's cache. The day's first build is free: it counts against neither the search quota nor
-the usage the family sees. Only a rebuild the same day (the profile changed) counts as a search.
-Marks never rebuild it: banned and seen titles are dropped when the picks are served, and the day
-picks a different handful of the shortlist.
+defaults, built at most every 12 hours per family; every load in between reads the store's cache.
+Only time renews them: editing the profile does not, so the picks change at a natural pace. As
+they can only be built that often, they are free: they count against neither the search quota nor
+the usage the family sees. Marks never rebuild them either: banned and seen titles are dropped
+when the picks are served, and each build picks a different handful of the shortlist.
 
 Banned titles are left out of search and chat by code: the server hands their keys to the
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
@@ -49,8 +49,6 @@ evals/prompt_injection.py.
 """
 
 import asyncio
-import hashlib
-import json
 import logging
 import random
 import re
@@ -97,11 +95,10 @@ log = logging.getLogger(__name__)
 MAX_MESSAGE_CHARS = 2000
 
 
-# Today's picks: how many cards, how many years back they reach, and how long a build is kept
-# (a day past its own, like the quotas, so a late load near midnight still finds it).
+# Today's picks: how many cards, how many years back they reach, and how long a build is kept.
 DAILY_SIZE = 12
 DAILY_YEARS = 5
-DAILY_TTL = timedelta(days=2)
+DAILY_TTL = timedelta(hours=12)
 DAILY_KINDS = (MediaType.MOVIE, MediaType.TV)
 
 INVITE_TTL = timedelta(days=7)
@@ -340,29 +337,26 @@ def chat_cards(
     return {**base, "results": rest[:MAX_CARDS], "near_misses": named[:MAX_CARDS]}
 
 
-def daily_key(family: str, day: date, profile: FamilyProfile) -> str:
-    """Cache key of a family's picks for a day. It holds a digest of the profile fields the
-    search reads, so saving a different profile builds new picks; nicknames do not count."""
-    fields = profile.model_dump(mode="json", exclude={"children_names", "mood"})
-    digest = hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()[:16]
-    return f"daily:{family}:{day.isoformat()}:{digest}"
+def daily_key(family: str) -> str:
+    """Cache key of a family's picks. Only the family: a profile edit waits for the next build."""
+    return f"daily:{family}"
 
 
 def daily_picks(
     built: dict[str, list[dict[str, Any]]],
     *,
     family: str,
-    day: date,
+    built_at: datetime,
     skip: set[str],
     size: int = DAILY_SIZE,
 ) -> list[dict[str, Any]]:
     """Today's handful from each type's shortlist, movies and series taking turns.
 
     `built` holds each type's ranked shortlist. Titles in `skip` (banned or already seen) are
-    left out, so a mark shows on the next load without a rebuild. The same family and day always
-    pick the same titles; another day picks another handful, kept in ranking order and leaning
+    left out, so a mark shows on the next load without a rebuild. The same family and build always
+    pick the same titles; another build picks another handful, kept in ranking order and leaning
     to the top of the shortlist."""
-    rng = random.Random(f"{family}:{day.isoformat()}")
+    rng = random.Random(f"{family}:{built_at.isoformat()}")
     lists = []
     for kind in DAILY_KINDS:
         pool = [r for r in built.get(kind.value) or [] if _key(r) not in skip]
@@ -612,21 +606,16 @@ def create_app(
 
     @app.get("/api/daily")
     async def daily(family: Family, locale: PageLocale) -> dict[str, Any]:
-        """Today's picks for the whole family, built once a day per profile."""
+        """Today's picks for the whole family, built at most every 12 hours and free."""
         profile = await require_profile(family)
         today = datetime.now(UTC).date()
-        key = daily_key(family, today, profile)
+        key = daily_key(family)
         marks = await store.list_marks(family)
         hidden = hidden_keys(marks, profile)
-        quota = None
         hit = await store.cache_get(key, DAILY_TTL)
         if hit is not None:
-            built = hit.data
+            built, built_at = hit.data, hit.retrieved_at
         else:
-            # Each family gets the day's first build on the house; a rebuild counts as a search.
-            first = await store.take_quota(family, "daily", today, 1)
-            if first is None:
-                quota = await take_quota(family, "search", locale)
             found = await asyncio.gather(
                 *(
                     find(
@@ -646,9 +635,9 @@ def create_app(
                     for kind, output in zip(DAILY_KINDS, found, strict=True)
                 },
             }
-            await store.cache_put(key, built, DAILY_TTL)
+            built_at = await store.cache_put(key, built, DAILY_TTL)
         seen = {m.title.key for m in marks if m.seen}
-        picks = daily_picks(built, family=family, day=today, skip={*hidden, *seen})
+        picks = daily_picks(built, family=family, built_at=built_at, skip={*hidden, *seen})
         output = with_marks(
             {
                 "regions": built.get("regions") or profile.regions,
@@ -662,7 +651,6 @@ def create_app(
         return {
             **(localize_output(output, locale) or {}),
             "day": today.isoformat(),
-            **({"quota": quota} if quota else {}),
         }
 
     @app.post("/api/search")
