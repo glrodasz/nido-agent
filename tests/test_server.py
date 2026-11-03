@@ -713,13 +713,13 @@ class DailyToolbox(FakeToolbox):
         return {"regions": ["SE"], "results": _shortlist(kwargs["media_type"], 20)}
 
 
-def test_daily_picks_build_once_a_day_and_count_one_search():
+def test_daily_picks_build_once_and_are_free():
     c, toolbox = client(toolbox=DailyToolbox())
     assert c.get("/api/daily").status_code == 409  # no profile yet
     c.put("/api/profile", json=PROFILE)
     first = c.get("/api/daily").json()
     assert len(first["results"]) == 12
-    assert first["quota"]["used"] == 1  # one search for both types
+    assert "quota" not in first  # free, and not shown as used
     kinds = {call["media_type"] for call in toolbox.calls}
     assert kinds == {"movie", "tv"}
     assert all(call["released_since"] == datetime.now(UTC).year - 5 for call in toolbox.calls)
@@ -728,23 +728,37 @@ def test_daily_picks_build_once_a_day_and_count_one_search():
     calls = len(toolbox.calls)
     again = c.get("/api/daily").json()
     assert len(toolbox.calls) == calls  # served from the cache
-    assert "quota" not in again
     assert again["results"] == first["results"]
-    assert c.post("/api/search", json={}).json()["quota"]["used"] == 2
+    assert c.post("/api/search", json={}).json()["quota"]["used"] == 1
 
 
-def test_daily_picks_rebuild_when_the_profile_changes_not_for_a_nickname():
+def test_daily_picks_renew_with_time_not_with_profile_edits(monkeypatch):
+    import nido.store
+
     c, toolbox = client(toolbox=DailyToolbox())
     c.put("/api/profile", json=PROFILE)
     c.get("/api/daily")
     calls = len(toolbox.calls)
-    c.put("/api/profile", json={**PROFILE, "children_names": ["Oldest", ""]})
+    c.put("/api/profile", json={**PROFILE, "services": ["netflix"]})
     c.get("/api/daily")
-    assert len(toolbox.calls) == calls
+    assert len(toolbox.calls) == calls  # an edit keeps the current picks
+    later = datetime.now(UTC) + timedelta(hours=12, minutes=1)
+    monkeypatch.setattr(nido.store, "_now", lambda: later)
+    rebuilt = c.get("/api/daily").json()
+    assert len(toolbox.calls) == calls + 2  # 12 hours on, built again with the new profile
+    assert "quota" not in rebuilt
+
+
+def test_daily_picks_rebuild_at_once_when_the_ages_change():
+    c, toolbox = client(toolbox=DailyToolbox())
+    c.put("/api/profile", json=PROFILE)
+    c.get("/api/daily")
+    calls = len(toolbox.calls)
     c.put("/api/profile", json={**PROFILE, "children_ages": [9, 4]})
     rebuilt = c.get("/api/daily").json()
     assert len(toolbox.calls) == calls + 2
-    assert rebuilt["quota"]["used"] == 2
+    assert toolbox.calls[-1]["children_ages"] == [9, 4]
+    assert "quota" not in rebuilt  # still free
 
 
 def test_daily_picks_drop_banned_and_seen_titles_without_a_rebuild():
@@ -769,29 +783,28 @@ def test_daily_picks_drop_banned_and_seen_titles_without_a_rebuild():
     assert len(later) == 12
 
 
-def test_daily_picks_rotate_by_day_and_fill_from_the_other_type():
-    from datetime import date
-
+def test_daily_picks_rotate_by_build_and_fill_from_the_other_type():
     from nido.server import daily_picks
 
+    morning, evening = datetime(2026, 11, 2, 8, tzinfo=UTC), datetime(2026, 11, 2, 20, tzinfo=UTC)
     built = {"movie": _shortlist("movie", 20), "tv": _shortlist("tv", 20)}
-    monday = daily_picks(built, family="f", day=date(2026, 11, 2), skip=set())
-    assert monday == daily_picks(built, family="f", day=date(2026, 11, 2), skip=set())
-    assert monday != daily_picks(built, family="f", day=date(2026, 11, 3), skip=set())
+    first = daily_picks(built, family="f", built_at=morning, skip=set())
+    assert first == daily_picks(built, family="f", built_at=morning, skip=set())
+    assert first != daily_picks(built, family="f", built_at=evening, skip=set())
     few = daily_picks(
         {"movie": _shortlist("movie", 20), "tv": _shortlist("tv", 2)},
         family="f",
-        day=date(2026, 11, 2),
+        built_at=morning,
         skip=set(),
     )
     assert len(few) == 12
     assert sum(r["media_type"] == "tv" for r in few) == 2
-    assert daily_picks({}, family="f", day=date(2026, 11, 2), skip=set()) == []
+    assert daily_picks({}, family="f", built_at=morning, skip=set()) == []
 
 
-def test_daily_picks_stay_off_when_searches_run_out():
+def test_daily_picks_are_an_extra_search_on_top_of_the_quota():
     settings = Settings(store="memory", auth="none", max_searches_per_day=1)
     c, _ = client(toolbox=DailyToolbox(), settings=settings)
     c.put("/api/profile", json=PROFILE)
-    c.post("/api/search", json={})
-    assert c.get("/api/daily").status_code == 429
+    assert c.post("/api/search", json={}).status_code == 200
+    assert len(c.get("/api/daily").json()["results"]) == 12  # still free with no searches left
