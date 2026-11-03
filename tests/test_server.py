@@ -739,15 +739,26 @@ def test_daily_picks_renew_with_time_not_with_profile_edits(monkeypatch):
     c.put("/api/profile", json=PROFILE)
     c.get("/api/daily")
     calls = len(toolbox.calls)
-    c.put("/api/profile", json={**PROFILE, "children_ages": [9, 4]})
+    c.put("/api/profile", json={**PROFILE, "services": ["netflix"]})
     c.get("/api/daily")
     assert len(toolbox.calls) == calls  # an edit keeps the current picks
     later = datetime.now(UTC) + timedelta(hours=12, minutes=1)
     monkeypatch.setattr(nido.store, "_now", lambda: later)
     rebuilt = c.get("/api/daily").json()
     assert len(toolbox.calls) == calls + 2  # 12 hours on, built again with the new profile
-    assert toolbox.calls[-1]["children_ages"] == [9, 4]
     assert "quota" not in rebuilt
+
+
+def test_daily_picks_rebuild_at_once_when_the_ages_change():
+    c, toolbox = client(toolbox=DailyToolbox())
+    c.put("/api/profile", json=PROFILE)
+    c.get("/api/daily")
+    calls = len(toolbox.calls)
+    c.put("/api/profile", json={**PROFILE, "children_ages": [9, 4]})
+    rebuilt = c.get("/api/daily").json()
+    assert len(toolbox.calls) == calls + 2
+    assert toolbox.calls[-1]["children_ages"] == [9, 4]
+    assert "quota" not in rebuilt  # still free
 
 
 def test_daily_picks_drop_banned_and_seen_titles_without_a_rebuild():

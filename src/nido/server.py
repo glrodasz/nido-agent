@@ -27,10 +27,11 @@ NIDO_ALLOWED_EMAILS has no limit (limit null) and still sees what it used.
 
 Today's picks (/api/daily) are one movie search and one series search with the profile's
 defaults, built at most every 12 hours per family; every load in between reads the store's cache.
-Only time renews them: editing the profile does not, so the picks change at a natural pace. As
-they can only be built that often, they are free: they count against neither the search quota nor
-the usage the family sees. Marks never rebuild them either: banned and seen titles are dropped
-when the picks are served, and each build picks a different handful of the shortlist.
+Time renews them, and so does a change in the children's ages (picks made for an older child must
+not wait); other profile edits wait for the next build, so the picks change at a natural pace. As
+they are built that rarely, they are free: they count against neither the search quota nor the
+usage the family sees. Marks never rebuild them: banned and seen titles are dropped when the picks
+are served, and each build picks a different handful of the shortlist.
 
 Banned titles are left out of search and chat by code: the server hands their keys to the
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
@@ -337,9 +338,11 @@ def chat_cards(
     return {**base, "results": rest[:MAX_CARDS], "near_misses": named[:MAX_CARDS]}
 
 
-def daily_key(family: str) -> str:
-    """Cache key of a family's picks. Only the family: a profile edit waits for the next build."""
-    return f"daily:{family}"
+def daily_key(family: str, profile: FamilyProfile) -> str:
+    """Cache key of a family's picks. Other profile edits wait for the next build, but the
+    children's ages are in it: picks made for an older child must not wait 12 hours."""
+    ages = "-".join(str(a) for a in sorted(profile.children_ages))
+    return f"daily:{family}:{ages}"
 
 
 def daily_picks(
@@ -609,7 +612,7 @@ def create_app(
         """Today's picks for the whole family, built at most every 12 hours and free."""
         profile = await require_profile(family)
         today = datetime.now(UTC).date()
-        key = daily_key(family)
+        key = daily_key(family, profile)
         marks = await store.list_marks(family)
         hidden = hidden_keys(marks, profile)
         hit = await store.cache_get(key, DAILY_TTL)
