@@ -26,9 +26,11 @@ answer 429, and below it they report `quota` ({used, limit}). A family whose own
 NIDO_ALLOWED_EMAILS has no limit (limit null) and still sees what it used.
 
 Today's picks (/api/daily) are one movie search and one series search with the profile's
-defaults, built at most once a day per family and profile: the build counts as one search, and
-every later load that day reads the store's cache. Marks never rebuild it: banned and seen titles
-are dropped when the picks are served, and the day picks a different handful of the shortlist.
+defaults, built at most once a day per family and profile, and every later load that day reads
+the store's cache. The day's first build is free: it counts against neither the search quota nor
+the usage the family sees. Only a rebuild the same day (the profile changed) counts as a search.
+Marks never rebuild it: banned and seen titles are dropped when the picks are served, and the day
+picks a different handful of the shortlist.
 
 Banned titles are left out of search and chat by code: the server hands their keys to the
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
@@ -621,7 +623,10 @@ def create_app(
         if hit is not None:
             built = hit.data
         else:
-            quota = await take_quota(family, "search", locale)
+            # Each family gets the day's first build on the house; a rebuild counts as a search.
+            first = await store.take_quota(family, "daily", today, 1)
+            if first is None:
+                quota = await take_quota(family, "search", locale)
             found = await asyncio.gather(
                 *(
                     find(

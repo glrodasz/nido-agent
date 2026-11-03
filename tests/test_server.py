@@ -713,13 +713,13 @@ class DailyToolbox(FakeToolbox):
         return {"regions": ["SE"], "results": _shortlist(kwargs["media_type"], 20)}
 
 
-def test_daily_picks_build_once_a_day_and_count_one_search():
+def test_daily_picks_build_once_a_day_for_free():
     c, toolbox = client(toolbox=DailyToolbox())
     assert c.get("/api/daily").status_code == 409  # no profile yet
     c.put("/api/profile", json=PROFILE)
     first = c.get("/api/daily").json()
     assert len(first["results"]) == 12
-    assert first["quota"]["used"] == 1  # one search for both types
+    assert "quota" not in first  # the day's first build is free and not shown as used
     kinds = {call["media_type"] for call in toolbox.calls}
     assert kinds == {"movie", "tv"}
     assert all(call["released_since"] == datetime.now(UTC).year - 5 for call in toolbox.calls)
@@ -730,7 +730,7 @@ def test_daily_picks_build_once_a_day_and_count_one_search():
     assert len(toolbox.calls) == calls  # served from the cache
     assert "quota" not in again
     assert again["results"] == first["results"]
-    assert c.post("/api/search", json={}).json()["quota"]["used"] == 2
+    assert c.post("/api/search", json={}).json()["quota"]["used"] == 1
 
 
 def test_daily_picks_rebuild_when_the_profile_changes_not_for_a_nickname():
@@ -744,7 +744,7 @@ def test_daily_picks_rebuild_when_the_profile_changes_not_for_a_nickname():
     c.put("/api/profile", json={**PROFILE, "children_ages": [9, 4]})
     rebuilt = c.get("/api/daily").json()
     assert len(toolbox.calls) == calls + 2
-    assert rebuilt["quota"]["used"] == 2
+    assert rebuilt["quota"]["used"] == 1  # only a same-day rebuild counts
 
 
 def test_daily_picks_drop_banned_and_seen_titles_without_a_rebuild():
@@ -789,9 +789,11 @@ def test_daily_picks_rotate_by_day_and_fill_from_the_other_type():
     assert daily_picks({}, family="f", day=date(2026, 11, 2), skip=set()) == []
 
 
-def test_daily_picks_stay_off_when_searches_run_out():
+def test_daily_picks_are_an_extra_search_on_top_of_the_quota():
     settings = Settings(store="memory", auth="none", max_searches_per_day=1)
     c, _ = client(toolbox=DailyToolbox(), settings=settings)
     c.put("/api/profile", json=PROFILE)
-    c.post("/api/search", json={})
-    assert c.get("/api/daily").status_code == 429
+    assert c.post("/api/search", json={}).status_code == 200
+    assert len(c.get("/api/daily").json()["results"]) == 12  # still free with no searches left
+    c.put("/api/profile", json={**PROFILE, "children_ages": [9, 4]})
+    assert c.get("/api/daily").status_code == 429  # a rebuild needs a search
