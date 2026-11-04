@@ -228,3 +228,41 @@ def test_every_offered_genre_resolves_for_its_media_type():
     for genre in [*_BOTH, "Kids", "Reality"]:
         assert resolve_genres([genre], _TMDB_TV_GENRES), genre
     assert resolve_genres(["Action"], _TMDB_TV_GENRES) == {"Action & Adventure": 10759}
+
+
+def _video(lang, key, kind="Trailer", official=True, published="2024-01-01", site="YouTube"):
+    return {
+        "iso_639_1": lang,
+        "key": key,
+        "type": kind,
+        "official": official,
+        "published_at": published,
+        "site": site,
+    }
+
+
+def test_trailers_pick_the_best_youtube_trailer_per_language():
+    data = {
+        **MOVIE,
+        "videos": {
+            "results": [
+                _video("en", "teaserAAAAA", kind="Teaser"),
+                _video("en", "trailerBBBB"),
+                _video("en", "fanCCCCCCCC", official=False, published="2025-01-01"),
+                _video("es", "spanishDDDD", published="2023-01-01"),
+                _video("es", "spanishEEEE", published="2024-06-01"),
+                _video("pt", "vimeoFFFFFF", site="Vimeo"),
+                _video("de", "germanGGGGG"),
+                _video("en", "featurette1", kind="Featurette"),
+                _video("pt", "bad key!"),
+            ]
+        },
+    }
+    assert parse_title(MediaType.MOVIE, data).trailers == {
+        "en": "trailerBBBB",
+        "es": "spanishEEEE",
+    }
+
+
+def test_no_videos_means_no_trailers():
+    assert parse_title(MediaType.MOVIE, MOVIE).trailers == {}

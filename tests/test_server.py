@@ -428,9 +428,9 @@ async def test_toolbox_serves_details_from_cache_with_original_retrieval_time():
     data, first = await toolbox._details(MediaType.MOVIE, 7)
     data2, second = await toolbox._details(MediaType.MOVIE, 7)
     assert fetched == [7] and data == data2 and first == second
-    hit = await store.cache_get("tmdb:details:movie:7:en-US", timedelta(days=1))
+    hit = await store.cache_get("tmdb:details:v2:movie:7:en-US", timedelta(days=1))
     assert hit is not None
-    assert await store.cache_get("tmdb:details:movie:7:en-US", timedelta(0)) is None
+    assert await store.cache_get("tmdb:details:v2:movie:7:en-US", timedelta(0)) is None
 
 
 def put_mark(c: TestClient, tmdb_id: int = 1, **fields: Any) -> dict[str, Any]:

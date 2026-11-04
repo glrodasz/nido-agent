@@ -167,6 +167,13 @@ const es: Messages = {
     guidance: "Guía para padres",
     imdbParents: "Guía para padres de IMDb",
     watchTitle: " — ver {title}",
+    enlargePoster: "Ver el póster de {title} en grande",
+    poster: "Póster de {title}",
+    trailer: "Tráiler",
+    trailerOf: "Tráiler de {title}",
+    loadingMedia: "Cargando…",
+    watchOnYouTube: "Ver en YouTube",
+    close: "Cerrar",
   },
   ago: {
     today: "hoy",

@@ -1,5 +1,5 @@
 import { useId, useState } from "preact/hooks";
-import { fmt, formatNumber, genreLabel, t } from "../i18n";
+import { fmt, formatNumber, genreLabel, locale, t } from "../i18n";
 import {
   accessLabel,
   formatVotes,
@@ -7,6 +7,7 @@ import {
   posterHue,
   serviceBrand,
   sortOffers,
+  trailerFor,
   verdictFor,
   verifiedAgo,
   yearSpan,
@@ -14,6 +15,7 @@ import {
 import type { ComponentChildren } from "preact";
 import type { MarkChange, Offer, TitleMark, TitleResult } from "../logic/types";
 import Icon from "./Icon";
+import MediaViewer, { type Media } from "./MediaViewer";
 import Spinner from "./Spinner";
 import TitleMarks from "./TitleMarks";
 
@@ -63,6 +65,8 @@ export default function TitleCard({
 }: Props) {
   const [posterFailed, setPosterFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [media, setMedia] = useState<Media | null>(null);
+  const trailer = trailerFor(result.trailers, locale);
   const headingId = useId();
   const sorted = sortOffers(result.where_to_watch, services);
   const included = sorted.filter((o) => isIncluded(o, services));
@@ -86,18 +90,36 @@ export default function TitleCard({
     <article class="card" aria-labelledby={headingId}>
       <div class="card-poster">
         {result.poster_url && !posterFailed ? (
-          <img
-            src={result.poster_url}
-            alt=""
-            loading="lazy"
-            width={120}
-            height={180}
-            onError={() => setPosterFailed(true)}
-          />
+          <button
+            type="button"
+            class="poster-btn"
+            onClick={() => result.poster_url && setMedia({ kind: "poster", url: result.poster_url })}
+          >
+            <img
+              src={result.poster_url}
+              alt=""
+              loading="lazy"
+              width={120}
+              height={180}
+              onError={() => setPosterFailed(true)}
+            />
+            <span class="sr-only">{fmt(t.card.enlargePoster, { title: result.title })}</span>
+          </button>
         ) : (
           <div class="poster-empty" style={{ "--hue": posterHue(result.tmdb_id) }} aria-hidden="true">
             <span>{result.title}</span>
           </div>
+        )}
+        {trailer && (
+          <button
+            type="button"
+            class="trailer-btn"
+            onClick={() => setMedia({ kind: "trailer", youtubeId: trailer })}
+          >
+            <Icon name="play" filled />
+            {t.card.trailer}
+            <span class="sr-only"> — {result.title}</span>
+          </button>
         )}
       </div>
       <div class="card-body">
@@ -267,6 +289,7 @@ export default function TitleCard({
         </details>
         {footer && <div class="card-foot">{footer}</div>}
       </div>
+      {media && <MediaViewer media={media} title={result.title} onClose={() => setMedia(null)} />}
     </article>
   );
 }
