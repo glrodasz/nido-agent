@@ -19,7 +19,7 @@ The genres Nido offers (profile "Favourite genres" and the Find filters) live in
 
 ## Languages
 
-Nido speaks Spanish (default, served at `/`), English (`/en`) and Portuguese (`/pt`). The page
+Nido speaks English (default, served at `/`), Spanish (`/es`) and Portuguese (`/pt`). The page
 URL decides the language; `web/src/i18n/locale.ts` holds the rules (saved `locale` cookie, then
 the browser's languages, for an unprefixed first visit).
 

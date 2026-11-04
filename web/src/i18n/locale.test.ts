@@ -15,38 +15,40 @@ import { MESSAGES } from "./index";
 const redirect = (pathname: string, savedLocale: string | null, header: string) =>
   resolveLocaleRedirect({ pathname, savedLocale, languages: parseAcceptLanguage(header) });
 
-describe("resolveLocaleRedirect (Spanish is the unprefixed default)", () => {
+describe("resolveLocaleRedirect (English is the unprefixed default)", () => {
   it.each([
-    ["/", null, "en-US", "/en"],
+    ["/", null, "es-ES", "/es"],
     ["/", null, "pt-BR, en;q=0.8", "/pt"],
-    ["/", null, "sv, pt;q=0.8", "/pt"],
-    ["/", null, "es-ES, en", null],
+    ["/", null, "sv, es;q=0.8", "/es"],
+    ["/", null, "en-US, es", null],
     ["/", null, "sv", null],
-    ["/", "en", "es-ES", "/en"],
-    ["/", "es", "en-US", null],
-    ["/en", "pt", "pt", null],
+    ["/", "es", "en-US", "/es"],
+    ["/", "en", "es-ES", null],
+    ["/es", "en", "en", null],
     ["/pt", "es", "es", null],
-    ["/api/search", "en", "en", null],
-    ["/__/auth/handler", "en", "en", null],
-    ["/apis", null, "en", "/en/apis"],
+    ["/api/search", "es", "es", null],
+    ["/__/auth/handler", "es", "es", null],
+    ["/apis", null, "es", "/es/apis"],
     ["/", "garbage", "pt", "/pt"],
   ])("%s with cookie %s and %s → %s", (path, cookie, header, expected) => {
     expect(redirect(path, cookie, header)).toBe(expected);
   });
 
   it("round-trips paths between languages", () => {
-    expect(localizePath("/en", "es")).toBe("/");
+    expect(localizePath("/es", "en")).toBe("/");
     expect(localizePath("/", "pt")).toBe("/pt");
-    expect(switchLocalePath("/pt", "en")).toBe("/en");
+    expect(switchLocalePath("/pt", "es")).toBe("/es");
+    expect(switchLocalePath("/es", "en")).toBe("/");
     expect(pageLocale("/pt")).toBe("pt");
-    expect(pageLocale("/")).toBe("es");
+    expect(pageLocale("/")).toBe("en");
+    expect(pageLocale("/en")).toBe("en");
     expect(negotiateLocale(["fr", "pt-PT"])).toBe("pt");
   });
 
   it("lists every language plus x-default", () => {
     expect(alternateLinks("/", "https://nido.example").map((l) => `${l.hreflang} ${l.href}`)).toEqual([
-      "es https://nido.example/",
-      "en https://nido.example/en",
+      "en https://nido.example/",
+      "es https://nido.example/es",
       "pt https://nido.example/pt",
       "x-default https://nido.example/",
     ]);
@@ -74,9 +76,9 @@ describe("boot script", () => {
   });
 
   it("follows the saved choice and leaves prefixed pages alone", () => {
-    expect(boot("/", "locale=es", ["en-US"])).toEqual([]);
-    expect(boot("/", "theme=x; locale=en", ["es"])).toEqual(["/en?invite=abc"]);
-    expect(boot("/en", "locale=pt", ["pt"])).toEqual([]);
+    expect(boot("/", "locale=en", ["es-ES"])).toEqual([]);
+    expect(boot("/", "theme=x; locale=es", ["en"])).toEqual(["/es?invite=abc"]);
+    expect(boot("/es", "locale=pt", ["pt"])).toEqual([]);
   });
 });
 
