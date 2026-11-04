@@ -13,7 +13,8 @@ const { title, description, socialTitle, ogAlt } = MESSAGES[locale].meta;
 const site = Astro.site ?? Astro.url;
 const url = new URL(localizePath("/", locale), site);
 const alternates = alternateLinks("/", site.origin);
-const ogImage = new URL("/og/nido-og.png", Astro.site);
+// One share card per language (public/og/nido-og-<locale>.png): crawlers read these tags, not JS.
+const ogImage = new URL(`/og/nido-og-${locale}.png`, site);
 const canonicalScript = `try{var t=(${canonicalRedirect})(location.href,${JSON.stringify(
   new URL(Astro.site ?? Astro.url).origin,
 )});if(t)location.replace(t)}catch(e){}`;

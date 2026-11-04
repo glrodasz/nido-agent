@@ -14,7 +14,7 @@
 
 [**Live app**](https://nido-agent.web.app) · [How it works](#how-it-works) · [Architecture](#architecture) · [Quick start](#quick-start) · [Deploy](docs/SETUP.md)
 
-<img src="web/public/og/nido-og.png" alt="Nido: What should we watch tonight? Family picks the grown-ups will enjoy too, on the services you already pay for. Age-checked, well rated, where to stream." width="860">
+<img src="web/public/og/nido-og-en.png" alt="Nido: What should we watch tonight? Family picks the grown-ups will enjoy too, on the services you already pay for. Age-checked, well rated, where to stream." width="860">
 
 ## Why
 

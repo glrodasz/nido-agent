@@ -4,6 +4,10 @@
     "cleanUrls": true,
     "trailingSlash": false,
     "ignore": ["**/.*"],
+    "redirects": [
+      { "source": "/en", "destination": "/", "type": 301 },
+      { "source": "/en/**", "destination": "/", "type": 301 }
+    ],
     "rewrites": [
       {
         "source": "/api/**",

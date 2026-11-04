@@ -1,20 +1,20 @@
-// Which language a page renders in, and where a first visit lands. Spanish is the default and has
-// no prefix (/); English and Portuguese live under /en and /pt. The URL decides what a page shows;
+// Which language a page renders in, and where a first visit lands. English is the default and has
+// no prefix (/); Spanish and Portuguese live under /es and /pt. The URL decides what a page shows;
 // the saved choice (the `locale` cookie) and then the browser's languages only decide where an
 // unprefixed visit goes. No imports: Base.astro inlines these functions as the boot script.
 
 // ── App config ─────────────────────────────────────────────────────────────
-export const LOCALES = ["es", "en", "pt"] as const;
+export const LOCALES = ["en", "es", "pt"] as const;
 export type Locale = (typeof LOCALES)[number];
-export const DEFAULT_LOCALE: Locale = "es";
+export const DEFAULT_LOCALE: Locale = "en";
 export const LOCALE_COOKIE = "locale";
 /** Registrable domain shared by sibling apps; undefined = host-only cookie. */
 export const COOKIE_DOMAIN: string | undefined = undefined;
 /** Never auto-redirected (segment-boundary match): the API and Firebase's reserved paths. */
 export const EXEMPT_PATHS = ["/api", "/__"];
 
-export const LANGUAGE_NAMES: Record<Locale, string> = { es: "Español", en: "English", pt: "Português" };
-export const OG_LOCALES: Record<Locale, string> = { es: "es_LA", en: "en_US", pt: "pt_BR" };
+export const LANGUAGE_NAMES: Record<Locale, string> = { en: "English", es: "Español", pt: "Português" };
+export const OG_LOCALES: Record<Locale, string> = { en: "en_US", es: "es_LA", pt: "pt_BR" };
 /** BCP 47 tags for Intl formatting. Plain "es" keeps the decimal comma ("8,4") the landing uses. */
 export const INTL_LOCALES: Record<Locale, string> = { es: "es", en: "en-US", pt: "pt-BR" };
 
