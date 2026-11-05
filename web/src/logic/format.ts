@@ -42,7 +42,23 @@ export function serviceBrand(service: string | null): { bg: string; fg: string }
   return (service && BRAND[service]) || null;
 }
 
-/** Offers the family already pays for first, then the rest; one row per provider and access. */
+// Which of the family's services the card leads with when a title is on several of them.
+export const SERVICE_PRIORITY = ["netflix", "disney_plus", "prime_video", "hbo_max", "apple_tv_plus"];
+
+// Short names for the buttons; TMDB's provider names run long ("Amazon Prime Video").
+const SERVICE_NAMES: Record<string, string> = {
+  netflix: "Netflix",
+  disney_plus: "Disney+",
+  hbo_max: "HBO Max",
+  prime_video: "Prime Video",
+  apple_tv_plus: "Apple TV+",
+};
+
+export function serviceName(offer: Offer): string {
+  return (offer.service && SERVICE_NAMES[offer.service]) || offer.provider;
+}
+
+/** Offers the family already pays for first (in SERVICE_PRIORITY order), then the rest; one row per provider and access. */
 export function sortOffers(offers: Offer[], services: string[]): Offer[] {
   const seen = new Set<string>();
   const unique = offers.filter((o) => {
@@ -52,7 +68,13 @@ export function sortOffers(offers: Offer[], services: string[]): Offer[] {
     return true;
   });
   const rank = (o: Offer) => (isIncluded(o, services) ? 0 : o.access === "addon" ? 1 : 2);
-  return unique.sort((a, b) => rank(a) - rank(b) || a.provider.localeCompare(b.provider));
+  const priority = (o: Offer) => {
+    const i = isIncluded(o, services) ? SERVICE_PRIORITY.indexOf(o.service ?? "") : -1;
+    return i === -1 ? SERVICE_PRIORITY.length : i;
+  };
+  return unique.sort(
+    (a, b) => rank(a) - rank(b) || priority(a) - priority(b) || a.provider.localeCompare(b.provider),
+  );
 }
 
 export function categoryLabel(category: string): string {

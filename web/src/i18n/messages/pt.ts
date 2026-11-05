@@ -150,6 +150,7 @@ const pt: Messages = {
     save: "Salvar",
     noOffers: "Não encontrado em streaming",
     noImdb: "Sem nota no IMDb",
+    moreServices: "Outros serviços",
     votesM: "{n} mi votos",
     votesK: "{n} mil votos",
     votes: "{n} votos",
