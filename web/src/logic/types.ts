@@ -34,7 +34,11 @@ export interface Classification {
 }
 
 export interface TitleResult {
+  // In the page's language, English where TMDB has no translation.
   title: string;
+  // The original (or English) title, shown small under `title` when it differs; missing on
+  // cards built before titles were translated.
+  original_title?: string | null;
   media_type: MediaType;
   tmdb_id: number;
   imdb_id: string | null;

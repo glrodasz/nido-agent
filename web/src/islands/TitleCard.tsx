@@ -154,6 +154,11 @@ export default function TitleCard({
         <header class="card-head">
           <div>
             <h3 id={headingId}>{result.title}</h3>
+            {result.original_title && (
+              <p class="original-title" lang="">
+                {result.original_title}
+              </p>
+            )}
             <p class="muted">{meta.join(" · ")}</p>
           </div>
           {saveButton("save-wide")}

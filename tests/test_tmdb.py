@@ -266,3 +266,88 @@ def test_trailers_pick_the_best_youtube_trailer_per_language():
 
 def test_no_videos_means_no_trailers():
     assert parse_title(MediaType.MOVIE, MOVIE).trailers == {}
+
+
+def _translation(lang: str, country: str, **data: str) -> dict:
+    return {"iso_639_1": lang, "iso_3166_1": country, "data": data}
+
+
+TOTORO = {
+    **MOVIE,
+    "title": "My Neighbor Totoro",
+    "original_title": "となりのトトロ",
+    "overview": "Two sisters move to the country.",
+    "translations": {
+        "translations": [
+            _translation("es", "ES", title="Mi vecino Totoro", overview="Dos hermanas (ES)."),
+            _translation("es", "MX", title="Mi vecino Totoro", overview="Dos hermanas (MX)."),
+            _translation("pt", "PT", title="O Meu Vizinho Totoro", overview="Duas irmãs (PT)."),
+            _translation("pt", "BR", title="Meu Amigo Totoro", overview=""),
+        ]
+    },
+}
+
+
+def test_translations_prefer_latin_american_spanish_and_brazilian_portuguese():
+    title = parse_title(MediaType.MOVIE, TOTORO)
+    assert title.translations["es"].synopsis == "Dos hermanas (MX)."
+    assert title.translations["pt"].name == "Meu Amigo Totoro"
+    # Brazil has no synopsis: Portugal's fills it before English does.
+    assert title.translations["pt"].synopsis == "Duas irmãs (PT)."
+
+
+def test_a_blank_name_keeps_the_original_instead_of_another_countrys():
+    data = {
+        **MOVIE,
+        "title": "Zootopia 2",
+        "translations": {
+            "translations": [
+                _translation("es", "ES", title="Zootrópolis 2", overview="Judy (ES)."),
+                _translation("es", "MX", title="", overview="Judy (MX)."),
+            ]
+        },
+    }
+    title = parse_title(MediaType.MOVIE, data)
+    assert title.text("es") == ("Zootopia 2", "Judy (MX).", None)
+
+
+def test_text_falls_back_to_english_and_shows_a_readable_original_title():
+    title = parse_title(MediaType.MOVIE, TOTORO)
+    # A Japanese original gives way to the English name under the Spanish one.
+    assert title.text("es") == ("Mi vecino Totoro", "Dos hermanas (MX).", "My Neighbor Totoro")
+    # In English the name is the English one; the Japanese original is not shown.
+    assert title.text("en") == ("My Neighbor Totoro", "Two sisters move to the country.", None)
+    french = parse_title(
+        MediaType.MOVIE,
+        {**MOVIE, "title": "The Little Prince", "original_title": "Le Petit Prince"},
+    )
+    assert french.text("en") == ("The Little Prince", "A bear.", "Le Petit Prince")
+    # No translation at all: English name and synopsis, no subtitle for the same name.
+    assert parse_title(MediaType.MOVIE, {**MOVIE, "original_title": "Paddington 2"}).text("es") == (
+        "Paddington 2",
+        "A bear.",
+        None,
+    )
+
+
+@respx.mock
+async def test_details_keep_only_the_app_languages_translations():
+    respx.get(f"{BASE_URL}/movie/1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                **MOVIE,
+                "translations": {
+                    "translations": [
+                        _translation("es", "MX", title="Paddington 2"),
+                        _translation("de", "DE", title="Paddington 2"),
+                    ]
+                },
+            },
+        )
+    )
+    client = TmdbClient("token")
+    data = await client.details(MediaType.MOVIE, 1)
+    assert [t["iso_639_1"] for t in data["translations"]["translations"]] == ["es"]
+    assert "translations" in respx.calls.last.request.url.params["append_to_response"]
+    await client.aclose()

@@ -45,7 +45,9 @@ class FakeToolbox:
     def guidance_links(self, title: str) -> dict[str, Any]:
         return {}
 
-    async def details(self, media_type: str, tmdb_id: int, profile: Any) -> dict[str, Any]:
+    async def details(
+        self, media_type: str, tmdb_id: int, profile: Any, locale: str = "en"
+    ) -> dict[str, Any]:
         self.calls.append({"details": (media_type, tmdb_id), "regions": profile.regions})
         return {"title": "Paddington 2", "media_type": media_type, "tmdb_id": tmdb_id}
 
@@ -428,9 +430,9 @@ async def test_toolbox_serves_details_from_cache_with_original_retrieval_time():
     data, first = await toolbox._details(MediaType.MOVIE, 7)
     data2, second = await toolbox._details(MediaType.MOVIE, 7)
     assert fetched == [7] and data == data2 and first == second
-    hit = await store.cache_get("tmdb:details:v2:movie:7:en-US", timedelta(days=1))
+    hit = await store.cache_get("tmdb:details:v3:movie:7:en-US", timedelta(days=1))
     assert hit is not None
-    assert await store.cache_get("tmdb:details:v2:movie:7:en-US", timedelta(0)) is None
+    assert await store.cache_get("tmdb:details:v3:movie:7:en-US", timedelta(0)) is None
 
 
 def put_mark(c: TestClient, tmdb_id: int = 1, **fields: Any) -> dict[str, Any]:
@@ -701,6 +703,7 @@ def test_chat_answers_in_the_page_language_and_translates_the_cards():
     assert body["results"]["results"][0]["why"] == ["Incluida en tus suscripciones."]
     c.post("/api/chat", json={"message": "something fun"})
     assert runner.state_deltas[1]["language"] == "English"
+    assert [d["locale"] for d in runner.state_deltas] == ["es", "en"]
 
 
 def _shortlist(kind: str, n: int) -> list[dict[str, Any]]:
@@ -808,3 +811,23 @@ def test_daily_picks_are_an_extra_search_on_top_of_the_quota():
     c.put("/api/profile", json=PROFILE)
     assert c.post("/api/search", json={}).status_code == 200
     assert len(c.get("/api/daily").json()["results"]) == 12  # still free with no searches left
+
+
+def test_daily_picks_are_built_per_language():
+    c, toolbox = client(toolbox=DailyToolbox())
+    c.put("/api/profile", json=PROFILE)
+    c.get("/api/daily")
+    assert {call["locale"] for call in toolbox.calls} == {"en"}
+    calls = len(toolbox.calls)
+    c.get("/api/daily", headers={"X-Nido-Locale": "es"})
+    assert len(toolbox.calls) == calls + 2  # Spanish titles are their own build
+    assert {call["locale"] for call in toolbox.calls[calls:]} == {"es"}
+    c.get("/api/daily", headers={"X-Nido-Locale": "es"})
+    assert len(toolbox.calls) == calls + 2
+
+
+def test_search_asks_for_the_page_language():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    c.post("/api/search", json={}, headers={"X-Nido-Locale": "pt"})
+    assert toolbox.calls[-1]["locale"] == "pt"
