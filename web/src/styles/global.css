@@ -1693,11 +1693,6 @@ a.imdb:hover {
     grid-column: 1 / -1;
   }
 
-  /* No hover on phones, so each mark shows a short name under its icon. */
-  .mark-label {
-    display: none;
-  }
-
   .hero {
     grid-template-columns: 1fr;
     gap: 1.5rem;
@@ -1729,10 +1724,6 @@ a.imdb:hover {
   gap: 0.5rem;
 }
 
-.mark-short {
-  display: none;
-}
-
 .mark-row {
   display: flex;
   flex-wrap: wrap;
@@ -1740,31 +1731,31 @@ a.imdb:hover {
 }
 
 @media (max-width: 560px) {
+  /* No hover on phones: wide buttons with the icon and its name, two per row. */
   .mark-row {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0.25rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
   }
 
   .mark {
-    flex-direction: column;
     justify-content: flex-start;
-    gap: 0.2rem;
     min-width: 0;
-    min-height: 3.4rem;
-    padding: 0.45rem 0.1rem 0.35rem;
-    border-radius: 14px;
+    padding: 0 0.75rem;
+    font-size: 0.82rem;
   }
 
-  .mark-short {
-    display: block;
-    font-size: 0.64rem;
-    /* Same weight on and off: the bold "on" weight pushed the longest names past the edge. */
-    font-weight: 500;
-    line-height: 1.15;
-    text-align: center;
+  /* "Don't suggest" opens a choice of its own, so it gets a full row. */
+  .mark:last-child {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  /* Long names ("Le gustó a mi hijo") wrap to two lines on the narrowest phones. */
+  .mark .mark-label {
     white-space: normal;
-    overflow-wrap: break-word;
+    line-height: 1.15;
+    text-align: left;
   }
 }
 

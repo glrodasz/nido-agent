@@ -198,14 +198,6 @@ const en = {
   },
   marks: {
     group: "Your marks",
-    /** One- or two-word names shown under the icons on phones, where there is no hover. */
-    short: {
-      seen: "Seen",
-      likedAdults: "We liked",
-      likedChild: "Kid liked",
-      rewatch: "Repeat",
-      dontSuggest: "Hide",
-    },
     seen: "Seen",
     likedAdults: "We liked it",
     likedChild: "Our kid liked it",
