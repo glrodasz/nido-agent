@@ -14,10 +14,10 @@ interface Props {
 
 const VOTES = () =>
   [
-    ["seen", t.marks.seen, "eye"],
-    ["liked_adults", t.marks.likedAdults, "heart"],
-    ["liked_child", t.marks.likedChild, "smile"],
-    ["rewatch", t.marks.rewatch, "repeat"],
+    ["seen", t.marks.seen, t.marks.short.seen, "eye"],
+    ["liked_adults", t.marks.likedAdults, t.marks.short.likedAdults, "heart"],
+    ["liked_child", t.marks.likedChild, t.marks.short.likedChild, "smile"],
+    ["rewatch", t.marks.rewatch, t.marks.short.rewatch, "repeat"],
   ] as const;
 
 const hint = (field: string) => (field === "rewatch" ? t.marks.rewatchHint : undefined);
@@ -65,7 +65,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
   return (
     <div class="marks">
       <div class="mark-row" role="group" aria-label={t.marks.group}>
-        {VOTES().map(([field, label, icon]) => {
+        {VOTES().map(([field, label, short, icon]) => {
           const on = Boolean(mark?.[field]);
           return (
             <button
@@ -87,6 +87,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
             >
               {pending === field ? <Spinner /> : <Icon name={icon} filled={on && icon === "heart"} />}
               <span class="mark-label">{label}</span>
+              <span class="mark-short" aria-hidden="true">{short}</span>
             </button>
           );
         })}
@@ -101,6 +102,7 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
         >
           <Icon name="eye-off" />
           <span class="mark-label">{t.marks.dontSuggest}</span>
+          <span class="mark-short" aria-hidden="true">{t.marks.short.dontSuggest}</span>
         </button>
       </div>
       {choosing && (

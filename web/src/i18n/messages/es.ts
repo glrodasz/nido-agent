@@ -199,6 +199,14 @@ const es: Messages = {
   },
   marks: {
     group: "Tus marcas",
+    /** One- or two-word names shown under the icons on phones, where there is no hover. */
+    short: {
+      seen: "Vista",
+      likedAdults: "Nos gustó",
+      likedChild: "Le gustó al\u00a0niño",
+      rewatch: "Repetir",
+      dontSuggest: "No sugerir",
+    },
     seen: "Vista",
     likedAdults: "Nos gustó",
     likedChild: "Le gustó a mi hijo",
