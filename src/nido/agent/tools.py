@@ -31,6 +31,8 @@ from nido.store import Store
 
 # Session state key holding the family's banned title keys; the server sets it on every chat turn.
 HIDDEN_STATE_KEY = "hidden_titles"
+# The page's language (en, es, pt): titles and synopses the tools return are in it.
+LOCALE_STATE_KEY = "locale"
 # Session state key holding the saved profile's limits ({"children_ages": [...], "avoid": [...]});
 # the server sets it on every chat turn. The model writes the tool arguments and whatever the chat
 # says can steer it ("my kid is 17 now", "violence is fine"), so the tools hold the saved profile
@@ -137,8 +139,8 @@ class Toolbox:
         self, media_type: MediaType, tmdb_id: int
     ) -> tuple[dict[str, Any], datetime]:
         tmdb, _ = self._clients()
-        # v2: payloads carry videos (trailers); older cached ones do not.
-        key = f"tmdb:details:v2:{media_type}:{tmdb_id}:{self._settings.language}"
+        # v3: payloads carry videos (trailers) and es/pt translations; older cached ones do not.
+        key = f"tmdb:details:v3:{media_type}:{tmdb_id}:{self._settings.language}"
         return await self._cached(key, DETAILS_TTL, lambda: tmdb.details(media_type, tmdb_id))
 
     async def _provider_ids(self, kind: MediaType, region: str) -> dict[str, list[int]]:
@@ -255,6 +257,7 @@ class Toolbox:
             exclude_genres=exclude_genres,
             match_all_genres=match_all_genres,
             hidden=hidden,
+            locale=tool_context.state.get(LOCALE_STATE_KEY, "en") if tool_context else "en",
         )
 
     async def search(
@@ -272,9 +275,11 @@ class Toolbox:
         exclude_genres: list[str] | None = None,
         match_all_genres: bool = False,
         hidden: list[str] | None = None,
+        locale: str = "en",
     ) -> dict[str, Any]:
         """find_titles without the model: `hidden` lists title keys ("movie:123") the family
-        banned, which never reach details, ranking or near misses."""
+        banned, which never reach details, ranking or near misses. Titles and synopses come in
+        `locale` (en, es, pt), English where TMDB has no translation."""
         kind = MediaType(media_type)
         regions = clean_regions(regions) or clean_regions(list(self._settings.regions))
         wanted = genres or prefer_genres or exclude_genres
@@ -317,8 +322,8 @@ class Toolbox:
         return {
             "regions": regions,
             **({"ignored_genres": ignored} if ignored else {}),
-            "results": [_present(r, regions) for r in ranked],
-            "near_misses": [_present(r, regions) for r in missed],
+            "results": [_present(r, regions, locale) for r in ranked],
+            "near_misses": [_present(r, regions, locale) for r in missed],
             "attribution": "Metadata: TMDB. Streaming availability: JustWatch via TMDB.",
         }
 
@@ -449,6 +454,7 @@ class Toolbox:
             avoid=guarded_avoid(avoid, guard),
             regions=regions,
             hidden=hidden,
+            locale=tool_context.state.get(LOCALE_STATE_KEY, "en") if tool_context else "en",
         )
 
     async def look_up(
@@ -462,6 +468,7 @@ class Toolbox:
         avoid: list[str] | None = None,
         regions: list[str] | None = None,
         hidden: list[str] | None = None,
+        locale: str = "en",
     ) -> dict[str, Any]:
         """look_up_title without the model. The title lands in "results" when it fits the family
         and in "near_misses", with what it misses, when it does not."""
@@ -498,10 +505,10 @@ class Toolbox:
         if ranked is None:
             return {**out, "not_available": candidate.title.name}
         bucket = "near_misses" if ranked.misses else "results"
-        return {**out, bucket: [_present(ranked, regions)]}
+        return {**out, bucket: [_present(ranked, regions, locale)]}
 
     async def details(
-        self, media_type: str, tmdb_id: int, profile: FamilyProfile
+        self, media_type: str, tmdb_id: int, profile: FamilyProfile, locale: str = "en"
     ) -> dict[str, Any]:
         """One title the family already knows (from the watchlist or its marks), as a result card
         judged against its profile. Unlike look_up it never drops the title: one that is not
@@ -528,7 +535,7 @@ class Toolbox:
                 cautions=["Not streaming in your regions right now."],
                 misses=misses,
             )
-        return _present(ranked, regions)
+        return _present(ranked, regions, locale)
 
     def guidance_links(self, title: str, imdb_id: str | None = None) -> dict[str, Any]:
         """Links to parental guidance sources for one title. Use them to point parents to the
@@ -560,11 +567,14 @@ def _interleave(lists: list[list[int]]) -> list[int]:
     return out
 
 
-def _present(ranked: Ranked, regions: list[str]) -> dict[str, Any]:
+def _present(ranked: Ranked, regions: list[str], locale: str = "en") -> dict[str, Any]:
     c = ranked.candidate
     t = c.title
+    name, synopsis, original = t.text(locale)
     return {
-        "title": t.name,
+        "title": name,
+        # Under the title on the card, when it differs: "Le Petit Prince", "My Neighbor Totoro".
+        "original_title": original,
         "media_type": t.media_type,
         "tmdb_id": t.tmdb_id,
         "imdb_id": t.imdb_id,
@@ -573,7 +583,7 @@ def _present(ranked: Ranked, regions: list[str]) -> dict[str, Any]:
         "released_on": t.latest_date.isoformat() if t.latest_date else None,
         "runtime_min": t.runtime_min,
         "genres": t.genres,
-        "synopsis": t.synopsis,
+        "synopsis": synopsis,
         "poster_url": str(t.poster_url) if t.poster_url else None,
         "trailers": t.trailers,
         "imdb": (

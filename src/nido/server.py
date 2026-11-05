@@ -69,7 +69,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from nido.agent.app import APP_NAME, build_app
 from nido.agent.budget import LlmBudgetExceededError
-from nido.agent.tools import GUARD_STATE_KEY, HIDDEN_STATE_KEY, Toolbox
+from nido.agent.tools import GUARD_STATE_KEY, HIDDEN_STATE_KEY, LOCALE_STATE_KEY, Toolbox
 from nido.auth import Authenticator, AuthError, FirebaseVerifier, User
 from nido.catalog import SERVICES, SERVICES_BY_KEY
 from nido.config import Settings, llm_credentials_available
@@ -338,11 +338,12 @@ def chat_cards(
     return {**base, "results": rest[:MAX_CARDS], "near_misses": named[:MAX_CARDS]}
 
 
-def daily_key(family: str, profile: FamilyProfile) -> str:
+def daily_key(family: str, profile: FamilyProfile, locale: str = "en") -> str:
     """Cache key of a family's picks. Other profile edits wait for the next build, but the
-    children's ages are in it: picks made for an older child must not wait 12 hours."""
+    children's ages are in it: picks made for an older child must not wait 12 hours. So is the
+    page's language, since the picks carry titles and synopses in it."""
     ages = "-".join(str(a) for a in sorted(profile.children_ages))
-    return f"daily:{family}:{ages}"
+    return f"daily:{family}:{ages}:{locale}"
 
 
 def daily_picks(
@@ -557,6 +558,7 @@ def create_app(
                 regions=request.regions or profile.regions,
                 released_since=request.released_since,
                 hidden=hidden_keys(marks, profile),
+                locale=locale,
             )
         except RuntimeError as exc:  # missing TMDB token
             raise HTTPException(503, str(exc)) from exc
@@ -612,7 +614,7 @@ def create_app(
         """Today's picks for the whole family, built at most every 12 hours and free."""
         profile = await require_profile(family)
         today = datetime.now(UTC).date()
-        key = daily_key(family, profile)
+        key = daily_key(family, profile, locale)
         marks = await store.list_marks(family)
         hidden = hidden_keys(marks, profile)
         hit = await store.cache_get(key, DAILY_TTL)
@@ -708,6 +710,7 @@ def create_app(
                     "today": date.today().isoformat(),
                     # The page's language, so the answer follows the language the family picked.
                     "language": LANGUAGE_NAMES[locale],
+                    LOCALE_STATE_KEY: locale,
                     HIDDEN_STATE_KEY: hidden,
                     GUARD_STATE_KEY: family_guard(profile, request.watching),
                 },
@@ -787,7 +790,7 @@ def create_app(
         if key not in known:
             raise HTTPException(404, "only saved or marked titles open here")
         try:
-            result = await toolbox.details(media_type.value, tmdb_id, profile)
+            result = await toolbox.details(media_type.value, tmdb_id, profile, locale)
         except RuntimeError as exc:  # missing TMDB token
             raise HTTPException(503, str(exc)) from exc
         except httpx.HTTPStatusError as exc:

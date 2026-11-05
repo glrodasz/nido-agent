@@ -21,6 +21,7 @@ from nido.models import (
     MediaType,
     Title,
     TitleRef,
+    TitleText,
 )
 
 BASE_URL = "https://api.themoviedb.org/3"
@@ -30,6 +31,9 @@ PROVIDER_SOURCE = "TMDB (JustWatch)"
 
 # Languages the web app speaks; TMDB returns videos only in the languages asked for.
 TRAILER_LANGUAGES = ("es", "en", "pt")
+# Languages titles and synopses are kept in, each with its countries in the order to prefer:
+# Nido's Spanish is Latin American and its Portuguese Brazilian. English is the request language.
+TEXT_LANGUAGES = {"es": ("MX", "419", "ES"), "pt": ("BR", "PT")}
 # A YouTube video id: it lands in an embed URL, so nothing else gets through.
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 
@@ -136,11 +140,17 @@ class TmdbClient:
     async def details(self, media_type: MediaType, tmdb_id: int) -> dict[str, Any]:
         """Raw details with certifications, external ids and watch providers in one request."""
         ratings = "release_dates" if media_type is MediaType.MOVIE else "content_ratings"
-        return await self._get(
+        data = await self._get(
             f"/{media_type}/{tmdb_id}",
-            append_to_response=f"{ratings},external_ids,watch/providers,videos",
+            append_to_response=f"{ratings},external_ids,watch/providers,videos,translations",
             include_video_language=",".join(TRAILER_LANGUAGES),
         )
+        # TMDB sends every translation it has (often 50 KB); only the app's languages are cached.
+        translations = (data.get("translations") or {}).get("translations") or []
+        data["translations"] = {
+            "translations": [t for t in translations if t.get("iso_639_1") in TEXT_LANGUAGES]
+        }
+        return data
 
 
 # Series genres are compound ("Action & Adventure", "Sci-Fi & Fantasy"); these spellings name
@@ -209,7 +219,37 @@ def parse_title(media_type: MediaType, data: dict[str, Any]) -> Title:
         synopsis=data.get("overview") or "",
         poster_url=f"{IMAGE_BASE}{poster}" if poster else None,
         trailers=parse_trailers(data),
+        original_name=data.get("original_title") or data.get("original_name") or None,
+        translations=parse_translations(data),
     )
+
+
+def parse_translations(data: dict[str, Any]) -> dict[str, TitleText]:
+    """Title and synopsis per app language (es, pt) from a details payload's translations, in the
+    preferred country's version. A synopsis missing there comes from another country; a blank
+    field stays blank and the card falls back to English."""
+    found: dict[str, dict[str, dict[str, Any]]] = {}
+    for t in (data.get("translations") or {}).get("translations") or []:
+        lang = t.get("iso_639_1")
+        if lang in TEXT_LANGUAGES:
+            found.setdefault(lang, {})[t.get("iso_3166_1") or ""] = t.get("data") or {}
+    out: dict[str, TitleText] = {}
+    for lang, countries in found.items():
+        order = [c for c in [*TEXT_LANGUAGES[lang], *sorted(countries)] if c in countries]
+        # A blank name means the country keeps the original one: Mexico's "Zootopia 2" is not
+        # Spain's "Zootrópolis 2", so the name comes from the preferred country or from English.
+        name = _text(countries[order[0]], "title", "name")
+        synopsis = next((o for c in order if (o := _text(countries.get(c), "overview"))), "")
+        if name or synopsis:
+            out[lang] = TitleText(name=name, synopsis=synopsis)
+    return out
+
+
+def _text(data: dict[str, Any] | None, *fields: str) -> str:
+    for field in fields:
+        if value := ((data or {}).get(field) or "").strip():
+            return value
+    return ""
 
 
 def parse_trailers(data: dict[str, Any]) -> dict[str, str]:

@@ -4,6 +4,7 @@ evidence under them changes."""
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from enum import StrEnum
 
@@ -60,6 +61,17 @@ class TitleRef(BaseModel):
         return base if self.season is None else f"{base}:s{self.season}"
 
 
+class TitleText(BaseModel):
+    """A title's name and synopsis in one language; blank where TMDB has no translation."""
+
+    name: str = ""
+    synopsis: str = ""
+
+
+# Characters a reader of es/en/pt can read: Latin letters, digits, punctuation and spaces.
+_LATIN = re.compile(r"[\u0000-\u024F\u1E00-\u1EFF\u2000-\u206F]*")
+
+
 class Title(BaseModel):
     media_type: MediaType
     tmdb_id: int
@@ -76,6 +88,23 @@ class Title(BaseModel):
     poster_url: HttpUrl | None = None
     # YouTube trailer ids by language (es, en, pt): the card plays the page's language first.
     trailers: dict[str, str] = Field(default_factory=dict)
+    # The name in the title's own language ("Le Petit Prince", "となりのトトロ").
+    original_name: str | None = None
+    # Name and synopsis by app language (es, pt); `name` and `synopsis` are the English ones.
+    translations: dict[str, TitleText] = Field(default_factory=dict)
+
+    def text(self, locale: str) -> tuple[str, str, str | None]:
+        """Name, synopsis and the original title to show under the name, in `locale`, falling
+        back to English field by field. The original title shows only when it differs from the
+        name; one in a script the reader may not read (Japanese) gives way to the English name."""
+        local = self.translations.get(locale) or TitleText()
+        name = local.name or self.name
+        original = self.original_name
+        if not original or not _LATIN.fullmatch(original):
+            original = self.name
+        if original.casefold() == name.casefold():
+            original = None
+        return name, local.synopsis or self.synopsis, original
 
     @property
     def latest_date(self) -> date | None:

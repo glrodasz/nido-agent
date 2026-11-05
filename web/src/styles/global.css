@@ -1329,6 +1329,14 @@ fieldset.filter-field {
   font-size: 0.825rem;
 }
 
+/* The original title, quiet under the translated one. */
+.card-head .original-title {
+  margin: 0.05rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
 /* The verdict is one calm line: a coloured dot, the call, then why in grey. */
 .verdict {
   margin: 0;
