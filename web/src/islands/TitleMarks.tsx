@@ -100,7 +100,17 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
           onClick={() => setChoosing(!choosing)}
         >
           <Icon name="eye-off" />
-          <span class="mark-label">{t.marks.dontSuggest}</span>
+          <span class="mark-label">
+            {/* Phones give this button a full row, so it can say what the choice is. */}
+            {canAgeBan ? (
+              <>
+                <span class="dont-short">{t.marks.dontSuggest}</span>
+                <span class="dont-long">{t.marks.dontSuggestLong}</span>
+              </>
+            ) : (
+              t.marks.dontSuggest
+            )}
+          </span>
         </button>
       </div>
       {choosing && (
