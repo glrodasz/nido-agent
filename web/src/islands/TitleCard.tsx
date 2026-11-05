@@ -147,6 +147,9 @@ export default function TitleCard({
             {saved ? t.card.saved : t.card.save}
           </button>
         </header>
+      </div>
+      {/* Beside the poster on wide screens; under it, full width, on phones. */}
+      <div class="card-rest">
 
         <div class="watch">
           {primary && <ServiceButton offer={primary} title={result.title} region={region(primary)} />}
@@ -187,9 +190,6 @@ export default function TitleCard({
           <strong>{verdict.label}</strong>
           {verdictWhy.length > 0 && <span class="verdict-why"> · {verdictWhy.join(" · ")}</span>}
         </p>
-      </div>
-      {/* Below the poster on phones, so the marks get the card's full width. */}
-      <div class="card-rest">
 
         <TitleMarks
           mark={mark}
