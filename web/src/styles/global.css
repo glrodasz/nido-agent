@@ -3113,3 +3113,18 @@ a.imdb:hover {
     font-size: 0.85rem;
   }
 }
+
+/* "Don't suggest…": short on wide screens, the full choice on phones. */
+.dont-long {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .dont-short {
+    display: none;
+  }
+
+  .dont-long {
+    display: inline;
+  }
+}

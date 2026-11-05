@@ -206,6 +206,7 @@ const pt: Messages = {
     rewatch: "Para repetir",
     rewatchHint: "Para repetir: as crianças adoram assistir de novo e de novo",
     dontSuggest: "Não sugerir…",
+    dontSuggestLong: "Não sugerir / até outra idade…",
     hiddenNote: "{label}. O Nido não vai sugerir.",
     undo: "Desfazer",
     howLong: "Por quanto tempo ocultar",

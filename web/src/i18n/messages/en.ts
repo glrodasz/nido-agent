@@ -205,6 +205,7 @@ const en = {
     rewatch: "On repeat",
     rewatchHint: "On repeat: the kids love to watch it again and again",
     dontSuggest: "Don't suggest…",
+    dontSuggestLong: "Don't suggest / until another age…",
     hiddenNote: "{label}. Nido won't suggest it.",
     undo: "Undo",
     howLong: "How long to hide it",
