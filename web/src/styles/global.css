@@ -2982,3 +2982,57 @@ a.imdb:hover {
     gap: 0.25rem;
   }
 }
+
+/* Trailer and Save: beside the poster on wide screens, in the watch row on phones. */
+.trailer-phone,
+.save-phone,
+.watch-break {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .trailer-wide,
+  .save-wide {
+    display: none;
+  }
+
+  .save-phone {
+    display: inline-flex;
+  }
+
+  .trailer-btn.trailer-phone {
+    display: inline-flex;
+    min-height: 2.25rem;
+    padding: 0 0.85rem;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    gap: 0.35rem;
+  }
+
+  .watch {
+    gap: 0.5rem 0.4rem;
+  }
+
+  /* Service, trailer and save share the first line evenly. */
+  .watch > .svc-btn,
+  .watch > .trailer-phone,
+  .watch > .save-phone {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+    padding: 0 0.5rem;
+  }
+
+  /* IMDb and other services go on their own line under the buttons. */
+  .watch-break {
+    display: block;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .card-body .synopsis {
+    -webkit-line-clamp: 3;
+    font-size: 0.85rem;
+  }
+}
