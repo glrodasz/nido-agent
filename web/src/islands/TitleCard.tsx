@@ -147,6 +147,9 @@ export default function TitleCard({
             {saved ? t.card.saved : t.card.save}
           </button>
         </header>
+      </div>
+      {/* Beside the poster on wide screens; under it, full width, on phones. */}
+      <div class="card-rest">
 
         <div class="watch">
           {primary && <ServiceButton offer={primary} title={result.title} region={region(primary)} />}

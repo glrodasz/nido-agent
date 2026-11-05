@@ -524,6 +524,8 @@ input:not([type="checkbox"]) {
 /* Finder: the question and the picks lead, filters fold away under them. */
 .finder {
   display: grid;
+  /* minmax(0, …) keeps a long slider label in Spanish or Portuguese from widening the page on phones. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
 }
 
@@ -1290,11 +1292,25 @@ fieldset.filter-field {
   flex: none;
 }
 
-.card-body {
+.card-body,
+.card-rest {
   display: grid;
   gap: 0.7rem;
   align-content: start;
   min-width: 0;
+}
+
+/* The poster spans the head and the rest, so the rest sits right under the head on wide screens. */
+.card:has(> .card-rest) {
+  row-gap: 0.7rem;
+}
+
+.card:has(> .card-rest) > .card-poster {
+  grid-row: span 2;
+}
+
+.card-rest {
+  grid-column: 2;
 }
 
 .card-head {
@@ -1668,13 +1684,13 @@ a.imdb:hover {
     font-size: 1.15rem;
   }
 
-  /* Marks go icon-only; the buttons keep their names for screen readers and tooltips. */
-  .mark-label {
-    display: none;
+  /* On phones the marks, synopsis and details use the whole card width under the poster. */
+  .card:has(> .card-rest) > .card-poster {
+    grid-row: auto;
   }
 
-  .mark {
-    padding: 0 0.7rem;
+  .card-rest {
+    grid-column: 1 / -1;
   }
 
   .hero {
@@ -1685,6 +1701,12 @@ a.imdb:hover {
 
   .ask .btn {
     padding: 0.6rem 0.8rem;
+  }
+
+  /* The sort switch, "Seen last" and the count are too wide for one line in Spanish or Portuguese. */
+  .results-tools {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
   }
 
   .wl-item {
@@ -1706,6 +1728,35 @@ a.imdb:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+}
+
+@media (max-width: 560px) {
+  /* No hover on phones: wide buttons with the icon and its name, two per row. */
+  .mark-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .mark {
+    justify-content: flex-start;
+    min-width: 0;
+    padding: 0 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  /* "Don't suggest" opens a choice of its own, so it gets a full row. */
+  .mark:last-child {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  /* Long names ("Le gustó a mi hijo") wrap to two lines on the narrowest phones. */
+  .mark .mark-label {
+    white-space: normal;
+    line-height: 1.15;
+    text-align: left;
+  }
 }
 
 .ban-choice {
