@@ -25,6 +25,7 @@ const en = {
     useLight: "Use light theme",
     useDark: "Use dark theme",
     signOut: "Sign out",
+    signingOut: "Signing out…",
     landingNav: "Sections",
     whatItDoes: "What it does",
     howItWorks: "How it works",

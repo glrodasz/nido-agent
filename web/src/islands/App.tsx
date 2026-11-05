@@ -251,11 +251,6 @@ export default function App() {
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
-        {authEnabled && session.state === "in" && (
-          <button type="button" class="link" onClick={() => signOut()}>
-            {t.header.signOut}
-          </button>
-        )}
       </div>
     </header>
   );
@@ -295,6 +290,7 @@ export default function App() {
         />
         {profile && <HiddenTitles marks={marks} onMark={markListed} />}
         {profile && <FamilyMembers onLeft={() => setReload((n) => n + 1)} />}
+        {authEnabled && <SignOutButton />}
       </>
     );
   } else if (tab === "watchlist") {
@@ -377,6 +373,23 @@ function HeroSample() {
           <span class="verdict-why"> · {t.invite.sampleWhy}</span>
         </p>
       </div>
+    </div>
+  );
+}
+
+/** Ends the session; sits at the end of the Family tab as the one destructive account action. */
+function SignOutButton() {
+  const [busy, setBusy] = useState(false);
+  const leave = () => {
+    setBusy(true);
+    signOut().catch(() => setBusy(false));
+  };
+  return (
+    <div class="sign-out">
+      <button type="button" class="btn btn-danger" disabled={busy} aria-busy={busy} onClick={leave}>
+        {busy ? <Spinner /> : <Icon name="log-out" />}
+        {busy ? t.header.signingOut : t.header.signOut}
+      </button>
     </div>
   );
 }

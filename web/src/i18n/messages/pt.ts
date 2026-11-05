@@ -25,6 +25,7 @@ const pt: Messages = {
     useLight: "Usar tema claro",
     useDark: "Usar tema escuro",
     signOut: "Sair",
+    signingOut: "Saindo…",
     landingNav: "Seções",
     whatItDoes: "O que faz",
     howItWorks: "Como funciona",
