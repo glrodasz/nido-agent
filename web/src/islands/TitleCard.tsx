@@ -83,8 +83,44 @@ export default function TitleCard({
   ].filter(Boolean);
   const nearMiss = result.misses.length > 0;
   const verdict = verdictFor(result.misses, result.age_baseline_min, watchingYoungest);
-  const verdictWhy = [...result.misses, ...result.cautions].map((r) => r.replace(/\.$/, ""));
+  // The watch row already says when there is no IMDb score; don't repeat it after the verdict.
+  const cautions = result.imdb ? result.cautions : result.cautions.filter((c) => !c.includes("IMDb"));
+  const verdictWhy = [...result.misses, ...cautions].map((r) => r.replace(/\.$/, ""));
   const region = (o: Offer) => (showRegion ? ` ${o.region}` : "");
+
+  // Rendered twice, one per layout; CSS shows the wide-screen or the phone copy.
+  const trailerButton = (where: string) =>
+    trailer && (
+      <button
+        type="button"
+        class={`trailer-btn ${where}`}
+        onClick={() => setMedia({ kind: "trailer", youtubeId: trailer })}
+      >
+        <Icon name="play" filled />
+        {t.card.trailer}
+        <span class="sr-only"> — {result.title}</span>
+      </button>
+    );
+  const saveButton = (where: string) => (
+    <button
+      type="button"
+      class={`${saved ? "key key-small key-on" : "key key-small"} ${where}`}
+      aria-pressed={saved}
+      aria-busy={saving}
+      disabled={saving}
+      onClick={async () => {
+        setSaving(true);
+        try {
+          await onToggleSave(result);
+        } finally {
+          setSaving(false);
+        }
+      }}
+    >
+      {saving ? <Spinner /> : <Icon name="bookmark" filled={saved} />}
+      {saved ? t.card.saved : t.card.save}
+    </button>
+  );
 
   return (
     <article class="card" aria-labelledby={headingId}>
@@ -110,17 +146,7 @@ export default function TitleCard({
             <span>{result.title}</span>
           </div>
         )}
-        {trailer && (
-          <button
-            type="button"
-            class="trailer-btn"
-            onClick={() => setMedia({ kind: "trailer", youtubeId: trailer })}
-          >
-            <Icon name="play" filled />
-            {t.card.trailer}
-            <span class="sr-only"> — {result.title}</span>
-          </button>
-        )}
+        {trailerButton("trailer-wide")}
       </div>
       <div class="card-body">
         <header class="card-head">
@@ -128,31 +154,19 @@ export default function TitleCard({
             <h3 id={headingId}>{result.title}</h3>
             <p class="muted">{meta.join(" · ")}</p>
           </div>
-          <button
-            type="button"
-            class={saved ? "key key-small key-on" : "key key-small"}
-            aria-pressed={saved}
-            aria-busy={saving}
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              try {
-                await onToggleSave(result);
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? <Spinner /> : <Icon name="bookmark" filled={saved} />}
-            {saved ? t.card.saved : t.card.save}
-          </button>
+          {saveButton("save-wide")}
         </header>
+        {result.synopsis && <p class="synopsis">{result.synopsis}</p>}
       </div>
       {/* Beside the poster on wide screens; under it, full width, on phones. */}
       <div class="card-rest">
 
         <div class="watch">
           {primary && <ServiceButton offer={primary} title={result.title} region={region(primary)} />}
+          {/* Phones: trailer and save sit next to the service button, under the poster. */}
+          {trailerButton("trailer-phone")}
+          {saveButton("save-phone")}
+          <span class="watch-break" aria-hidden="true" />
           {others.map((o) => {
             const label = (
               <>
@@ -197,8 +211,6 @@ export default function TitleCard({
           baselineAge={result.age_baseline_min ?? null}
           onMark={onMark}
         />
-
-        {result.synopsis && <p class="synopsis">{result.synopsis}</p>}
 
         <details class="more">
           <summary>
