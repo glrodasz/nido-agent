@@ -1,4 +1,4 @@
-import { useId, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { fmt, formatNumber, genreLabel, locale, t } from "../i18n";
 import {
   accessLabel,
@@ -6,6 +6,7 @@ import {
   isIncluded,
   posterHue,
   serviceBrand,
+  serviceName,
   sortOffers,
   trailerFor,
   verdictFor,
@@ -72,7 +73,8 @@ export default function TitleCard({
   const included = sorted.filter((o) => isIncluded(o, services));
   // Rent and buy rows can run to a dozen stores; the card leads with what the family already pays for.
   const [primary, ...alsoIncluded] = included;
-  const others = included.length > 0 ? alsoIncluded : sorted.slice(0, 2);
+  // The family's other services go in the service button's menu; without any, show two other offers.
+  const others = included.length > 0 ? [] : sorted.slice(0, 2);
   const meta = [
     yearSpan(result),
     result.media_type === "tv" ? t.card.series : t.card.movie,
@@ -88,12 +90,11 @@ export default function TitleCard({
   const verdictWhy = [...result.misses, ...cautions].map((r) => r.replace(/\.$/, ""));
   const region = (o: Offer) => (showRegion ? ` ${o.region}` : "");
 
-  // Rendered twice, one per layout; CSS shows the wide-screen or the phone copy.
-  const trailerButton = (where: string) =>
+  const trailerButton = () =>
     trailer && (
       <button
         type="button"
-        class={`trailer-btn ${where}`}
+        class="trailer-btn"
         onClick={() => setMedia({ kind: "trailer", youtubeId: trailer })}
       >
         <Icon name="play" filled />
@@ -101,6 +102,7 @@ export default function TitleCard({
         <span class="sr-only"> — {result.title}</span>
       </button>
     );
+  // Rendered twice, one per layout; CSS shows the wide-screen or the phone copy.
   const saveButton = (where: string) => (
     <button
       type="button"
@@ -146,7 +148,7 @@ export default function TitleCard({
             <span>{result.title}</span>
           </div>
         )}
-        {trailerButton("trailer-wide")}
+        {trailerButton()}
       </div>
       <div class="card-body">
         <header class="card-head">
@@ -162,17 +164,22 @@ export default function TitleCard({
       <div class="card-rest">
 
         <div class="watch">
-          {primary && <ServiceButton offer={primary} title={result.title} region={region(primary)} />}
-          {/* Phones: trailer and save sit next to the service button, under the poster. */}
-          {trailerButton("trailer-phone")}
+          {primary && (
+            <ServiceButton
+              offer={primary}
+              more={alsoIncluded}
+              title={result.title}
+              region={region}
+            />
+          )}
+          {/* Phones: Save shares the row with the service button, under the poster. */}
           {saveButton("save-phone")}
           <span class="watch-break" aria-hidden="true" />
           {others.map((o) => {
             const label = (
               <>
-                {included.length > 0 && "+ "}
                 {o.provider}
-                {!isIncluded(o, services) && ` · ${accessLabel(o.access)}`}
+                {` · ${accessLabel(o.access)}`}
                 {region(o)}
               </>
             );
@@ -310,24 +317,98 @@ export default function TitleCard({
 }
 
 /** The family's own service as the card's main action: brand colour, name and play. */
-function ServiceButton({ offer, title, region }: { offer: Offer; title: string; region: string }) {
-  const brand = serviceBrand(offer.service);
-  const style = brand ? { "--brand": brand.bg, "--brand-text": brand.fg } : undefined;
+function ServiceButton({
+  offer,
+  more,
+  title,
+  region,
+}: {
+  offer: Offer;
+  more: Offer[];
+  title: string;
+  region: (o: Offer) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !root.current?.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  const style = (o: Offer) => {
+    const brand = serviceBrand(o.service);
+    return brand ? { "--brand": brand.bg, "--brand-text": brand.fg } : undefined;
+  };
   const body = (
     <>
-      {offer.provider}
-      {region}
+      {serviceName(offer)}
+      {region(offer)}
       <Icon name="play" filled />
       <span class="sr-only">{fmt(t.card.watchTitle, { title })}</span>
     </>
   );
-  return offer.link ? (
-    <a class="svc-btn" style={style} href={offer.link} target="_blank" rel="noopener">
+  const main = offer.link ? (
+    <a class="svc-btn" style={style(offer)} href={offer.link} target="_blank" rel="noopener">
       {body}
     </a>
   ) : (
-    <span class="svc-btn" style={style}>
+    <span class="svc-btn" style={style(offer)}>
       {body}
     </span>
+  );
+  if (more.length === 0) return main;
+  // On several of the family's services: the arrow lists the others.
+  return (
+    <div class={open ? "svc-split open" : "svc-split"} ref={root}>
+      {main}
+      <button
+        type="button"
+        class="svc-btn svc-caret"
+        style={style(offer)}
+        aria-expanded={open}
+        aria-controls={menuId}
+        aria-label={t.card.moreServices}
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name="chevron-down" />
+      </button>
+      {open && (
+        <ul class="svc-menu" id={menuId}>
+          {more.map((o) => {
+            const label = (
+              <>
+                <span class="svc-dot" style={style(o)} aria-hidden="true" />
+                {serviceName(o)}
+                {region(o)}
+              </>
+            );
+            return (
+              <li key={`${o.region}-${o.provider}-${o.access}`}>
+                {o.link ? (
+                  <a href={o.link} target="_blank" rel="noopener" onClick={() => setOpen(false)}>
+                    {label}
+                    <Icon name="play" filled />
+                  </a>
+                ) : (
+                  <span>{label}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

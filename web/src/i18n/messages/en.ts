@@ -149,6 +149,7 @@ const en = {
     save: "Save",
     noOffers: "No streaming offers found",
     noImdb: "No IMDb rating",
+    moreServices: "Other services",
     votesM: "{n}M votes",
     votesK: "{n}k votes",
     votes: "{n} votes",

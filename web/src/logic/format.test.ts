@@ -21,6 +21,7 @@ import {
   seenLast,
   yearSpan,
   serviceBrand,
+  serviceName,
   sortOffers,
   verdictFor,
   verifiedAgo,
@@ -68,6 +69,28 @@ describe("sortOffers", () => {
       "HBO Max Amazon Channel",
       "Apple TV",
       "Disney Plus",
+    ]);
+  });
+});
+
+describe("sortOffers priority", () => {
+  it("leads with Netflix, then Disney+, Prime Video, HBO Max and Apple TV+", () => {
+    const sorted = sortOffers(
+      [
+        offer({ provider: "Apple TV Plus", service: "apple_tv_plus" }),
+        offer({ provider: "HBO Max", service: "hbo_max" }),
+        offer({ provider: "Amazon Prime Video", service: "prime_video" }),
+        offer({ provider: "Disney Plus", service: "disney_plus" }),
+        offer({}),
+      ],
+      ["netflix", "disney_plus", "prime_video", "hbo_max", "apple_tv_plus"],
+    );
+    expect(sorted.map((o) => serviceName(o))).toEqual([
+      "Netflix",
+      "Disney+",
+      "Prime Video",
+      "HBO Max",
+      "Apple TV+",
     ]);
   });
 });
