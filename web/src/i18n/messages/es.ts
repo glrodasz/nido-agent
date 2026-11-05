@@ -25,6 +25,7 @@ const es: Messages = {
     useLight: "Usar tema claro",
     useDark: "Usar tema oscuro",
     signOut: "Cerrar sesión",
+    signingOut: "Cerrando sesión…",
     landingNav: "Secciones",
     whatItDoes: "Qué hace",
     howItWorks: "Cómo funciona",
