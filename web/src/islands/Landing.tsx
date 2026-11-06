@@ -224,7 +224,6 @@ export default function Landing({
                 {error}
               </p>
             )}
-            <span class="lp-kicker">{c.kicker}</span>
             <h1>{rich(c.heroTitle)}</h1>
             <p class="lp-lede">{rich(c.heroLede)}</p>
             <div class="lp-cta">
@@ -243,8 +242,7 @@ export default function Landing({
         <div class="lp-wrap">
           <h2>{c.bandTitle}</h2>
           <div>
-            <p>{rich(c.bandP1)}</p>
-            <p>{rich(c.bandP2)}</p>
+            <p>{rich(c.band)}</p>
             <div class="lp-triad">
               {c.triad.map((item) => (
                 <span key={item}>{item}</span>
