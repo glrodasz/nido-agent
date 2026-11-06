@@ -69,17 +69,14 @@ const en = {
     },
   ] as Scene[],
   marks: ["Seen", "We liked it", "Our kid liked it", "On repeat"],
-  kicker: "For family movie night",
   heroTitle: "What to watch as a family, *sorted*.",
-  heroLede: "Movies and series **right for your kids that you'll enjoy too**, on the streaming you already pay for.",
+  heroLede: "**Right for your kids, good for you**, on the streaming you already pay for.",
   signIn: "Sign in with Google",
   seeWhat: "See what Nido does",
   fine: "Free, with a daily search limit per family.",
   bandTitle: "Suitable isn't enough. Everyone has to enjoy it.",
-  bandP1:
-    "Most kids' finders only filter. Nido starts from your family: **your child's age, the services you already have and what you'd rather avoid**, like scares, violence or bad examples.",
-  bandP2:
-    "With that it looks for quality titles, well rated and that a grown-up enjoys too, and tells you in one line whether they suit you and why.",
+  band:
+    "Nido starts from **your child's age, your services and what you'd rather avoid**, and tells you in one line whether a title fits and why.",
   triad: ["Right for their age", "Well rated", "On your services", "Fun for everyone"],
   featuresTitle: "Everything you need to decide in a minute",
   featuresLede: "Every fact comes from an official source and says where it comes from.",
@@ -180,17 +177,14 @@ const es: LandingCopy = {
     },
   ],
   marks: ["Vista", "Nos gustó", "Le gustó a mi hijo", "Para repetir"],
-  kicker: "Para ver en familia",
   heroTitle: "Qué ver en familia, *resuelto*.",
-  heroLede: "Películas y series **aptas para tus hijos que tú también vas a disfrutar**, en el streaming que ya pagas.",
+  heroLede: "**Aptas para tus hijos y buenas para ti**, en el streaming que ya pagas.",
   signIn: "Entrar con Google",
   seeWhat: "Ver qué hace Nido",
   fine: "Gratis, con un límite diario de búsquedas por familia.",
   bandTitle: "Que sea apta no basta. Tiene que gustarles a todos.",
-  bandP1:
-    "La mayoría de buscadores para niños solo filtran. Nido parte de tu familia: **la edad de tu hijo, los servicios que ya tienen y lo que prefieres evitar**, como sustos, violencia o malos ejemplos.",
-  bandP2:
-    "Con eso busca títulos de calidad, bien valorados y que un adulto también vea con gusto, y te dice en una línea si encajan con ustedes y por qué.",
+  band:
+    "Nido parte de **la edad de tu hijo, tus servicios y lo que prefieres evitar**, y te dice en una línea si un título encaja y por qué.",
   triad: ["Apta para su edad", "Bien valorada", "En tus servicios", "Divertida para todos"],
   featuresTitle: "Todo lo que necesitas para decidir en un minuto",
   featuresLede: "Cada dato viene de una fuente oficial y te dice de dónde sale.",
@@ -289,17 +283,14 @@ const pt: LandingCopy = {
     },
   ],
   marks: ["Visto", "Nós gostamos", "Meu filho gostou", "Para repetir"],
-  kicker: "Para assistir em família",
   heroTitle: "O que assistir em família, *resolvido*.",
-  heroLede: "Filmes e séries **adequados para os seus filhos que você também vai curtir**, no streaming que você já assina.",
+  heroLede: "**Certos para os seus filhos e bons para você**, no streaming que você já assina.",
   signIn: "Entrar com o Google",
   seeWhat: "Ver o que o Nido faz",
   fine: "Grátis, com um limite diário de buscas por família.",
   bandTitle: "Ser adequado não basta. Todo mundo tem que gostar.",
-  bandP1:
-    "A maioria dos buscadores para crianças só filtra. O Nido parte da sua família: **a idade do seu filho, os serviços que vocês já têm e o que você prefere evitar**, como sustos, violência ou maus exemplos.",
-  bandP2:
-    "Com isso, busca títulos de qualidade, bem avaliados e que um adulto também assiste com prazer, e diz em uma linha se combinam com vocês e por quê.",
+  band:
+    "O Nido parte da **idade do seu filho, dos seus serviços e do que você prefere evitar**, e diz em uma linha se um título combina e por quê.",
   triad: ["Adequado para a idade", "Bem avaliado", "Nos seus serviços", "Divertido para todos"],
   featuresTitle: "Tudo o que você precisa para decidir em um minuto",
   featuresLede: "Cada dado vem de uma fonte oficial e diz de onde saiu.",
