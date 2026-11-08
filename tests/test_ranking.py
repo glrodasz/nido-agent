@@ -120,6 +120,15 @@ def test_unknown_movie_runtime_cannot_meet_a_limit():
     assert evaluate(make(3, runtime=None), PROFILE.model_copy(update={"max_runtime_min": None}))
 
 
+def test_minimum_runtime_excludes_shorter_titles():
+    ranged = PROFILE.model_copy(update={"min_runtime_min": 60})
+    assert evaluate(make(1, runtime=45), ranged) is None
+    assert evaluate(make(2, runtime=60), ranged) is not None
+    assert (
+        evaluate(make(3, runtime=None), ranged.model_copy(update={"max_runtime_min": None})) is None
+    )
+
+
 def test_avoided_category_lowers_score_and_is_explained():
     profile = PROFILE.model_copy(update={"avoid_categories": [GuidanceCategory.DEATH_GRIEF]})
     clean = evaluate(make(1), profile)

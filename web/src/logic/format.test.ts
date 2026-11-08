@@ -8,6 +8,7 @@ import {
   familyLine,
   formatVotes,
   isNight,
+  rangeLabel,
   genresFor,
   ageLabel,
   childLabel,
@@ -301,11 +302,30 @@ describe("searchKind", () => {
     expect(searchKind("movie", null)).toEqual({ media_type: "movie", max_runtime_min: undefined });
     expect(searchKind("tv", 30)).toEqual({ media_type: "tv", max_runtime_min: 30 });
   });
+
+  it("sends a minimum length only when there is one", () => {
+    expect(searchKind("movie", 120, 0)).toEqual({ media_type: "movie", max_runtime_min: 120 });
+    expect(searchKind("movie", null, 60)).toEqual({
+      media_type: "movie",
+      max_runtime_min: undefined,
+      min_runtime_min: 60,
+    });
+    expect(searchKind("short", null, 10)).toEqual({ media_type: "movie", max_runtime_min: 40, min_runtime_min: 10 });
+  });
 });
 
 describe("lengthLabel", () => {
   it("names the slider stops", () => {
     expect([10, 40, 60, 120, null].map(lengthLabel)).toEqual(["10 min", "40 min", "1h", "2h", "Any"]);
+  });
+});
+
+describe("rangeLabel", () => {
+  it("reads the length range", () => {
+    expect(rangeLabel(0, null)).toBe("Any");
+    expect(rangeLabel(0, 120)).toBe("Up to 2h");
+    expect(rangeLabel(30, null)).toBe("From 30 min");
+    expect(rangeLabel(30, 120)).toBe("30 min – 2h");
   });
 });
 
@@ -323,6 +343,13 @@ describe("type and length move together", () => {
     expect(withLength({ kind: "short" as const, runtime: 40 }, 60)).toEqual({ kind: "movie", runtime: 60 });
     expect(withLength({ kind: "short" as const, runtime: 40 }, null)).toEqual(movie);
     expect(withLength({ kind: "tv" as const, runtime: null }, 10)).toEqual({ kind: "tv", runtime: 10 });
+  });
+
+  it("drops a minimum that the new maximum would reach", () => {
+    const ranged = { kind: "movie" as const, runtime: null, minRuntime: 60 };
+    expect(withKind(ranged, "short")).toEqual({ kind: "short", runtime: 40, minRuntime: 0 });
+    expect(withKind({ ...ranged, minRuntime: 30 }, "short")).toEqual({ kind: "short", runtime: 40, minRuntime: 30 });
+    expect(withLength(ranged, 120)).toEqual({ kind: "movie", runtime: 120, minRuntime: 60 });
   });
 });
 

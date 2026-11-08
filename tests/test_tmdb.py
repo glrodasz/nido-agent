@@ -351,3 +351,17 @@ async def test_details_keep_only_the_app_languages_translations():
     assert [t["iso_639_1"] for t in data["translations"]["translations"]] == ["es"]
     assert "translations" in respx.calls.last.request.url.params["append_to_response"]
     await client.aclose()
+
+
+@respx.mock
+async def test_discover_asks_for_a_runtime_range():
+    route = respx.get(f"{BASE_URL}/discover/movie").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    client = TmdbClient("token")
+    await client.discover(MediaType.MOVIE, region="SE", min_runtime_min=30, max_runtime_min=120)
+    params = route.calls.last.request.url.params
+    assert (params["with_runtime.gte"], params["with_runtime.lte"]) == ("30", "120")
+    await client.discover(MediaType.MOVIE, region="SE", max_runtime_min=40)
+    assert route.calls.last.request.url.params["with_runtime.gte"] == "1"
+    await client.aclose()

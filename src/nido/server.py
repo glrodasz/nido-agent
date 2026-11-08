@@ -116,6 +116,8 @@ class SearchRequest(BaseModel):
     # True: a title needs every genre in `genres` (Comedy and Romance), not just one of them.
     match_all_genres: bool = False
     max_runtime_min: int | None = Field(default=None, ge=1, le=600)
+    # Shortest runtime, the lower end of Find's length range; no profile default.
+    min_runtime_min: int | None = Field(default=None, ge=1, le=600)
     min_imdb_rating: float | None = Field(default=None, ge=0, le=10)
     avoid: list[GuidanceCategory] | None = None
     regions: list[str] | None = None
@@ -544,6 +546,7 @@ def create_app(
                     if "max_runtime_min" in request.model_fields_set
                     else profile.max_runtime_min
                 ),
+                min_runtime_min=request.min_runtime_min,
                 min_imdb_rating=(
                     request.min_imdb_rating
                     if "min_imdb_rating" in request.model_fields_set

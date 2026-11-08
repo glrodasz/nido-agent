@@ -128,6 +128,16 @@ def test_search_can_lift_the_profile_limits():
     assert toolbox.calls[-1]["min_imdb_rating"] is None
 
 
+def test_search_passes_the_length_range():
+    # The lower end of Find's length range has no profile default.
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    c.post("/api/search", json={})
+    assert toolbox.calls[-1]["min_runtime_min"] is None
+    c.post("/api/search", json={"min_runtime_min": 30, "max_runtime_min": 120})
+    assert (toolbox.calls[-1]["min_runtime_min"], toolbox.calls[-1]["max_runtime_min"]) == (30, 120)
+
+
 def test_search_passes_the_release_filter():
     c, toolbox = client()
     c.put("/api/profile", json=PROFILE)

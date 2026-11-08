@@ -298,42 +298,47 @@ export const SHORT_MAX_MIN = 40;
 export type FindKind = "movie" | "short" | "tv";
 
 /** What a filter search asks for: Shorts is a movie search with a 40-minute cap, and a shorter
- * "Max length" the family typed still wins. */
+ * "Max length" the family typed still wins. A minimum length of 0 asks for none. */
 export function searchKind(
   kind: FindKind,
   maxLength: number | null,
-): { media_type: "movie" | "tv"; max_runtime_min: number | undefined } {
+  minLength = 0,
+): { media_type: "movie" | "tv"; max_runtime_min: number | undefined; min_runtime_min?: number } {
+  const min = minLength > 0 ? { min_runtime_min: minLength } : {};
   if (kind === "short") {
     return {
       media_type: "movie",
       max_runtime_min: Math.min(maxLength ?? SHORT_MAX_MIN, SHORT_MAX_MIN),
+      ...min,
     };
   }
-  return { media_type: kind, max_runtime_min: maxLength ?? undefined };
+  return { media_type: kind, max_runtime_min: maxLength ?? undefined, ...min };
 }
+
+type Lengths = { kind: FindKind; runtime: number | null; minRuntime?: number };
+
+/** A minimum that would reach the new maximum goes back to none. */
+const keepBelow = <F extends Lengths>(f: F): F =>
+  f.minRuntime && f.runtime !== null && f.minRuntime >= f.runtime ? { ...f, minRuntime: 0 } : f;
 
 /** Picking a type sets the slider: Shorts to 40 min, Movies to Any. Series keep their length,
  * since for them it is the episode length. */
-export function withKind<F extends { kind: FindKind; runtime: number | null }>(
-  f: F,
-  kind: FindKind,
-): F {
+export function withKind<F extends Lengths>(f: F, kind: FindKind): F {
   if (kind === "tv") return { ...f, kind };
-  return { ...f, kind, runtime: kind === "short" ? SHORT_MAX_MIN : null };
+  return keepBelow({ ...f, kind, runtime: kind === "short" ? SHORT_MAX_MIN : null });
 }
 
 /** Moving the slider sets the type: 40 min or less is a short, anything longer a movie. */
-export function withLength<F extends { kind: FindKind; runtime: number | null }>(
-  f: F,
-  runtime: number | null,
-): F {
-  if (f.kind === "tv") return { ...f, runtime };
+export function withLength<F extends Lengths>(f: F, runtime: number | null): F {
+  if (f.kind === "tv") return keepBelow({ ...f, runtime });
   const short = runtime !== null && runtime <= SHORT_MAX_MIN;
-  return { ...f, runtime, kind: short ? "short" : "movie" };
+  return keepBelow({ ...f, runtime, kind: short ? "short" : "movie" });
 }
 
 /** Max length slider stops in minutes; null is "Any" (the default, last stop). */
 export const LENGTH_STOPS: (number | null)[] = [10, 30, 40, 60, 120, null];
+/** Find's length range: 0 (no minimum) first, "Any" (no maximum) last. */
+export const RANGE_STOPS: (number | null)[] = [0, ...LENGTH_STOPS];
 /** Min IMDb score slider stops. The first is the default and adds no minimum, so titles without
  * an IMDb score (common for shorts and specials) still show. */
 export const SCORE_STOPS = [4, 6, 7, 8, 9];
@@ -366,6 +371,13 @@ export const scoreTick = (stop: number) => (stop === SCORE_STOPS[0] ? t.finder.a
 export function lengthLabel(min: number | null): string {
   if (min === null) return t.finder.any;
   return min >= 60 && min % 60 === 0 ? `${min / 60}h` : fmt(t.card.minutes, { n: min });
+}
+
+/** The length range read out: "Any", "Up to 2h", "From 30 min", "30 min – 2h". */
+export function rangeLabel(min: number, max: number | null): string {
+  if (!min) return max === null ? t.finder.any : fmt(t.finder.upTo, { length: lengthLabel(max) });
+  if (max === null) return fmt(t.finder.from, { length: lengthLabel(min) });
+  return `${lengthLabel(min)} – ${lengthLabel(max)}`;
 }
 
 /** Max length slider ticks: "Any", "10", "30", "1h". */
