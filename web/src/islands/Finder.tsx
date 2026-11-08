@@ -31,6 +31,7 @@ import type {
 } from "../logic/types";
 import { Fragment } from "preact";
 import { fmt, genreLabel, plural, t } from "../i18n";
+import AnswerFeedback from "./AnswerFeedback";
 import Icon from "./Icon";
 import Markdown from "./Markdown";
 import Spinner from "./Spinner";
@@ -62,6 +63,8 @@ interface Turn {
   text: string;
   // Nido's turn that says the question failed; it offers to ask the same question again.
   failed?: boolean;
+  // The answer's entry in the quality log, which 👍/👎 rate.
+  logId?: string;
 }
 
 // Below these, the ask panel says how much of today's quota the family has left.
@@ -337,7 +340,7 @@ export default function Finder({
     session.current = reply.session_id;
     setQuota((q) => ({ ...q, chat: reply.quota }));
     const text2 = [reply.reply, reply.note].filter(Boolean).join("\n\n");
-    if (text2) setTurns((t) => [...t, { role: "nido", text: text2 }]);
+    if (text2) setTurns((t) => [...t, { role: "nido", text: text2, logId: reply.log_id }]);
     else if (!reply.results) setTurns((prev) => [...prev, { role: "nido", text: t.finder.noAnswer, failed: true }]);
     if (reply.results) {
       acted.current = true;
@@ -536,6 +539,7 @@ export default function Finder({
                       Nido
                     </span>
                     <Markdown text={turn.text} />
+                    {turn.logId && <AnswerFeedback key={turn.logId} logId={turn.logId} />}
                   </>
                 )}
               </li>

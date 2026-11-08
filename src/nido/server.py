@@ -5,6 +5,9 @@
     GET    /api/daily                             today's picks: Find's opening cards, cached a day
     POST   /api/search                            filter panel: deterministic, no model call
     POST   /api/chat                              one turn with the ADK agent
+    POST   /api/chat/feedback                     👍/👎 (and a comment) on one answer
+    GET    /api/me                                what the caller may see (the Quality page)
+    GET    /api/quality                           Nido's owners: the last days' questions
     GET    /api/watchlist                         saved titles
     PUT    /api/watchlist/{media_type}/{tmdb_id}  save or update one
     DELETE /api/watchlist/{media_type}/{tmdb_id}
@@ -33,6 +36,11 @@ they are built that rarely, they are free: they count against neither the search
 usage the family sees. Marks never rebuild them: banned and seen titles are dropped when the picks
 are served, and each build picks a different handful of the shortlist.
 
+Every chat turn is kept 30 days in the quality log (nido.asklog): the question, who it was for
+without names, the tool calls, the reply and its cards, time and models, and what the family did
+next (👍/👎, saves and marks on those cards, another question). Only Nido's owners
+(NIDO_ALLOWED_EMAILS) read it, on the Quality page.
+
 Banned titles are left out of search and chat by code: the server hands their keys to the
 toolbox (and to chat through session state), so the model can neither see nor undo a ban.
 
@@ -58,11 +66,11 @@ import unicodedata
 from collections import OrderedDict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, HttpUrl
@@ -70,6 +78,16 @@ from pydantic import BaseModel, Field, HttpUrl
 from nido.agent.app import APP_NAME, build_app
 from nido.agent.budget import LlmBudgetExceededError
 from nido.agent.tools import GUARD_STATE_KEY, HIDDEN_STATE_KEY, LOCALE_STATE_KEY, Toolbox
+from nido.asklog import (
+    FOLLOW_UP_WINDOW,
+    MAX_COMMENT_CHARS,
+    TurnRecorder,
+    card_keys,
+    family_tag,
+    new_log_id,
+    summarize,
+)
+from nido.asklog import present as present_log
 from nido.auth import Authenticator, AuthError, FirebaseVerifier, User
 from nido.catalog import SERVICES, SERVICES_BY_KEY
 from nido.config import Settings, llm_credentials_available
@@ -133,6 +151,17 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
     session_id: str | None = Field(default=None, max_length=128)
     watching: list[int] | None = Field(default=None, max_length=MAX_CHILDREN)
+
+
+class ChatFeedback(BaseModel):
+    log_id: str = Field(min_length=1, max_length=64)
+    # None takes the rating back.
+    rating: Literal["up", "down"] | None
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+# Questions the Quality page lists at once, newest first.
+MAX_QUALITY_ITEMS = 300
 
 
 class WatchlistUpdate(BaseModel):
@@ -401,6 +430,20 @@ def family_guard(
     }
 
 
+def log_viewers(profile: FamilyProfile | None, watching: list[int] | None) -> dict[str, Any]:
+    """Who a question was for, as the quality log keeps it: nothing that names anyone."""
+    if profile is None:
+        return {}
+    return {
+        "ages": sorted(profile.watching(watching)),
+        "family_ages": sorted(profile.children_ages),
+        "avoid": [c.value for c in profile.avoid_categories],
+        "services": list(profile.services),
+        "regions": list(profile.regions),
+        "genres": list(profile.preferred_genres),
+    }
+
+
 # Hosts the reply may link to: guidance and metadata sources. Links the tools returned (streaming
 # offers, IMDb pages) are allowed too. Anything else is dropped: the chat text and the titles'
 # synopses are not ours, so a reply could otherwise carry a phishing link ("verify your Netflix
@@ -490,6 +533,9 @@ def create_app(
     limits = {"chat": settings.max_chat_turns_per_day, "search": settings.max_searches_per_day}
     # Per chat session: every title the tools returned, by key, so later answers get cards.
     session_titles: OrderedDict[tuple[str, str], dict[str, dict[str, Any]]] = OrderedDict()
+    # Per family tag: its last answer (log id, time, card keys), so saves and marks on those cards
+    # and the next question are noted as reactions to it. In memory: a cold start only loses that.
+    recent_asks: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
     app = FastAPI(title="Nido", docs_url=None, redoc_url=None)
 
@@ -705,6 +751,12 @@ def create_app(
         while len(session_titles) > MAX_REMEMBERED_SESSIONS:
             session_titles.popitem(last=False)
         note = None
+        recorder = TurnRecorder()
+        log_id = new_log_id()
+        previous = recent_asks.get(family_tag(family))
+        if previous and datetime.now(UTC) - previous["at"] > FOLLOW_UP_WINDOW:
+            previous = None
+        outcome, failure, text, cards = "ok", None, "", None
         try:
             async with asyncio.timeout(CHAT_TURN_SECONDS):
                 async for event in runner.run_async(
@@ -723,6 +775,7 @@ def create_app(
                         GUARD_STATE_KEY: family_guard(profile, request.watching),
                     },
                 ):
+                    recorder.event(event)
                     for output in _find_titles_outputs(event):
                         results = output
                         for field in ("results", "near_misses"):
@@ -730,32 +783,127 @@ def create_app(
                     if text := _final_text(event):
                         reply.append(text)
         except LlmBudgetExceededError:
+            outcome = "budget"
             note = message("stopped_budget", locale)
         except TimeoutError:
             # Hosting drops the request at 60 s with a bare error page; answer before that, with
             # whatever the turn found so far.
             log.warning("chat turn ran past %s s", CHAT_TURN_SECONDS)
+            outcome = "partial"
+            failure = f"ran past {CHAT_TURN_SECONDS:g} s"
             if results is None and not reply:
-                raise HTTPException(504, message("too_slow", locale)) from None
-            note = message("stopped", locale)
+                outcome = "too_slow"
+            else:
+                note = message("stopped", locale)
         except Exception as exc:  # model quota, network: report, keep the session
             log.warning("chat turn failed: %s", exc)
+            outcome, failure = "partial", f"{type(exc).__name__}: {exc}"[:500]
             if results is None and not reply:
-                raise HTTPException(503, message("busy", locale)) from exc
-            note = message("stopped", locale)
-        text = safe_links("\n\n".join(reply).strip(), known)
-        if not text and results is None and note is None:
+                outcome = "busy"
+            else:
+                note = message("stopped", locale)
+        if outcome not in {"too_slow", "busy"}:
+            text = safe_links("\n\n".join(reply).strip(), known)
+            cards = with_marks(chat_cards(text, results, known), marks, profile)
+            if outcome == "ok" and not text and not cards:
+                outcome = "no_answer"
+        await log_turn(
+            recorder.record(
+                log_id=log_id,
+                family_id=family,
+                session_id=session.id,
+                previous=previous["id"] if previous else None,
+                question=request.message,
+                locale=locale,
+                viewers=log_viewers(profile, request.watching),
+                reply=text,
+                cards=cards,
+                note=note,
+                outcome=outcome,
+                error=failure,
+            ),
+            previous,
+        )
+        if outcome == "too_slow":
+            raise HTTPException(504, message("too_slow", locale))
+        if outcome == "busy":
+            raise HTTPException(503, message("busy", locale))
+        if outcome == "no_answer":
             # The model can finish a turn with nothing to show; an empty answer reads as a hang.
-            log.warning("chat turn ended without text or titles")
             raise HTTPException(502, message("no_answer", locale))
         return {
             "session_id": session.id,
+            "log_id": log_id,
             "reply": text,
-            "results": localize_output(
-                with_marks(chat_cards(text, results, known), marks, profile), locale
-            ),
+            "results": localize_output(cards, locale),
             "note": note,
             "quota": quota,
+        }
+
+    async def log_turn(record: dict[str, Any], previous: dict[str, Any] | None) -> None:
+        """Keeps the question for the Quality page; a store problem never fails the answer."""
+        family = record["family"]
+        recent_asks[family] = {"id": record["id"], "at": record["at"], "keys": card_keys(record)}
+        recent_asks.move_to_end(family)
+        while len(recent_asks) > MAX_REMEMBERED_SESSIONS:
+            recent_asks.popitem(last=False)
+        try:
+            await store.put_ask_log(record)
+            if previous:
+                await store.update_ask_log(
+                    previous["id"], {}, {"kind": "asked_again", "at": record["at"]}
+                )
+        except Exception as exc:
+            log.warning("could not keep the ask log: %s", exc)
+
+    async def follow_up(family: str, key: str, kinds: list[str]) -> None:
+        """A save or a mark on a card of the family's last answer counts as its reaction."""
+        last = recent_asks.get(family_tag(family))
+        now = datetime.now(UTC)
+        if not kinds or not last or key not in last["keys"] or now - last["at"] > FOLLOW_UP_WINDOW:
+            return
+        try:
+            for kind in kinds:
+                await store.update_ask_log(last["id"], {}, {"kind": kind, "key": key, "at": now})
+        except Exception as exc:
+            log.warning("could not note the follow-up: %s", exc)
+
+    def can_review(user: User) -> bool:
+        # Nido's owners (NIDO_ALLOWED_EMAILS); anyone on a local run without sign-in.
+        if authenticator.mode == "none":
+            return True
+        return bool(user.email and user.email.lower() in settings.allowed_emails)
+
+    @app.post("/api/chat/feedback")
+    async def chat_feedback(feedback: ChatFeedback, family: Family) -> dict[str, Any]:
+        record = await store.get_ask_log(feedback.log_id)
+        if record is None or record.get("family") != family_tag(family):
+            raise HTTPException(404, "no such answer")
+        comment = " ".join((feedback.comment or "").split())[:MAX_COMMENT_CHARS] or None
+        await store.update_ask_log(
+            feedback.log_id,
+            {"rating": feedback.rating, "comment": comment if feedback.rating else None},
+        )
+        return {"rating": feedback.rating, "comment": comment if feedback.rating else None}
+
+    @app.get("/api/me")
+    async def me(user: CurrentUser) -> dict[str, Any]:
+        return {"can_review": can_review(user)}
+
+    @app.get("/api/quality")
+    async def quality(
+        user: CurrentUser,
+        family: Family,
+        days: Annotated[int, Query(ge=1, le=30)] = 7,
+    ) -> dict[str, Any]:
+        if not can_review(user):
+            raise HTTPException(403, "only Nido's owners see the quality log")
+        since = datetime.now(UTC) - timedelta(days=days)
+        records = await store.list_ask_logs(since, MAX_QUALITY_ITEMS)
+        return {
+            "days": days,
+            "summary": summarize(records, settings.fallback_model),
+            "items": [present_log(r, family) for r in records],
         }
 
     @app.get("/api/watchlist")
@@ -778,6 +926,11 @@ def create_app(
             added_at=existing.added_at if existing else datetime.now(UTC),
         )
         await store.put_watchlist_item(family, item)
+        await follow_up(
+            family,
+            ref.key,
+            [k for k, now in (("saved", existing is None), ("watched", update.watched)) if now],
+        )
         return {"item": item.model_dump(mode="json")}
 
     @app.delete("/api/watchlist/{media_type}/{tmdb_id}")
@@ -862,6 +1015,12 @@ def create_app(
                     )
                 changes["ban"] = Ban(scope=BanScope.AGE, until_age=until, at=now)
         mark = mark.model_copy(update=changes)
+        await follow_up(
+            family,
+            ref.key,
+            [f for f in ("seen", "liked_adults", "liked_child", "rewatch") if changes.get(f)]
+            + (["dont_suggest"] if changes.get("ban") else []),
+        )
         if mark.empty:
             await store.delete_mark(family, ref.key)
         else:

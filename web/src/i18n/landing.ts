@@ -128,6 +128,8 @@ const en = {
   closingTitle: "Less time choosing, more time together.",
   closingBody: "Sign in with your Google account and set up your family's profile in a minute.",
   footerSources: "Availability from JustWatch via TMDB. Ratings from OMDb.",
+  footerPrivacy:
+    "We keep Ask Nido questions for 30 days, without names or emails, to improve the answers.",
   footerTag: "Nido · homemade for family viewing",
 };
 
@@ -236,6 +238,8 @@ const es: LandingCopy = {
   closingTitle: "Menos tiempo eligiendo, más tiempo juntos.",
   closingBody: "Entra con tu cuenta de Google y arma el perfil de tu familia en un minuto.",
   footerSources: "Disponibilidad de JustWatch vía TMDB. Valoraciones de OMDb.",
+  footerPrivacy:
+    "Guardamos las preguntas a Ask Nido 30 días, sin nombres ni correos, para mejorar las respuestas.",
   footerTag: "Nido · hecho en casa para ver en familia",
 };
 
@@ -342,6 +346,8 @@ const pt: LandingCopy = {
   closingTitle: "Menos tempo escolhendo, mais tempo juntos.",
   closingBody: "Entre com a sua conta do Google e monte o perfil da sua família em um minuto.",
   footerSources: "Disponibilidade da JustWatch via TMDB. Avaliações do OMDb.",
+  footerPrivacy:
+    "Guardamos as perguntas ao Ask Nido por 30 dias, sem nomes nem e-mails, para melhorar as respostas.",
   footerTag: "Nido · feito em casa para assistir em família",
 };
 

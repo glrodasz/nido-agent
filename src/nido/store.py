@@ -10,6 +10,8 @@ Two implementations behind one interface: `MemoryStore` for tests and local runs
     invites/{token}                   one Invite per invite link (single use, expires)
     usage/{family}_{day}              {<kind>: count, expire_at}: requests a family made that UTC
                                       day, for the daily quotas; TTL on expire_at cleans them up
+    ask_logs/{id}                     one Ask Nido question with its answer, for the Quality page
+                                      (nido.asklog); TTL on expire_at deletes it after 30 days
 
 A family's id is its owner's uid; the parameters below named `uid` are family ids.
     cache/{key}                       {payload (JSON), retrieved_at, expire_at}; a TTL policy
@@ -64,6 +66,18 @@ class Store(Protocol):
         limit only counts. Atomic."""
         ...
 
+    async def put_ask_log(self, record: dict[str, Any]) -> None: ...
+    async def get_ask_log(self, log_id: str) -> dict[str, Any] | None: ...
+    async def update_ask_log(
+        self, log_id: str, changes: dict[str, Any], event: dict[str, Any] | None = None
+    ) -> None:
+        """Sets `changes` on a record and appends `event` to its events, if given."""
+        ...
+
+    async def list_ask_logs(self, since: datetime, limit: int) -> list[dict[str, Any]]:
+        """Records made at or after `since`, newest first."""
+        ...
+
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None: ...
     async def cache_put(self, key: str, data: dict[str, Any], ttl: timedelta) -> datetime:
         """Stores `data` and returns its retrieval time."""
@@ -83,6 +97,7 @@ class MemoryStore:
         self._members: dict[str, Member] = {}
         self._invites: dict[str, Invite] = {}
         self._usage: dict[tuple[str, str, date], int] = {}
+        self._ask_logs: dict[str, dict[str, Any]] = {}
 
     async def get_profile(self, uid: str) -> FamilyProfile | None:
         return self._profiles.get(uid)
@@ -147,6 +162,28 @@ class MemoryStore:
             return None
         self._usage[(family_id, kind, day)] = used + 1
         return used + 1
+
+    async def put_ask_log(self, record: dict[str, Any]) -> None:
+        self._ask_logs[record["id"]] = {**record, "events": list(record.get("events") or [])}
+
+    async def get_ask_log(self, log_id: str) -> dict[str, Any] | None:
+        record = self._ask_logs.get(log_id)
+        return {**record, "events": list(record["events"])} if record else None
+
+    async def update_ask_log(
+        self, log_id: str, changes: dict[str, Any], event: dict[str, Any] | None = None
+    ) -> None:
+        record = self._ask_logs.get(log_id)
+        if record is None:
+            return
+        record.update(changes)
+        if event is not None:
+            record["events"].append(event)
+
+    async def list_ask_logs(self, since: datetime, limit: int) -> list[dict[str, Any]]:
+        found = [r for r in self._ask_logs.values() if r["at"] >= since]
+        found.sort(key=lambda r: r["at"], reverse=True)
+        return [{**r, "events": list(r["events"])} for r in found[:limit]]
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         hit = self._cache.get(key)
@@ -283,6 +320,43 @@ class FirestoreStore:
             return used + 1
 
         return await take(self._db.transaction())
+
+    def _ask_log(self, log_id: str) -> Any:
+        return self._db.collection("ask_logs").document(log_id)
+
+    async def put_ask_log(self, record: dict[str, Any]) -> None:
+        await self._ask_log(record["id"]).set(record)
+
+    async def get_ask_log(self, log_id: str) -> dict[str, Any] | None:
+        snap = await self._ask_log(log_id).get()
+        return snap.to_dict() if snap.exists else None
+
+    async def update_ask_log(
+        self, log_id: str, changes: dict[str, Any], event: dict[str, Any] | None = None
+    ) -> None:
+        from google.api_core import exceptions
+        from google.cloud import firestore
+
+        update = dict(changes)
+        if event is not None:
+            update["events"] = firestore.ArrayUnion([event])
+        if not update:
+            return
+        try:
+            await self._ask_log(log_id).update(update)
+        except exceptions.NotFound:  # expired, or never written
+            return
+
+    async def list_ask_logs(self, since: datetime, limit: int) -> list[dict[str, Any]]:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        query = (
+            self._db.collection("ask_logs")
+            .where(filter=FieldFilter("at", ">=", since))
+            .order_by("at", direction="DESCENDING")
+            .limit(limit)
+        )
+        return [snap.to_dict() async for snap in query.stream()]
 
     async def cache_get(self, key: str, max_age: timedelta) -> Cached | None:
         snap = await self._db.collection("cache").document(_doc_id(key)).get()

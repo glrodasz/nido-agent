@@ -195,6 +195,11 @@ gcloud firestore fields ttls update expire_at --collection-group=usage --enable-
   --format=none --async ||
   warn "could not enable the TTL policy on usage.expire_at (old counters stay; harmless)"
 info "TTL policy on usage.expire_at"
+# Ask Nido's quality log (ask_logs/{id}) keeps each question 30 days.
+gcloud firestore fields ttls update expire_at --collection-group=ask_logs --enable-ttl \
+  --format=none --async ||
+  warn "could not enable the TTL policy on ask_logs.expire_at (old questions stay until deleted)"
+info "TTL policy on ask_logs.expire_at"
 
 # --- Artifact Registry ---------------------------------------------------------------------------
 step "Artifact Registry repository ${AR_REPO} (${REGION})"

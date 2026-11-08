@@ -20,11 +20,12 @@ import Landing from "./Landing";
 import LanguageMenu from "./LanguageMenu";
 import Logo from "./Logo";
 import ProfileForm from "./ProfileForm";
+import Quality from "./Quality";
 import ScreenGuard from "./ScreenGuard";
 import Spinner from "./Spinner";
 import Watchlist from "./Watchlist";
 
-type Tab = "find" | "watchlist" | "family";
+type Tab = "find" | "watchlist" | "family" | "quality";
 type Session =
   | { state: "loading" }
   | { state: "signed-out" }
@@ -52,6 +53,8 @@ export default function App() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [marks, setMarks] = useState<TitleMark[]>([]);
   const [tab, setTab] = useState<Tab>("find");
+  // Nido's owners also get the Quality tab, with every Ask Nido question of the last days.
+  const [canReview, setCanReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [theme, setThemeState] = useState<Theme>(currentTheme);
   const [invite, setInvite] = useState<string | null>(inviteFromUrl);
@@ -77,6 +80,7 @@ export default function App() {
     setWatchlist([]);
     setMarks([]);
     setTab("find");
+    setCanReview(false);
     if (uid === null) return;
     setError(null);
     let stale = false;
@@ -97,8 +101,14 @@ export default function App() {
         setInvite(null);
       }
       try {
-        const [p, w, m] = await Promise.all([api.profile(), api.watchlist(), api.marks()]);
+        const [p, w, m, me] = await Promise.all([
+          api.profile(),
+          api.watchlist(),
+          api.marks(),
+          api.me().catch(() => ({ can_review: false })),
+        ]);
         if (stale) return;
+        setCanReview(me.can_review);
         setProfile(p);
         setWatchlist(w);
         setMarks(m);
@@ -227,6 +237,7 @@ export default function App() {
                 watchlist.length ? fmt(t.header.watchlistCount, { n: watchlist.length }) : t.header.watchlist,
               ],
               ["family", t.header.family],
+              ...(canReview ? ([["quality", t.header.quality]] as const) : []),
             ] as const
           ).map(([id, label]) => (
             <button
@@ -294,6 +305,8 @@ export default function App() {
         {authEnabled && <SignOutButton />}
       </>
     );
+  } else if (tab === "quality" && canReview) {
+    body = <Quality config={config} />;
   } else if (tab === "watchlist") {
     body = (
       <Watchlist
