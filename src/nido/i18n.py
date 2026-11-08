@@ -266,6 +266,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Se detuvo antes: esta respuesta llegó a su límite de llamadas al modelo.",
         "pt": "Parou antes: esta resposta atingiu o limite de chamadas ao modelo.",
     },
+    "no_answer": {
+        "en": "Nido came back without an answer. Try again, or ask it another way.",
+        "es": "Nido volvió sin respuesta. Intenta de nuevo o pregúntalo de otra forma.",
+        "pt": "O Nido voltou sem resposta. Tente de novo ou pergunte de outro jeito.",
+    },
     "stopped": {
         "en": "The assistant stopped before finishing.",
         "es": "El asistente se detuvo antes de terminar.",

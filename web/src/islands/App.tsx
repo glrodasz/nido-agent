@@ -21,6 +21,7 @@ import LanguageMenu from "./LanguageMenu";
 import Logo from "./Logo";
 import ProfileForm from "./ProfileForm";
 import Quality from "./Quality";
+import ScreenGuard from "./ScreenGuard";
 import Spinner from "./Spinner";
 import Watchlist from "./Watchlist";
 
@@ -350,7 +351,7 @@ export default function App() {
             {error}
           </p>
         )}
-        {body}
+        <ScreenGuard>{body}</ScreenGuard>
       </main>
     </>
   );

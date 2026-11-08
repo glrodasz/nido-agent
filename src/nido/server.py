@@ -828,6 +828,9 @@ def create_app(
             raise HTTPException(504, message("too_slow", locale))
         if outcome == "busy":
             raise HTTPException(503, message("busy", locale))
+        if outcome == "no_answer":
+            # The model can finish a turn with nothing to show; an empty answer reads as a hang.
+            raise HTTPException(502, message("no_answer", locale))
         return {
             "session_id": session.id,
             "log_id": log_id,

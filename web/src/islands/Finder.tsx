@@ -341,6 +341,7 @@ export default function Finder({
     setQuota((q) => ({ ...q, chat: reply.quota }));
     const text2 = [reply.reply, reply.note].filter(Boolean).join("\n\n");
     if (text2) setTurns((t) => [...t, { role: "nido", text: text2, logId: reply.log_id }]);
+    else if (!reply.results) setTurns((prev) => [...prev, { role: "nido", text: t.finder.noAnswer, failed: true }]);
     if (reply.results) {
       acted.current = true;
       setToday(false);
