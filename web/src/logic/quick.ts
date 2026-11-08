@@ -21,6 +21,8 @@ export interface Filters {
   matchAll: boolean;
   // Max length in minutes; null is any length.
   runtime: number | null;
+  // Min length in minutes; 0 is no minimum. Find only: the profile has no minimum.
+  minRuntime: number;
   // The lowest stop is the default and asks for no minimum.
   minImdb: number;
   // "Last N years" as a string for the select; "" is any time.
@@ -36,6 +38,7 @@ export const DEFAULT_FILTERS: Filters = {
   excludeGenres: [],
   matchAll: false,
   runtime: null,
+  minRuntime: 0,
   minImdb: SCORE_STOPS[0],
   since: DEFAULT_SINCE,
 };
@@ -61,6 +64,7 @@ export const isDefault = (f: Filters, base: Filters = DEFAULT_FILTERS) =>
   sameSet(f.excludeGenres, base.excludeGenres) &&
   f.matchAll === base.matchAll &&
   f.runtime === base.runtime &&
+  f.minRuntime === base.minRuntime &&
   f.minImdb === base.minImdb &&
   f.since === base.since;
 

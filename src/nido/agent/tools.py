@@ -208,6 +208,7 @@ class Toolbox:
         min_imdb_rating: float | None = None,
         avoid: list[str] | None = None,
         regions: list[str] | None = None,
+        min_runtime_min: int | None = None,
         prefer_genres: list[str] | None = None,
         released_since: int | None = None,
         exclude_genres: list[str] | None = None,
@@ -225,6 +226,8 @@ class Toolbox:
             max_runtime_min: longest acceptable runtime in minutes (episode length for series).
                 For short films ("shorts", "something quick for the little one") use 40.
             min_imdb_rating: lowest acceptable IMDb score, 0-10.
+            min_runtime_min: shortest acceptable runtime in minutes, e.g. 60 for "a proper
+                movie, not a short". Omit unless the parent asks for something longer.
             avoid: content categories to avoid, any of: violence, frightening, language,
                 sex_nudity, romance, substances, bullying_discrimination, death_grief,
                 imitable_behavior.
@@ -249,6 +252,7 @@ class Toolbox:
             services=services,
             genres=genres,
             max_runtime_min=max_runtime_min,
+            min_runtime_min=min_runtime_min,
             min_imdb_rating=min_imdb_rating,
             avoid=guarded_avoid(avoid, guard),
             regions=regions,
@@ -270,6 +274,7 @@ class Toolbox:
         min_imdb_rating: float | None = None,
         avoid: list[str] | None = None,
         regions: list[str] | None = None,
+        min_runtime_min: int | None = None,
         prefer_genres: list[str] | None = None,
         released_since: int | None = None,
         exclude_genres: list[str] | None = None,
@@ -299,6 +304,7 @@ class Toolbox:
             preferred_genres=sorted({*required, *preferred} - set(excluded)),
             avoid_categories=[GuidanceCategory(a) for a in avoid or [] if a in GuidanceCategory],
             max_runtime_min=max_runtime_min,
+            min_runtime_min=min_runtime_min,
             min_imdb_rating=min_imdb_rating,
         )
         candidates = await self._pool(
@@ -410,6 +416,7 @@ class Toolbox:
             max_certification=prefilter_certification(profile.youngest, kind),
             certification_country="US",
             max_runtime_min=profile.max_runtime_min if kind is MediaType.MOVIE else None,
+            min_runtime_min=profile.min_runtime_min if kind is MediaType.MOVIE else None,
             min_year=released_since,
             page=page,
         )

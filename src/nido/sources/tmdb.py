@@ -94,6 +94,7 @@ class TmdbClient:
         max_certification: str | None = None,
         certification_country: str | None = None,
         max_runtime_min: int | None = None,
+        min_runtime_min: int | None = None,
         min_vote_average: float | None = None,
         min_year: int | None = None,
         page: int = 1,
@@ -111,7 +112,7 @@ class TmdbClient:
             "without_genres": ",".join(str(g) for g in without_genre_ids) or None,
             "with_runtime.lte": max_runtime_min,
             # TMDB stores an unknown runtime as 0, which would pass any limit.
-            "with_runtime.gte": 1 if max_runtime_min else None,
+            "with_runtime.gte": min_runtime_min or (1 if max_runtime_min else None),
             "vote_average.gte": min_vote_average,
             "vote_count.gte": 200 if min_vote_average else None,
         }

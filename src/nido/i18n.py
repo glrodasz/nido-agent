@@ -124,6 +124,13 @@ RULES: list[Rule] = [
         ),
     ),
     (
+        re.compile(r"Runs (\d+) min, shorter than your (\d+) min minimum\."),
+        _fixed(
+            "Dura {0} min, menos que tu mínimo de {1} min.",
+            "Dura {0} min, menos do que o seu mínimo de {1} min.",
+        ),
+    ),
+    (
         re.compile(r"No runtime listed to check against your (\d+) min limit\."),
         _fixed(
             "No figura su duración para compararla con tu límite de {0} min.",

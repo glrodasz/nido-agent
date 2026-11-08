@@ -206,6 +206,8 @@ class FamilyProfile(BaseModel):
     preferred_genres: list[str] = Field(default_factory=list)
     avoid_categories: list[GuidanceCategory] = Field(default_factory=list)
     max_runtime_min: int | None = None
+    # Shortest acceptable runtime: set by Find's length range, never by the profile form.
+    min_runtime_min: int | None = None
     mood: str | None = None
     min_imdb_rating: float | None = None
 

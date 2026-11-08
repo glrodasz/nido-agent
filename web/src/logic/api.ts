@@ -66,6 +66,7 @@ export interface SearchFilters {
   exclude_genres?: string[];
   match_all_genres?: boolean;
   max_runtime_min?: number | null;
+  min_runtime_min?: number;
   min_imdb_rating?: number | null;
   avoid?: string[];
   released_since?: number | null;

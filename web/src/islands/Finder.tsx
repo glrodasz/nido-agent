@@ -6,10 +6,10 @@ import {
   type FindKind,
   genresFor,
   isNight,
-  LENGTH_STOPS,
-  lengthLabel,
-  newestFirst,
   lengthTick,
+  newestFirst,
+  RANGE_STOPS,
+  rangeLabel,
   releasedSince,
   SCORE_STOPS,
   scoreTick,
@@ -34,6 +34,7 @@ import { fmt, genreLabel, plural, t } from "../i18n";
 import Icon from "./Icon";
 import Markdown from "./Markdown";
 import Spinner from "./Spinner";
+import RangeSlider from "./RangeSlider";
 import StopSlider from "./StopSlider";
 import TitleCard from "./TitleCard";
 import {
@@ -132,7 +133,7 @@ export default function Finder({
   const base = useMemo(() => profileFilters(profile), [profile]);
   const [filters, setFilters] = useState<Filters>(base);
   useEffect(() => setFilters(base), [base]);
-  const { kind, runtime, minImdb, since } = filters;
+  const { kind, runtime, minRuntime, minImdb, since } = filters;
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -243,13 +244,14 @@ export default function Finder({
 
   async function search(e?: Event, f: Filters = filters, who: number | null = watching) {
     e?.preventDefault();
-    const { media_type, max_runtime_min } = searchKind(f.kind, f.runtime);
+    const { media_type, max_runtime_min, min_runtime_min } = searchKind(f.kind, f.runtime, f.minRuntime);
     const found = await run("search", () =>
       api.search({
         // Both limits are always sent, null for "any", so the sliders win over the profile's
         // defaults they started from.
         media_type,
         max_runtime_min: max_runtime_min ?? null,
+        min_runtime_min,
         genres: applicable(f).length ? applicable(f) : undefined,
         exclude_genres: applicable(f, f.excludeGenres).length ? applicable(f, f.excludeGenres) : undefined,
         match_all_genres: f.matchAll && applicable(f).length > 1 ? true : undefined,
@@ -584,14 +586,17 @@ export default function Finder({
                 ))}
               </select>
             </label>
-            <StopSlider
+            <RangeSlider
               id="filter-length"
-              label={t.finder.maxLength}
-              stops={LENGTH_STOPS}
-              value={runtime}
-              valueText={lengthLabel(runtime)}
+              label={t.finder.length}
+              lowLabel={t.finder.minLength}
+              highLabel={t.finder.maxLength}
+              stops={RANGE_STOPS}
+              low={minRuntime}
+              high={runtime}
+              valueText={rangeLabel(minRuntime, runtime)}
               tick={lengthTick}
-              onChange={(m) => setFilters(withLength(filters, m))}
+              onChange={(lo, hi) => setFilters(withLength({ ...filters, minRuntime: lo ?? 0 }, hi))}
             />
             <StopSlider
               id="filter-score"

@@ -23,6 +23,7 @@ RANKING_SENTENCES = [
     "Included in your subscriptions.",
     "Not included in your subscriptions: rent, buy or add-on only.",
     "Runs 140 min, longer than your 120 min limit.",
+    "Runs 25 min, shorter than your 60 min minimum.",
     "No runtime listed to check against your 40 min limit.",
     "No IMDb score to check against your minimum of 7.0.",
     "IMDb 6.5, below your minimum of 7.0.",
