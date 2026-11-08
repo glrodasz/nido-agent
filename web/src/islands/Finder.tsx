@@ -59,6 +59,8 @@ interface Props {
 interface Turn {
   role: "you" | "nido";
   text: string;
+  // Nido's turn that says the question failed; it offers to ask the same question again.
+  failed?: boolean;
 }
 
 // Below these, the ask panel says how much of today's quota the family has left.
@@ -149,6 +151,8 @@ export default function Finder({
   // The family's use of today's quotas, as the last answers reported it.
   const [quota, setQuota] = useState<{ chat?: Quota; search?: Quota }>({});
   const session = useRef<string | null>(null);
+  const askInput = useRef<HTMLInputElement>(null);
+  const turnsList = useRef<HTMLOListElement>(null);
   const [sinkSeen, setSinkSeen] = useState(loadSeenLast);
   // Who is watching: one child by position in the profile, or the whole family (null).
   const [watching, setWatching] = useState<number | null>(null);
@@ -217,7 +221,11 @@ export default function Finder({
     }
   }
 
-  async function run<T>(kind: "search" | "chat", work: () => Promise<T>): Promise<T | undefined> {
+  async function run<T>(
+    kind: "search" | "chat",
+    work: () => Promise<T>,
+    onError: (message: string) => void = setError,
+  ): Promise<T | undefined> {
     setBusy(kind);
     setError(null);
     try {
@@ -227,7 +235,7 @@ export default function Finder({
       if (err instanceof ApiError && err.status === 429) {
         setQuota((q) => ({ ...q, [kind]: { used: q[kind]?.limit ?? 0, limit: q[kind]?.limit ?? 0 } }));
       }
-      else setError(err instanceof Error ? err.message : t.app.somethingWrong);
+      else onError(err instanceof Error ? err.message : t.app.somethingWrong);
     } finally {
       setBusy(null);
     }
@@ -298,6 +306,11 @@ export default function Finder({
     }
   }
 
+  // The new question and its loading turn come into view, even with the chips above them on a phone.
+  useEffect(() => {
+    if (busy === "chat") turnsList.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [busy]);
+
   function pressChip(chip: QuickChip) {
     if (chip.kind === "ask") void chat(undefined, chip.question);
     else void quick(chip.id, chip.toggle);
@@ -306,11 +319,18 @@ export default function Finder({
   async function chat(e?: Event, text = message) {
     e?.preventDefault();
     const ask = text.trim();
-    if (!ask) return;
-    setTurns((t) => [...t, { role: "you", text: ask }]);
+    if (!ask || busy !== null) return;
+    // A new question replaces the last exchange, so on a phone the question and its loading turn
+    // are what shows under the box, not the previous answer. The server keeps the conversation.
+    setTurns([{ role: "you", text: ask }]);
     setMessage("");
+    askInput.current?.blur();
     const asked = watching;
-    const reply = await run("chat", () => api.chat(ask, session.current, asked === null ? undefined : [asked]));
+    const reply = await run(
+      "chat",
+      () => api.chat(ask, session.current, asked === null ? undefined : [asked]),
+      (problem) => setTurns((t) => [...t, { role: "nido", text: problem, failed: true }]),
+    );
     if (!reply) return;
     session.current = reply.session_id;
     setQuota((q) => ({ ...q, chat: reply.quota }));
@@ -350,6 +370,7 @@ export default function Finder({
     const q = quota[k];
     return q && q.limit !== null ? Math.max(0, q.limit - q.used) : null;
   };
+  const noAsksLeft = left("chat") === 0;
   // Owner families have no limit and always see what they used; the rest only when few are left.
   const shownQuotas = QUOTA_KINDS.filter((k) => {
     const q = quota[k];
@@ -394,18 +415,26 @@ export default function Finder({
           <form class="ask" onSubmit={(e) => chat(e)}>
             <Icon name="search" />
             <input
+              ref={askInput}
               value={message}
               onInput={(e) => setMessage(e.currentTarget.value)}
               placeholder={
-                turns.length ? t.finder.followUp : t.finder.placeholder
+                busy === "chat"
+                  ? t.finder.waitAnswer
+                  : noAsksLeft
+                    ? t.finder.noAsksLeft
+                    : turns.length
+                      ? t.finder.followUp
+                      : t.finder.placeholder
               }
+              disabled={busy === "chat" || noAsksLeft}
               maxLength={2000}
               aria-label={t.finder.message}
             />
             <button
               class="btn btn-primary"
               type="submit"
-              disabled={busy !== null || !message.trim()}
+              disabled={busy !== null || noAsksLeft || !message.trim()}
             >
               {t.finder.ask}
             </button>
@@ -476,12 +505,28 @@ export default function Finder({
           )}
         </div>
         {turns.length > 0 && (
-          <ol class="turns" aria-live="polite">
+          <ol class="turns" aria-live="polite" ref={turnsList}>
             {turns.map((turn, i) => (
-              <li key={i} class={`turn turn-${turn.role}`}>
+              <li key={i} class={`turn turn-${turn.role}${turn.failed ? " turn-error" : ""}`}>
                 <span class="sr-only">{turn.role === "you" ? t.finder.you : t.finder.nido}</span>
                 {turn.role === "you" ? (
                   <p>{turn.text}</p>
+                ) : turn.failed ? (
+                  <div class="turn-failed" role="alert">
+                    <span class="turn-who">{t.finder.couldNotAnswer}</span>
+                    <p>{turn.text}</p>
+                    {!noAsksLeft && (
+                      <button
+                        type="button"
+                        class="btn btn-small"
+                        disabled={busy !== null}
+                        onClick={() => chat(undefined, turns[0].text)}
+                      >
+                        <Icon name="refresh" />
+                        {t.finder.tryAgain}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <>
                     <span class="turn-who" aria-hidden="true">
@@ -657,7 +702,8 @@ export default function Finder({
         </section>
       )}
 
-      {results && (
+      {/* While Nido answers, the last picks step aside: the answer brings its own. */}
+      {results && busy !== "chat" && (
         <section class="results" aria-labelledby="picks-title" aria-busy={busy !== null}>
           <header class="results-head">
             <h2 id="picks-title">

@@ -1,4 +1,4 @@
-import { locale } from "../i18n";
+import { locale, t } from "../i18n";
 import { idToken } from "./auth";
 import type {
   AppConfig,
@@ -25,21 +25,37 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+// Firebase Hosting gives up on the server after 60 s; the server stops a chat turn at 50 s.
+// Past this the page stops waiting too, so a lost answer never leaves Ask Nido stuck.
+export const CHAT_TIMEOUT_MS = 65_000;
+
+async function call<T>(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<T> {
   // The page's language: Ask Nido answers in it and the server writes card reasons in it.
   const headers: Record<string, string> = { Accept: "application/json", "X-Nido-Locale": locale };
   const token = await idToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const abort = new AbortController();
+  const timer = timeoutMs ? setTimeout(() => abort.abort(), timeoutMs) : undefined;
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: abort.signal,
+    });
+  } catch {
+    // No answer at all: the page gave up waiting, or the phone lost its connection.
+    throw new ApiError(0, abort.signal.aborted ? t.app.tooSlow : t.app.offline);
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : response.statusText;
-    throw new ApiError(response.status, detail || "request failed");
+    // The server explains its own errors; a bare page from the hosting in front of it does not.
+    if (typeof data.detail === "string") throw new ApiError(response.status, data.detail);
+    throw new ApiError(response.status, response.status === 504 ? t.app.tooSlow : t.app.somethingWrong);
   }
   return data as T;
 }
@@ -66,7 +82,7 @@ export const api = {
   /** Today's picks for the whole family: built once a day on the server, cached after. */
   daily: () => call<SearchResult>("GET", "/daily"),
   chat: (message: string, sessionId: string | null, watching?: number[]) =>
-    call<ChatReply>("POST", "/chat", { message, session_id: sessionId, watching }),
+    call<ChatReply>("POST", "/chat", { message, session_id: sessionId, watching }, CHAT_TIMEOUT_MS),
   watchlist: () => call<{ items: WatchlistItem[] }>("GET", "/watchlist").then((r) => r.items),
   save: (t: TitleInfo, watched = false) =>
     call<{ item: WatchlistItem }>("PUT", `/watchlist/${t.media_type}/${t.tmdb_id}`, {
