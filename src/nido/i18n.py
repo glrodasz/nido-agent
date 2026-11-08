@@ -249,6 +249,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "filtros.",
         "pt": "O assistente está ocupado agora. Tente de novo em um minuto ou use os filtros.",
     },
+    "too_slow": {
+        "en": "Nido took too long to answer. Try again, or ask something shorter.",
+        "es": "Nido tardó demasiado en responder. Intenta de nuevo o pregunta algo más corto.",
+        "pt": "O Nido demorou demais para responder. Tente de novo ou pergunte algo mais curto.",
+    },
     "stopped_budget": {
         "en": "Stopped early: this turn reached its model call limit.",
         "es": "Se detuvo antes: esta respuesta llegó a su límite de llamadas al modelo.",

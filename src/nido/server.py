@@ -94,6 +94,8 @@ from nido.store import Store, build_store
 log = logging.getLogger(__name__)
 
 MAX_MESSAGE_CHARS = 2000
+# Firebase Hosting gives up on a Cloud Run request after 60 s; a chat turn stops before that.
+CHAT_TURN_SECONDS = 50.0
 
 
 # Today's picks: how many cards, how many years back they reach, and how long a build is kept.
@@ -701,28 +703,38 @@ def create_app(
             session_titles.popitem(last=False)
         note = None
         try:
-            async for event in runner.run_async(
-                user_id=user.uid,
-                session_id=session.id,
-                new_message=types.Content(role="user", parts=[types.Part(text=request.message)]),
-                state_delta={
-                    "family": describe_family(profile, request.watching),
-                    "today": date.today().isoformat(),
-                    # The page's language, so the answer follows the language the family picked.
-                    "language": LANGUAGE_NAMES[locale],
-                    LOCALE_STATE_KEY: locale,
-                    HIDDEN_STATE_KEY: hidden,
-                    GUARD_STATE_KEY: family_guard(profile, request.watching),
-                },
-            ):
-                for output in _find_titles_outputs(event):
-                    results = output
-                    for field in ("results", "near_misses"):
-                        known.update({_key(item): item for item in output.get(field) or []})
-                if text := _final_text(event):
-                    reply.append(text)
+            async with asyncio.timeout(CHAT_TURN_SECONDS):
+                async for event in runner.run_async(
+                    user_id=user.uid,
+                    session_id=session.id,
+                    new_message=types.Content(
+                        role="user", parts=[types.Part(text=request.message)]
+                    ),
+                    state_delta={
+                        "family": describe_family(profile, request.watching),
+                        "today": date.today().isoformat(),
+                        # The page's language, so the answer follows the language the family picked.
+                        "language": LANGUAGE_NAMES[locale],
+                        LOCALE_STATE_KEY: locale,
+                        HIDDEN_STATE_KEY: hidden,
+                        GUARD_STATE_KEY: family_guard(profile, request.watching),
+                    },
+                ):
+                    for output in _find_titles_outputs(event):
+                        results = output
+                        for field in ("results", "near_misses"):
+                            known.update({_key(item): item for item in output.get(field) or []})
+                    if text := _final_text(event):
+                        reply.append(text)
         except LlmBudgetExceededError:
             note = message("stopped_budget", locale)
+        except TimeoutError:
+            # Hosting drops the request at 60 s with a bare error page; answer before that, with
+            # whatever the turn found so far.
+            log.warning("chat turn ran past %s s", CHAT_TURN_SECONDS)
+            if results is None and not reply:
+                raise HTTPException(504, message("too_slow", locale)) from None
+            note = message("stopped", locale)
         except Exception as exc:  # model quota, network: report, keep the session
             log.warning("chat turn failed: %s", exc)
             if results is None and not reply:

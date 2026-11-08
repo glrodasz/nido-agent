@@ -692,8 +692,8 @@ input:not([type="checkbox"]) {
   padding: 0;
   display: grid;
   gap: 0.75rem;
-  max-height: 30rem;
-  overflow-y: auto;
+  /* Clear of the sticky header when the new question scrolls into view. */
+  scroll-margin: 6rem 0 1rem;
 }
 
 .turn-you {
@@ -727,6 +727,33 @@ input:not([type="checkbox"]) {
 
 .turn-nido > p {
   margin: 0;
+}
+
+/* A question Nido could not answer: said plainly, where the answer would be, with a retry. */
+.turn-error {
+  background: color-mix(in srgb, var(--error) 9%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--error) 30%, var(--border));
+}
+
+.turn-failed {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.turn-failed .turn-who {
+  color: var(--error);
+  margin: 0;
+}
+
+.turn-failed p {
+  margin: 0;
+}
+
+.turn-failed .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .md {

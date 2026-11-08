@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from nido import server
 from nido.agent.budget import LlmBudgetExceededError
 from nido.auth import LOCAL_UID, Authenticator, User
 from nido.config import Settings
@@ -283,6 +284,28 @@ def test_chat_budget_stop_keeps_partial_results():
 def test_chat_model_failure_without_output_is_503():
     c, _ = client(runner=FakeRunner([], fail=RuntimeError("429")))
     assert c.post("/api/chat", json={"message": "x"}).status_code == 503
+
+
+class SlowRunner(FakeRunner):
+    async def run_async(self, *, user_id, session_id, new_message, state_delta):
+        for e in self.events:
+            yield e
+        await asyncio.sleep(5)
+
+
+def test_chat_too_slow_without_output_is_a_clear_504(monkeypatch):
+    monkeypatch.setattr(server, "CHAT_TURN_SECONDS", 0.05)
+    c, _ = client(runner=SlowRunner([]))
+    over = c.post("/api/chat", json={"message": "x"}, headers={"X-Nido-Locale": "es"})
+    assert over.status_code == 504 and "tardó demasiado" in over.json()["detail"]
+
+
+def test_chat_too_slow_keeps_what_it_found(monkeypatch):
+    monkeypatch.setattr(server, "CHAT_TURN_SECONDS", 0.05)
+    c, _ = client(runner=SlowRunner([event(tool_output=RESULT)]))
+    body = c.post("/api/chat", json={"message": "x"}).json()
+    assert body["results"]["results"][0]["title"] == "Paddington 2"
+    assert body["note"] == "The assistant stopped before finishing."
 
 
 def test_search_quota_is_per_family_per_day():
