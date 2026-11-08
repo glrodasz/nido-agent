@@ -3255,3 +3255,266 @@ a.imdb:hover {
     display: inline;
   }
 }
+
+/* 👍/👎 under an Ask Nido answer: quiet, so the answer stays the point. */
+.answer-feedback {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--coral-ink) 18%, transparent);
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.answer-rate {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.answer-rate > span {
+  margin-right: 0.35rem;
+}
+
+.rate-btn {
+  width: 2rem;
+  height: 2rem;
+}
+
+.rate-btn svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.rate-btn.rate-on {
+  background: var(--surface);
+  color: var(--coral-ink);
+}
+
+.answer-comment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem 0.5rem;
+  align-items: center;
+}
+
+.answer-comment .answer-hint {
+  grid-column: 1 / -1;
+}
+
+.answer-comment .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.answer-noted,
+.answer-feedback .error {
+  margin: 0;
+}
+
+/* Quality page (Nido's owners). */
+.quality {
+  display: grid;
+  gap: 1rem;
+}
+
+.quality-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.quality-head .section-title {
+  margin-bottom: 0.25rem;
+}
+
+.quality-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 36rem;
+}
+
+.quality-head .segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.quality-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.quality-stats > div {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+}
+
+.quality-stats dt {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.quality-stats dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 650;
+}
+
+.is-stale {
+  opacity: 0.55;
+}
+
+.quality-empty {
+  color: var(--muted);
+  margin: 0;
+}
+
+.quality-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.quality-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.quality-item.is-failed {
+  border-color: color-mix(in srgb, var(--error) 35%, var(--border));
+}
+
+.quality-item summary {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.quality-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.quality-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.quality-outcome {
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.quality-outcome.outcome-too_slow,
+.quality-outcome.outcome-busy,
+.quality-outcome.outcome-no_answer {
+  background: color-mix(in srgb, var(--error) 12%, var(--surface));
+  color: var(--error);
+}
+
+.quality-outcome.outcome-partial,
+.quality-outcome.outcome-budget {
+  background: var(--coral-soft);
+  color: var(--coral-ink);
+}
+
+.quality-rating {
+  display: inline-flex;
+}
+
+.quality-rating svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.quality-rating.rating-up {
+  color: var(--accent);
+}
+
+.quality-rating.rating-down {
+  color: var(--error);
+}
+
+.quality-question {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.quality-comment {
+  font-size: 0.875rem;
+  color: var(--coral-ink);
+}
+
+.quality-body {
+  display: grid;
+  gap: 0.9rem;
+  padding: 0 0.8rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.quality-body h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 0.3rem;
+}
+
+.quality-body p {
+  margin: 0 0 0.2rem;
+}
+
+.quality-tools,
+.quality-cards,
+.quality-events {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.quality-tool-name {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.quality-found {
+  color: var(--muted);
+}
+
+.quality-tools pre {
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.6rem;
+  background: var(--surface-2);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.quality-titles,
+.quality-model {
+  color: var(--muted);
+  font-size: 0.82rem;
+}

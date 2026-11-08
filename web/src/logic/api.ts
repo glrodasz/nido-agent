@@ -3,6 +3,7 @@ import { idToken } from "./auth";
 import type {
   AppConfig,
   ChatReply,
+  QualityReport,
   Family,
   MarkChange,
   MediaType,
@@ -84,6 +85,12 @@ export const api = {
   daily: () => call<SearchResult>("GET", "/daily"),
   chat: (message: string, sessionId: string | null, watching?: number[]) =>
     call<ChatReply>("POST", "/chat", { message, session_id: sessionId, watching }, CHAT_TIMEOUT_MS),
+  /** 👍/👎 on one Ask Nido answer; null takes it back. */
+  feedback: (logId: string, rating: "up" | "down" | null, comment?: string) =>
+    call<{ rating: string | null }>("POST", "/chat/feedback", { log_id: logId, rating, comment }),
+  /** What this account may see beyond its family: the Quality page. */
+  me: () => call<{ can_review: boolean }>("GET", "/me"),
+  quality: (days: number) => call<QualityReport>("GET", `/quality?days=${days}`),
   watchlist: () => call<{ items: WatchlistItem[] }>("GET", "/watchlist").then((r) => r.items),
   save: (t: TitleInfo, watched = false) =>
     call<{ item: WatchlistItem }>("PUT", `/watchlist/${t.media_type}/${t.tmdb_id}`, {
