@@ -70,6 +70,7 @@ Scoring and exclusion live in [`ranking.py`](../src/nido/ranking.py) and are cov
 | `members/{uid}` | which family an account belongs to, and its role |
 | `invites/{token}` | single-use invite links, valid 7 days |
 | `usage/{family}_{day}` | daily quota counters; a TTL on `expire_at` deletes them |
+| `ask_logs/{id}` | one Ask Nido question: who it was for (ages, no names), tool calls, reply, cards, time, models, 👍/👎 and later saves or marks; a TTL on `expire_at` deletes it after 30 days |
 | `cache/{key}` | TMDB and OMDb responses with their retrieval time; a TTL on `expire_at` deletes stale ones |
 
 A family's id is its owner's uid. Locally, `NIDO_STORE=memory` keeps the same interface in

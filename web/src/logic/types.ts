@@ -92,6 +92,8 @@ export interface SearchResult {
 
 export interface ChatReply {
   session_id: string;
+  // This answer's entry in the quality log, for 👍/👎.
+  log_id: string;
   reply: string;
   results: SearchResult | null;
   note: string | null;
@@ -167,4 +169,72 @@ export interface FamilyMember {
 export interface Family {
   role: "owner" | "member";
   members: FamilyMember[];
+}
+
+export interface AskEvent {
+  kind: string;
+  key?: string;
+  at: string;
+}
+
+export interface AskTool {
+  name: string;
+  args: Record<string, unknown>;
+  found?: {
+    results: number;
+    near_misses: number;
+    titles?: { key: string; title: string | null; year: number | null; near_miss?: boolean }[];
+    [extra: string]: unknown;
+  };
+}
+
+/** One Ask Nido question as the Quality page shows it. */
+export interface AskLog {
+  id: string;
+  family: string;
+  yours: boolean;
+  session: string;
+  previous: string | null;
+  at: string;
+  locale: string;
+  question: string;
+  viewers: {
+    ages?: number[];
+    family_ages?: number[];
+    avoid?: string[];
+    services?: string[];
+    regions?: string[];
+    genres?: string[];
+  };
+  tools: AskTool[];
+  reply: string;
+  cards: { key: string; title: string | null; year: number | null; near_miss?: boolean }[];
+  note: string | null;
+  outcome: "ok" | "partial" | "budget" | "too_slow" | "busy" | "no_answer";
+  error: string | null;
+  latency_ms: number;
+  model_calls: number;
+  models: string[];
+  tokens: { prompt: number; output: number };
+  rating: "up" | "down" | null;
+  comment: string | null;
+  events: AskEvent[];
+}
+
+export interface QualityReport {
+  days: number;
+  summary: {
+    questions: number;
+    families: number;
+    failed: number;
+    partial: number;
+    up: number;
+    down: number;
+    no_cards: number;
+    acted: number;
+    fallback: number;
+    median_ms: number | null;
+    slowest_ms: number | null;
+  };
+  items: AskLog[];
 }

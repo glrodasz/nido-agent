@@ -416,6 +416,7 @@ export default function Landing({
       <footer class="lp-footer">
         <div class="lp-wrap">
           <span>{c.footerSources}</span>
+          <span>{c.footerPrivacy}</span>
           <LanguageLinks />
           <span>{c.footerTag}</span>
         </div>
