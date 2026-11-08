@@ -306,8 +306,11 @@ TITLE_TOOLS = ("find_titles", "look_up_title")
 def _find_titles_outputs(event: Any) -> list[dict[str, Any]]:
     out = []
     for response in event.get_function_responses() or []:
-        if response.name in TITLE_TOOLS and isinstance(response.response, dict):
-            out.append(response.response)
+        output = response.response
+        # A tool that raised comes back as {"error": ...}: no cards in it, so it must not
+        # replace the turn's cards (the page reads `regions` and `results` from them).
+        if response.name in TITLE_TOOLS and isinstance(output, dict) and "results" in output:
+            out.append({"regions": [], **output})
     return out
 
 

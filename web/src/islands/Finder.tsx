@@ -358,7 +358,7 @@ export default function Finder({
   // The lowest stop sends no minimum (unrated shorts stay in), so it reads as "Any".
   const scoreText = minImdb !== SCORE_STOPS[0] ? `${minImdb}+` : t.finder.any;
   const serviceNames = Object.fromEntries(config.services.map((s) => [s.key, s.name]));
-  const multiRegion = (results?.regions.length ?? 0) > 1;
+  const multiRegion = (results?.regions?.length ?? 0) > 1;
   const nearMisses = results?.near_misses ?? [];
 
   const ranked = results ? (results.results.length > 0 ? results.results : nearMisses) : [];

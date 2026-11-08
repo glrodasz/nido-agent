@@ -870,3 +870,23 @@ def test_chat_without_text_or_titles_says_so_instead_of_answering_nothing():
     c, _ = client(runner=FakeRunner([]))
     empty = c.post("/api/chat", json={"message": "x"}, headers={"X-Nido-Locale": "es"})
     assert empty.status_code == 502 and "sin respuesta" in empty.json()["detail"]
+
+
+def test_chat_tool_error_never_replaces_the_cards():
+    runner = FakeRunner(
+        [
+            event(tool_output=RESULT),
+            event(tool_output={"error": "TMDB timed out"}),
+            event(text="Try Paddington 2."),
+        ]
+    )
+    c, _ = client(runner=runner)
+    body = c.post("/api/chat", json={"message": "x"}).json()
+    assert body["results"]["regions"] and body["results"]["results"][0]["title"] == "Paddington 2"
+
+
+def test_chat_with_only_a_tool_error_has_no_cards():
+    runner = FakeRunner([event(tool_output={"error": "boom"}), event(text="Sorry, try again.")])
+    c, _ = client(runner=runner)
+    body = c.post("/api/chat", json={"message": "x"}).json()
+    assert body["reply"] == "Sorry, try again." and body["results"] is None
