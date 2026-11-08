@@ -39,6 +39,8 @@ const pt: Messages = {
     markFailed: "Não foi possível salvar essa marcação.",
     watchlistFailed: "Não foi possível atualizar a sua lista.",
     somethingWrong: "Algo deu errado.",
+    screenBroke: "A tela parou de responder. Recarregue para continuar; este texto ajuda a corrigir:",
+    reload: "Recarregar",
     tooSlow: "O Nido demorou demais para responder. Tente de novo.",
     offline: "Não foi possível falar com o Nido. Verifique sua conexão e tente de novo.",
   },

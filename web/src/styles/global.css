@@ -3255,3 +3255,16 @@ a.imdb:hover {
     display: inline;
   }
 }
+
+/* Shown when a render error stops the page: what broke, and a way back */
+.screen-broke {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+.screen-broke code {
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

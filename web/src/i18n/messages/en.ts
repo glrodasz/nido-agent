@@ -39,6 +39,8 @@ const en = {
     markFailed: "Could not save that mark.",
     watchlistFailed: "Could not update the watchlist.",
     somethingWrong: "Something went wrong.",
+    screenBroke: "The screen stopped responding. Reload to keep going; this text helps fix it:",
+    reload: "Reload",
     tooSlow: "Nido took too long to answer. Try again.",
     offline: "Could not reach Nido. Check your connection and try again.",
   },
