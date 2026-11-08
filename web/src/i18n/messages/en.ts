@@ -86,6 +86,7 @@ const en = {
     noAsksLeft: "No questions left today",
     tryAgain: "Try again",
     couldNotAnswer: "Nido couldn't answer",
+    noAnswer: "Nido came back without an answer. Try again, or ask it another way.",
     moreFilters: "More filters",
     filters: "Filters",
     type: "Type",

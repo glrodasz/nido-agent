@@ -86,6 +86,7 @@ const pt: Messages = {
     noAsksLeft: "Sem perguntas por hoje",
     tryAgain: "Tentar de novo",
     couldNotAnswer: "O Nido não conseguiu responder",
+    noAnswer: "O Nido voltou sem resposta. Tente de novo ou pergunte de outro jeito.",
     moreFilters: "Mais filtros",
     filters: "Filtros",
     type: "Tipo",

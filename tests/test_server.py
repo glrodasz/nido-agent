@@ -864,3 +864,9 @@ def test_search_asks_for_the_page_language():
     c.put("/api/profile", json=PROFILE)
     c.post("/api/search", json={}, headers={"X-Nido-Locale": "pt"})
     assert toolbox.calls[-1]["locale"] == "pt"
+
+
+def test_chat_without_text_or_titles_says_so_instead_of_answering_nothing():
+    c, _ = client(runner=FakeRunner([]))
+    empty = c.post("/api/chat", json={"message": "x"}, headers={"X-Nido-Locale": "es"})
+    assert empty.status_code == 502 and "sin respuesta" in empty.json()["detail"]

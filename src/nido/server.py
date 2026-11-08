@@ -744,6 +744,10 @@ def create_app(
                 raise HTTPException(503, message("busy", locale)) from exc
             note = message("stopped", locale)
         text = safe_links("\n\n".join(reply).strip(), known)
+        if not text and results is None and note is None:
+            # The model can finish a turn with nothing to show; an empty answer reads as a hang.
+            log.warning("chat turn ended without text or titles")
+            raise HTTPException(502, message("no_answer", locale))
         return {
             "session_id": session.id,
             "reply": text,
