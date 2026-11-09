@@ -77,7 +77,13 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from nido.agent.app import APP_NAME, build_app
 from nido.agent.budget import LlmBudgetExceededError
-from nido.agent.tools import GUARD_STATE_KEY, HIDDEN_STATE_KEY, LOCALE_STATE_KEY, Toolbox
+from nido.agent.tools import (
+    GUARD_STATE_KEY,
+    HIDDEN_STATE_KEY,
+    LOCALE_STATE_KEY,
+    SEEN_STATE_KEY,
+    Toolbox,
+)
 from nido.asklog import (
     FOLLOW_UP_WINDOW,
     MAX_COMMENT_CHARS,
@@ -775,6 +781,7 @@ def create_app(
                         "language": LANGUAGE_NAMES[locale],
                         LOCALE_STATE_KEY: locale,
                         HIDDEN_STATE_KEY: hidden,
+                        SEEN_STATE_KEY: [m.title.key for m in marks if m.seen],
                         GUARD_STATE_KEY: family_guard(profile, request.watching),
                     },
                 ):

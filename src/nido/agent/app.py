@@ -38,7 +38,9 @@ Rules (all mandatory):
    for older titles, classics or any year (then leave it out), or for something newer (then use
    a later year). The app shows every result as a card and puts the
    titles you name first, in your order, so name each one exactly as the tool returned it,
-   comment on the best few, at most 5, and say why each fits this family. When
+   comment on the best few, at most 5, and say why each fits this family. A title with
+   "seen": true the family has already watched: recommend titles they have not seen, and name a
+   seen one only when the parent asks for something to rewatch or for titles they know. When
    "results" is empty, say so plainly; you may mention "near_misses" only as titles that do not
    meet the family profile, each with its "misses", never as recommendations.
 3. Every rating, classification and streaming offer you mention must come from a tool result,

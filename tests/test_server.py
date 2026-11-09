@@ -570,6 +570,7 @@ def test_chat_hands_bans_to_the_tool_through_session_state():
     put_mark(c, 1, seen=True)
     body = c.post("/api/chat", json={"message": "x"}).json()
     assert runner.state_deltas[0]["hidden_titles"] == ["movie:2"]
+    assert runner.state_deltas[0]["seen_titles"] == ["movie:1"]
     assert body["results"]["results"][0]["mark"]["seen"] is True
 
 
@@ -890,3 +891,28 @@ def test_chat_with_only_a_tool_error_has_no_cards():
     c, _ = client(runner=runner)
     body = c.post("/api/chat", json={"message": "x"}).json()
     assert body["reply"] == "Sorry, try again." and body["results"] is None
+
+
+async def test_find_titles_tags_seen_titles_and_lists_them_after_new_ones():
+    from nido.agent.tools import Toolbox
+
+    toolbox = Toolbox(Settings(tmdb_token="t"))
+
+    async def search(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "regions": ["SE"],
+            "results": [
+                {"media_type": "movie", "tmdb_id": 1, "title": "Seen one"},
+                {"media_type": "movie", "tmdb_id": 2, "title": "New one"},
+            ],
+        }
+
+    toolbox.search = search  # type: ignore[method-assign]
+    context = SimpleNamespace(state={"seen_titles": ["movie:1"]})
+    out = await toolbox.find_titles("movie", [4], ["netflix"], tool_context=context)  # type: ignore[arg-type]
+    assert [(r["title"], r.get("seen")) for r in out["results"]] == [
+        ("New one", None),
+        ("Seen one", True),
+    ]
+    plain = await toolbox.find_titles("movie", [4], ["netflix"])
+    assert [r["title"] for r in plain["results"]] == ["Seen one", "New one"]
