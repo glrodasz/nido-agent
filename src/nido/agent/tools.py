@@ -31,6 +31,8 @@ from nido.store import Store
 
 # Session state key holding the family's banned title keys; the server sets it on every chat turn.
 HIDDEN_STATE_KEY = "hidden_titles"
+# Title keys the family marked as seen: tagged in tool output so the model favours new ones.
+SEEN_STATE_KEY = "seen_titles"
 # The page's language (en, es, pt): titles and synopses the tools return are in it.
 LOCALE_STATE_KEY = "locale"
 # Session state key holding the saved profile's limits ({"children_ages": [...], "avoid": [...]});
@@ -246,7 +248,7 @@ class Toolbox:
         # turn, never from the model.
         hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
         guard = tool_context.state.get(GUARD_STATE_KEY) if tool_context else None
-        return await self.search(
+        output = await self.search(
             media_type=media_type,
             children_ages=guarded_ages(children_ages, guard),
             services=services,
@@ -263,6 +265,7 @@ class Toolbox:
             hidden=hidden,
             locale=tool_context.state.get(LOCALE_STATE_KEY, "en") if tool_context else "en",
         )
+        return tag_seen(output, tool_context.state.get(SEEN_STATE_KEY, []) if tool_context else [])
 
     async def search(
         self,
@@ -451,7 +454,7 @@ class Toolbox:
         """
         hidden = tool_context.state.get(HIDDEN_STATE_KEY, []) if tool_context else []
         guard = tool_context.state.get(GUARD_STATE_KEY) if tool_context else None
-        return await self.look_up(
+        output = await self.look_up(
             name,
             media_type,
             guarded_ages(children_ages, guard),
@@ -463,6 +466,7 @@ class Toolbox:
             hidden=hidden,
             locale=tool_context.state.get(LOCALE_STATE_KEY, "en") if tool_context else "en",
         )
+        return tag_seen(output, tool_context.state.get(SEEN_STATE_KEY, []) if tool_context else [])
 
     async def look_up(
         self,
@@ -572,6 +576,26 @@ def _interleave(lists: list[list[int]]) -> list[int]:
                 seen.add(tmdb_id)
                 out.append(tmdb_id)
     return out
+
+
+def tag_seen(output: dict[str, Any], seen: list[str]) -> dict[str, Any]:
+    """Marks the titles the family has already watched with "seen": true and lists them after the
+    new ones, so the model recommends new titles first; the cards keep every title."""
+    if not seen:
+        return output
+    keys = set(seen)
+
+    def tagged(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        marked = [
+            {**i, "seen": True} if f"{i.get('media_type')}:{i.get('tmdb_id')}" in keys else i
+            for i in items
+        ]
+        return [i for i in marked if not i.get("seen")] + [i for i in marked if i.get("seen")]
+
+    return {
+        **output,
+        **{f: tagged(output[f]) for f in ("results", "near_misses") if output.get(f)},
+    }
 
 
 def _present(ranked: Ranked, regions: list[str], locale: str = "en") -> dict[str, Any]:

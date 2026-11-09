@@ -77,7 +77,13 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from nido.agent.app import APP_NAME, build_app
 from nido.agent.budget import LlmBudgetExceededError
-from nido.agent.tools import GUARD_STATE_KEY, HIDDEN_STATE_KEY, LOCALE_STATE_KEY, Toolbox
+from nido.agent.tools import (
+    GUARD_STATE_KEY,
+    HIDDEN_STATE_KEY,
+    LOCALE_STATE_KEY,
+    SEEN_STATE_KEY,
+    Toolbox,
+)
 from nido.asklog import (
     FOLLOW_UP_WINDOW,
     MAX_COMMENT_CHARS,
@@ -306,8 +312,11 @@ TITLE_TOOLS = ("find_titles", "look_up_title")
 def _find_titles_outputs(event: Any) -> list[dict[str, Any]]:
     out = []
     for response in event.get_function_responses() or []:
-        if response.name in TITLE_TOOLS and isinstance(response.response, dict):
-            out.append(response.response)
+        output = response.response
+        # A tool that raised comes back as {"error": ...}: no cards in it, so it must not
+        # replace the turn's cards (the page reads `regions` and `results` from them).
+        if response.name in TITLE_TOOLS and isinstance(output, dict) and "results" in output:
+            out.append({"regions": [], **output})
     return out
 
 
@@ -772,6 +781,7 @@ def create_app(
                         "language": LANGUAGE_NAMES[locale],
                         LOCALE_STATE_KEY: locale,
                         HIDDEN_STATE_KEY: hidden,
+                        SEEN_STATE_KEY: [m.title.key for m in marks if m.seen],
                         GUARD_STATE_KEY: family_guard(profile, request.watching),
                     },
                 ):
