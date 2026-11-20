@@ -354,7 +354,7 @@ const es: Messages = {
     genres: "Géneros favoritos",
     defaults: "Filtros predeterminados",
     defaultsHint:
-      "Donde empiezan los filtros de Buscar, y a lo que vuelve Quitar filtros. No son reglas fijas: cámbialos en cualquier búsqueda.",
+      "Puedes cambiarlos en cada búsqueda, pero serán el valor por defecto.",
     lengthShorts: "{length} · Cortos",
     saving: "Guardando…",
     start: "Empezar a buscar",
