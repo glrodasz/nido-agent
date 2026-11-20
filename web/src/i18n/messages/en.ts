@@ -353,7 +353,7 @@ const en = {
     genres: "Favourite genres",
     defaults: "Default filters",
     defaultsHint:
-      "Find starts with these filters. You can change them for any search, and Clear filters brings them back.",
+      "You can change them for any search, but these will be the defaults.",
     lengthShorts: "{length} · Shorts",
     saving: "Saving…",
     start: "Start finding",
