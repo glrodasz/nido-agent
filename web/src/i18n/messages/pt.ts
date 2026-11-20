@@ -354,7 +354,7 @@ const pt: Messages = {
     genres: "Gêneros favoritos",
     defaults: "Filtros padrão",
     defaultsHint:
-      "Onde os filtros de Buscar começam, e para onde Limpar filtros volta. Não são regras fixas: mude em qualquer busca.",
+      "Buscar começa com estes filtros. Você pode mudá-los em cada busca, e Limpar filtros os restaura.",
     lengthShorts: "{length} · Curtas",
     saving: "Salvando…",
     start: "Começar a buscar",
