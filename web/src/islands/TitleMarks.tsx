@@ -138,6 +138,9 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
           </span>
         </button>
       </div>
+      {(mark?.disliked_adults || mark?.disliked_child) && (
+        <p class="muted disliked-note">{t.marks.dislikedNote}</p>
+      )}
       {choosing && (
         <fieldset class="ban-choice">
           <legend class="sr-only">{t.marks.howLong}</legend>

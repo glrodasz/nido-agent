@@ -157,9 +157,12 @@ const wellRatedChip = (base: Filters): QuickChip => {
 };
 
 /** Titles the family keeps coming back to, newest mark first: On repeat, then "Our kid liked
- * it". Hidden titles never seed a suggestion. */
+ * it". Hidden and disliked titles never seed a suggestion. */
 export function favouriteTitles(marks: Iterable<TitleMark>): TitleMark[] {
-  const fit = [...marks].filter((m) => !m.ban_active && (m.rewatch || m.liked_child));
+  const fit = [...marks].filter(
+    (m) =>
+      !m.ban_active && !m.disliked_adults && !m.disliked_child && (m.rewatch || m.liked_child),
+  );
   const newest = (a: TitleMark, b: TitleMark) => b.updated_at.localeCompare(a.updated_at);
   return [...fit.filter((m) => m.rewatch).sort(newest), ...fit.filter((m) => !m.rewatch).sort(newest)];
 }

@@ -117,7 +117,8 @@ Any verified Google account starts its own family on first sign-in; an invite li
 valid 7 days, up to 8 members) moves another account into it. The profile, watchlist and title
 marks belong to the family. A title can be marked seen, liked or not liked (by the adults and by
 the child, separately), on repeat or **Don't suggest**, either always or until the youngest child
-reaches an age.
+reaches an age. Titles marked as not liked are left out of searches, Today's picks and
+Ask Nido, and the Family tab lists them so the mark can be taken back.
 
 ### Guardrails
 

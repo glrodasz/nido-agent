@@ -301,6 +301,7 @@ const en = {
     likedChild: "Our kid liked it",
     dislikedAdults: "We didn't like it",
     dislikedChild: "Our kid didn't like it",
+    dislikedNote: "Nido won't suggest it again.",
     rewatch: "On repeat",
     rewatchHint: "On repeat: the kids love to watch it again and again",
     dontSuggest: "Don't suggest…",
@@ -366,7 +367,8 @@ const en = {
   },
   hidden: {
     title: "Titles Nido won't suggest",
-    none: "None yet. Press \"Don't suggest…\" on a result to hide it for now or for good.",
+    none:
+      "None yet. Press \"Don't suggest…\" on a result to hide it for now or for good. Titles you mark as not liked land here too.",
     hideAlways: "Hide at every age",
     suggestAgain: "Suggest again",
     clear: "Clear",

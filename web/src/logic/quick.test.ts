@@ -143,6 +143,7 @@ describe("favouriteTitles", () => {
       mark("Seen only"),
       mark("Hidden", { rewatch: true, ban_active: true }),
       mark("Loved", { liked_child: true }),
+      mark("Kids only", { rewatch: true, disliked_adults: true }),
     ];
     expect(favouriteTitles(marks).map((m) => m.name)).toEqual(["Loved"]);
   });

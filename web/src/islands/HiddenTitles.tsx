@@ -9,16 +9,20 @@ interface Props {
   onMark: (mark: TitleMark, change: MarkChange) => Promise<void>;
 }
 
-/** Every title the family told Nido not to suggest, including age bans that have lifted. */
+/** Every title the family told Nido not to suggest or marked as not liked, including age bans
+ * that have lifted. */
 export default function HiddenTitles({ marks, onMark }: Props) {
   const [pending, track] = usePending();
+  const disliked = (m: TitleMark) => m.disliked_adults || m.disliked_child;
   const banned = marks
     .filter((m) => m.ban)
     .sort((a, b) => Number(b.ban_active) - Number(a.ban_active));
+  // A title with a ban shows the ban's own row; its dislike takes over once the ban is cleared.
+  const unliked = marks.filter((m) => !m.ban && disliked(m));
   return (
     <section class="panel hidden-titles">
       <h2 class="section-title">{t.hidden.title}</h2>
-      {banned.length === 0 ? (
+      {banned.length + unliked.length === 0 ? (
         <p class="muted">{t.hidden.none}</p>
       ) : (
         <ul class="watchlist">
@@ -57,6 +61,38 @@ export default function HiddenTitles({ marks, onMark }: Props) {
               >
                 {pending === `clear:${m.key}` && <Spinner />}
                 {m.ban_active ? t.hidden.suggestAgain : t.hidden.clear}
+              </button>
+            </li>
+          ))}
+          {unliked.map((m) => (
+            <li key={m.key} class="wl-item">
+              <Poster url={m.poster_url} hue={posterHue(m.title.tmdb_id)} />
+              <div class="wl-text">
+                <strong>{m.name}</strong>
+                <span class="muted">
+                  {[
+                    m.year,
+                    m.title.media_type === "tv" ? t.card.series : t.card.movie,
+                    m.disliked_adults && t.marks.dislikedAdults,
+                    m.disliked_child && t.marks.dislikedChild,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </div>
+              <button
+                type="button"
+                class="btn btn-small"
+                aria-busy={pending === `like:${m.key}`}
+                disabled={pending !== null}
+                onClick={() =>
+                  track(`like:${m.key}`, () =>
+                    onMark(m, { disliked_adults: false, disliked_child: false }),
+                  )
+                }
+              >
+                {pending === `like:${m.key}` && <Spinner />}
+                {t.hidden.suggestAgain}
               </button>
             </li>
           ))}
