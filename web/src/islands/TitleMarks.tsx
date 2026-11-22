@@ -2,7 +2,7 @@ import { useId, useState } from "preact/hooks";
 import { fmt, t } from "../i18n";
 import { MAX_CHILD_AGE, banLabel, defaultBanUntil } from "../logic/format";
 import type { MarkChange, TitleMark } from "../logic/types";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
 import Spinner, { usePending } from "./Spinner";
 
 interface Props {
@@ -15,14 +15,23 @@ interface Props {
 const VOTES = () =>
   [
     ["seen", t.marks.seen, "eye"],
-    ["liked_adults", t.marks.likedAdults, "heart"],
-    ["liked_child", t.marks.likedChild, "smile"],
     ["rewatch", t.marks.rewatch, "repeat"],
   ] as const;
 
-const hint = (field: string) => (field === "rewatch" ? t.marks.rewatchHint : undefined);
+/** One verdict per audience: liked, disliked or neither. Pressing one side clears the other. */
+const VERDICTS = () =>
+  [
+    [
+      ["liked_adults", t.marks.likedAdults, "heart"],
+      ["disliked_adults", t.marks.dislikedAdults, "thumbs-down"],
+    ],
+    [
+      ["liked_child", t.marks.likedChild, "smile"],
+      ["disliked_child", t.marks.dislikedChild, "frown"],
+    ],
+  ] as const;
 
-/** Seen, the two independent likes, "on repeat" and "don't suggest this" for one title. */
+/** Seen, "on repeat", the two liked / didn't like verdicts and "don't suggest this" for one title. */
 export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Props) {
   const [choosing, setChoosing] = useState(false);
   // Profiles stop at 17, so a 17-year-old's ban can only be for every age.
@@ -38,6 +47,33 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
       await onMark(next);
       setChoosing(false);
     });
+  }
+
+  function toggle(
+    field: string,
+    label: string,
+    icon: IconName,
+    on: boolean,
+    next: MarkChange,
+    title: string,
+    negative = false,
+  ) {
+    return (
+      <button
+        key={field}
+        type="button"
+        class={["key mark", negative ? "mark-no" : "", on ? "key-on" : ""].filter(Boolean).join(" ")}
+        aria-pressed={on}
+        aria-label={label}
+        title={title}
+        disabled={busy}
+        aria-busy={pending === field}
+        onClick={() => change(field, next)}
+      >
+        {pending === field ? <Spinner /> : <Icon name={icon} filled={on && icon === "heart"} />}
+        <span class="mark-label">{label}</span>
+      </button>
+    );
   }
 
   if (mark?.ban && mark.ban_active) {
@@ -67,29 +103,18 @@ export default function TitleMarks({ mark, youngest, baselineAge, onMark }: Prop
       <div class="mark-row" role="group" aria-label={t.marks.group}>
         {VOTES().map(([field, label, icon]) => {
           const on = Boolean(mark?.[field]);
-          return (
-            <button
-              key={field}
-              type="button"
-              class={on ? "key mark key-on" : "key mark"}
-              aria-pressed={on}
-              aria-label={label}
-              title={hint(field) ?? label}
-              disabled={busy}
-              aria-busy={pending === field}
-              // A favourite to rewatch has been seen, so turning it on marks it seen too.
-              onClick={() =>
-                change(
-                  field,
-                  field === "rewatch" && !on ? { rewatch: true, seen: true } : { [field]: !on },
-                )
-              }
-            >
-              {pending === field ? <Spinner /> : <Icon name={icon} filled={on && icon === "heart"} />}
-              <span class="mark-label">{label}</span>
-            </button>
-          );
+          // A favourite to rewatch has been seen, so turning it on marks it seen too.
+          const next = field === "rewatch" && !on ? { rewatch: true, seen: true } : { [field]: !on };
+          return toggle(field, label, icon, on, next, field === "rewatch" ? t.marks.rewatchHint : label);
         })}
+        {VERDICTS().map(([yes, no]) => (
+          <span key={yes[0]} class="mark-pair">
+            {[yes, no].map(([field, label, icon]) => {
+              const on = Boolean(mark?.[field]);
+              return toggle(field, label, icon, on, { [field]: !on }, label, field === no[0]);
+            })}
+          </span>
+        ))}
         <button
           type="button"
           class={choosing ? "key mark key-on" : "key mark"}

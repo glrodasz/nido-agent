@@ -31,6 +31,8 @@ const mark = (name: string, patch: Partial<TitleMark> = {}): TitleMark => ({
   seen: true,
   liked_adults: false,
   liked_child: false,
+  disliked_adults: false,
+  disliked_child: false,
   rewatch: false,
   ban: null,
   ban_active: false,

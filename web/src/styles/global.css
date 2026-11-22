@@ -1877,7 +1877,58 @@ a.imdb:hover {
   gap: 0.4rem;
 }
 
+/* A verdict the family can give either way: "liked it" with its "didn't like it" beside it. */
+.mark-pair {
+  display: inline-flex;
+}
+
+.mark-pair .mark:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.mark-pair .mark-no {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* A dislike reads as a quiet "no", not as the accent the positive marks use. */
+.mark-no.key-on {
+  background: var(--surface-2);
+  border-color: color-mix(in srgb, var(--muted) 45%, var(--border));
+  color: var(--muted);
+}
+
+.wl-badge-no {
+  color: var(--muted);
+}
+
+@media (min-width: 561px) {
+  /* With hover at hand only the chosen side spells its name; the other is its icon. */
+  .mark-no:not(.key-on) .mark-label,
+  .mark-pair:has(.mark-no.key-on) .mark:first-child .mark-label {
+    display: none;
+  }
+
+  .mark-pair .mark-no:not(.key-on),
+  .mark-pair:has(.mark-no.key-on) .mark:first-child {
+    padding: 0 0.7rem;
+  }
+}
+
 @media (max-width: 560px) {
+  /* Each verdict is one row: "liked it" on the left, "didn't like it" on the right. */
+  .mark-pair {
+    display: contents;
+  }
+
+  .mark-pair .mark:first-child,
+  .mark-pair .mark-no {
+    margin-left: 0;
+    border-radius: 999px;
+  }
+
   /* No hover on phones: wide buttons with the icon and its name, two per row. */
   .mark-row {
     display: grid;
@@ -1893,7 +1944,7 @@ a.imdb:hover {
   }
 
   /* "Don't suggest" opens a choice of its own, so it gets a full row. */
-  .mark:last-child {
+  .mark-row > .mark:last-child {
     grid-column: 1 / -1;
     justify-content: center;
   }

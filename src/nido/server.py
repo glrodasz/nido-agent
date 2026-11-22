@@ -185,6 +185,10 @@ class BanRequest(BaseModel):
     baseline_age: int | None = Field(default=None, ge=0, le=18)
 
 
+OPPOSITE_MARKS = (("liked_adults", "disliked_adults"), ("liked_child", "disliked_child"))
+MARK_FLAGS = ("seen", "liked_adults", "liked_child", "disliked_adults", "disliked_child", "rewatch")
+
+
 class MarkUpdate(BaseModel):
     """Only the fields sent change; `"ban": null` lifts a ban."""
 
@@ -194,6 +198,8 @@ class MarkUpdate(BaseModel):
     seen: bool | None = None
     liked_adults: bool | None = None
     liked_child: bool | None = None
+    disliked_adults: bool | None = None
+    disliked_child: bool | None = None
     rewatch: bool | None = None
     ban: BanRequest | None = None
 
@@ -1002,9 +1008,17 @@ def create_app(
             "poster_url": update.poster_url or mark.poster_url,
             "updated_at": now,
         }
-        for flag in ("seen", "liked_adults", "liked_child", "rewatch"):
+        for flag in MARK_FLAGS:
             if getattr(update, flag) is not None:
                 changes[flag] = getattr(update, flag)
+        # Liked and disliked are one three-way choice per audience: turning one on clears the other.
+        for liked, disliked in OPPOSITE_MARKS:
+            if changes.get(liked) and changes.get(disliked):
+                raise HTTPException(422, f"{liked} and {disliked} cannot both be true")
+            if changes.get(liked):
+                changes[disliked] = False
+            elif changes.get(disliked):
+                changes[liked] = False
         if "ban" in update.model_fields_set:
             request = update.ban
             if request is None:
@@ -1028,7 +1042,7 @@ def create_app(
         await follow_up(
             family,
             ref.key,
-            [f for f in ("seen", "liked_adults", "liked_child", "rewatch") if changes.get(f)]
+            [f for f in MARK_FLAGS if changes.get(f)]
             + (["dont_suggest"] if changes.get("ban") else []),
         )
         if mark.empty:

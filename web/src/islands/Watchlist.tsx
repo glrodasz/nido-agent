@@ -12,7 +12,7 @@ import type {
   WatchlistItem,
 } from "../logic/types";
 import { Poster } from "./HiddenTitles";
-import Icon from "./Icon";
+import Icon, { type IconName } from "./Icon";
 import Spinner, { usePending } from "./Spinner";
 import TitleCard from "./TitleCard";
 
@@ -68,14 +68,20 @@ function MarkBadges({ mark }: { mark: TitleMark | undefined }) {
   if (!mark) return null;
   const on = [
     mark.liked_adults && (["heart", t.marks.likedAdults] as const),
+    mark.disliked_adults && (["thumbs-down", t.marks.dislikedAdults] as const),
     mark.liked_child && (["smile", t.marks.likedChild] as const),
+    mark.disliked_child && (["frown", t.marks.dislikedChild] as const),
     mark.rewatch && (["repeat", t.marks.rewatch] as const),
-  ].filter(Boolean) as (readonly ["heart" | "smile" | "repeat", string])[];
+  ].filter(Boolean) as (readonly [IconName, string])[];
   if (on.length === 0) return null;
   return (
     <span class="wl-badges">
       {on.map(([icon, label]) => (
-        <span key={icon} class="wl-badge" title={label}>
+        <span
+          key={icon}
+          class={icon === "thumbs-down" || icon === "frown" ? "wl-badge wl-badge-no" : "wl-badge"}
+          title={label}
+        >
           <Icon name={icon} filled={icon === "heart"} />
           <span class="sr-only">{label}</span>
         </span>
