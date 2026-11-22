@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@astrojs/preact": "^6.1.1",
-    "astro": "~7.3.8",
+    "astro": "~7.4.7",
     "firebase": "^13.1.0",
     "preact": "^10.29.8"
   },
