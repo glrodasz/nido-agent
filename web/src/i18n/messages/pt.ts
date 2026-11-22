@@ -302,6 +302,7 @@ const pt: Messages = {
     likedChild: "Meu filho gostou",
     dislikedAdults: "Nós não gostamos",
     dislikedChild: "Meu filho não gostou",
+    dislikedNote: "O Nido não vai sugerir de novo.",
     rewatch: "Para repetir",
     rewatchHint: "Para repetir: as crianças adoram assistir de novo e de novo",
     dontSuggest: "Não sugerir…",
@@ -367,7 +368,8 @@ const pt: Messages = {
   },
   hidden: {
     title: "Títulos que o Nido não vai sugerir",
-    none: "Nenhum ainda. Toque em \"Não sugerir…\" em um resultado para ocultá-lo por um tempo ou para sempre.",
+    none:
+      "Nenhum ainda. Toque em \"Não sugerir…\" em um resultado para ocultá-lo por um tempo ou para sempre. Os que você marcar como \"não gostou\" também aparecem aqui.",
     hideAlways: "Ocultar em qualquer idade",
     suggestAgain: "Sugerir de novo",
     clear: "Remover",

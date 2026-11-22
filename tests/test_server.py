@@ -583,6 +583,21 @@ def test_search_hides_active_bans_and_age_bans_lift_with_the_profile():
     assert lifted == {"movie:1": False, "movie:2": True, "movie:3": False}  # still listed
 
 
+def test_search_and_chat_leave_out_titles_the_family_did_not_like():
+    c, toolbox = client()
+    c.put("/api/profile", json=PROFILE)
+    put_mark(c, 1, disliked_adults=True)
+    put_mark(c, 2, disliked_child=True, seen=True)
+    put_mark(c, 3, liked_adults=True)
+    c.post("/api/search", json={})
+    assert sorted(toolbox.calls[-1]["hidden"]) == ["movie:1", "movie:2"]
+    # Taking the dislike back, or turning it into a like, brings the title back.
+    put_mark(c, 1, disliked_adults=False)
+    put_mark(c, 2, liked_child=True)
+    c.post("/api/search", json={})
+    assert toolbox.calls[-1]["hidden"] == []
+
+
 def test_unban_with_null():
     c, toolbox = client()
     c.put("/api/profile", json=PROFILE)

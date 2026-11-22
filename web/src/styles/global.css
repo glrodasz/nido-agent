@@ -1900,6 +1900,11 @@ a.imdb:hover {
   color: var(--muted);
 }
 
+.disliked-note {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .wl-badge-no {
   color: var(--muted);
 }

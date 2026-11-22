@@ -256,8 +256,8 @@ class Ban(BaseModel):
 
 
 class TitleMark(BaseModel):
-    """The family's own marks on one title. Seen, liked, disliked and rewatch never hide a
-    title; an active ban keeps it out of every search and chat shortlist."""
+    """The family's own marks on one title. Seen, liked and rewatch never hide a title; an
+    active ban or a "didn't like it" keeps it out of every search, daily pick and chat shortlist."""
 
     title: TitleRef
     name: str

@@ -226,7 +226,13 @@ def present_mark(mark: TitleMark, profile: FamilyProfile | None) -> dict[str, An
 
 
 def hidden_keys(marks: list[TitleMark], profile: FamilyProfile) -> list[str]:
-    return [m.title.key for m in marks if m.ban and m.ban.active(profile.youngest)]
+    """Titles Nido must not suggest: an active "Don't suggest", or one the adults or the child
+    marked as not liked."""
+    return [
+        m.title.key
+        for m in marks
+        if (m.ban and m.ban.active(profile.youngest)) or m.disliked_adults or m.disliked_child
+    ]
 
 
 def with_marks(
