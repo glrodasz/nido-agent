@@ -126,6 +126,9 @@ export interface TitleMark {
   seen: boolean;
   liked_adults: boolean;
   liked_child: boolean;
+  // The opposite verdicts: per audience a title is liked, disliked or neither, never both.
+  disliked_adults: boolean;
+  disliked_child: boolean;
   // The kids love to watch it again and again.
   rewatch: boolean;
   ban: Ban | null;
@@ -145,6 +148,8 @@ export interface MarkChange {
   seen?: boolean;
   liked_adults?: boolean;
   liked_child?: boolean;
+  disliked_adults?: boolean;
+  disliked_child?: boolean;
   rewatch?: boolean;
   ban?: BanRequest | null;
 }

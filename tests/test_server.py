@@ -484,6 +484,45 @@ def test_marks_are_independent_and_partial_updates_keep_the_rest():
     assert [i["key"] for i in c.get("/api/titles").json()["items"]] == ["movie:1"]
 
 
+def test_liked_and_disliked_are_one_three_way_choice_per_audience():
+    c, _ = client()
+    item = put_mark(c, liked_adults=True, liked_child=True)
+    assert (item["disliked_adults"], item["disliked_child"]) == (False, False)
+    # Disliking replaces the like for that audience only.
+    item = put_mark(c, disliked_child=True)
+    assert (item["liked_child"], item["disliked_child"]) == (False, True)
+    assert (item["liked_adults"], item["disliked_adults"]) == (True, False)
+    # And liking again replaces the dislike.
+    item = put_mark(c, liked_child=True)
+    assert (item["liked_child"], item["disliked_child"]) == (True, False)
+    response = c.put(
+        "/api/titles/movie/1",
+        json={"name": "Paddington 2", "liked_adults": True, "disliked_adults": True},
+    )
+    assert response.status_code == 422
+    # A dislike alone is a mark worth keeping; clearing it leaves nothing to store.
+    put_mark(c, 2, disliked_adults=True)
+    put_mark(c, 2, disliked_adults=False)
+    assert [i["key"] for i in c.get("/api/titles").json()["items"]] == ["movie:1"]
+
+
+def test_marks_stored_before_dislikes_existed_still_load():
+    from nido.models import TitleMark
+
+    old = {
+        "title": {"media_type": "movie", "tmdb_id": 1},
+        "name": "Paddington 2",
+        "seen": True,
+        "liked_adults": True,
+        "liked_child": False,
+        "rewatch": False,
+        "ban": None,
+        "updated_at": "2026-10-25T20:00:00Z",
+    }
+    mark = TitleMark.model_validate(old)
+    assert mark.liked_adults and not mark.disliked_adults and not mark.disliked_child
+
+
 def test_on_repeat_is_its_own_mark_and_never_hides_a_title():
     c, _ = client()
     item = put_mark(c, rewatch=True, seen=True)

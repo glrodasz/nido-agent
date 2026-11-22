@@ -66,7 +66,7 @@ Scoring and exclusion live in [`ranking.py`](../src/nido/ranking.py) and are cov
 |---|---|
 | `families/{family}` | the family profile |
 | `families/{family}/watchlist/{key}` | saved titles (`key` is `movie:123` or `tv:456`) |
-| `families/{family}/titles/{key}` | marks: seen, liked, rewatch, Don't suggest |
+| `families/{family}/titles/{key}` | marks: seen, liked or disliked, rewatch, Don't suggest |
 | `members/{uid}` | which family an account belongs to, and its role |
 | `invites/{token}` | single-use invite links, valid 7 days |
 | `usage/{family}_{day}` | daily quota counters; a TTL on `expire_at` deletes them |

@@ -144,6 +144,8 @@ export default function App() {
         !updated.seen &&
         !updated.liked_adults &&
         !updated.liked_child &&
+        !updated.disliked_adults &&
+        !updated.disliked_child &&
         !updated.rewatch &&
         !updated.ban;
       setMarks((all) => [...(empty ? [] : [updated]), ...all.filter((m) => m.key !== updated.key)]);
